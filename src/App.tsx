@@ -13,6 +13,8 @@ import AdminCases from "./pages/AdminCases";
 import AdminCaseDetail from "./pages/AdminCaseDetail";
 import AdminPolicies from "./pages/AdminPolicies";
 import AdminPolicyDetail from "./pages/AdminPolicyDetail";
+import AdminInventory from "./pages/AdminInventory";
+import AdminInventoryDetail from "./pages/AdminInventoryDetail";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -34,6 +36,8 @@ const App = () => (
           <Route path="/admin/case/:caseId" element={<AdminCaseDetail />} />
           <Route path="/admin/policies" element={<AdminPolicies />} />
           <Route path="/admin/policy/:policyId" element={<AdminPolicyDetail />} />
+          <Route path="/admin/inventory" element={<AdminInventory />} />
+          <Route path="/admin/inventory/:assetId" element={<AdminInventoryDetail />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
