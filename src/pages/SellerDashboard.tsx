@@ -8,26 +8,26 @@ export default function SellerDashboard() {
     <SellerLayout>
       <div className="space-y-6">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Seller Dashboard</h1>
-          <p className="text-muted-foreground">Welcome back. Here's an overview of your timeshare cases.</p>
+          <h1 className="text-2xl font-bold text-foreground">Eladói vezérlőpult</h1>
+          <p className="text-muted-foreground">Üdvözöljük újra. Itt láthatja üdülési jog ügyeinek áttekintését.</p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          <DashboardCard title="Active Cases" value="3" icon={<FolderOpen className="h-4 w-4" />} variant="accent" description="2 pending review" />
-          <DashboardCard title="Documents" value="12" icon={<FileCheck className="h-4 w-4" />} variant="success" trend="+2" description="this week" />
-          <DashboardCard title="Pending Actions" value="5" icon={<Clock className="h-4 w-4" />} variant="warning" description="action required" />
-          <DashboardCard title="Payments" value="$4,200" icon={<CreditCard className="h-4 w-4" />} description="total received" />
+          <DashboardCard title="Aktív ügyek" value="3" icon={<FolderOpen className="h-4 w-4" />} variant="accent" description="2 felülvizsgálat alatt" />
+          <DashboardCard title="Dokumentumok" value="12" icon={<FileCheck className="h-4 w-4" />} variant="success" trend="+2" description="ezen a héten" />
+          <DashboardCard title="Függő teendők" value="5" icon={<Clock className="h-4 w-4" />} variant="warning" description="beavatkozás szükséges" />
+          <DashboardCard title="Fizetések" value="$4 200" icon={<CreditCard className="h-4 w-4" />} description="összes beérkezett" />
         </div>
 
         <div className="grid lg:grid-cols-3 gap-6">
           <Card className="lg:col-span-2 shadow-sm">
-            <CardHeader><CardTitle className="text-base">Active Cases</CardTitle></CardHeader>
+            <CardHeader><CardTitle className="text-base">Aktív ügyek</CardTitle></CardHeader>
             <CardContent>
               <div className="space-y-4">
                 {[
-                  { name: "Marriott Vacation Club — Week 32", status: "Under Review", color: "bg-warning" },
-                  { name: "Hilton Grand Vacations — Week 14", status: "Documents Pending", color: "bg-secondary" },
-                  { name: "Wyndham Resorts — Week 48", status: "Transfer in Progress", color: "bg-success" },
+                  { name: "Marriott Vacation Club — 32. hét", status: "Felülvizsgálat alatt", color: "bg-warning" },
+                  { name: "Hilton Grand Vacations — 14. hét", status: "Dokumentumok hiányoznak", color: "bg-secondary" },
+                  { name: "Wyndham Resorts — 48. hét", status: "Átruházás folyamatban", color: "bg-success" },
                 ].map((c) => (
                   <div key={c.name} className="flex items-center justify-between p-4 rounded-xl border border-border hover:bg-muted/30 transition-colors">
                     <div>
@@ -42,14 +42,14 @@ export default function SellerDashboard() {
           </Card>
 
           <Card className="shadow-sm">
-            <CardHeader><CardTitle className="text-base">Recent Activity</CardTitle></CardHeader>
+            <CardHeader><CardTitle className="text-base">Legutóbbi tevékenység</CardTitle></CardHeader>
             <CardContent>
               <div className="space-y-4">
                 {[
-                  { text: "Document uploaded for Case #102", time: "2h ago" },
-                  { text: "Case #98 status updated", time: "5h ago" },
-                  { text: "Payment received — $1,400", time: "1d ago" },
-                  { text: "New case created", time: "3d ago" },
+                  { text: "Dokumentum feltöltve a #102-es ügyhöz", time: "2 órája" },
+                  { text: "A #98-as ügy státusza frissült", time: "5 órája" },
+                  { text: "Fizetés beérkezett — $1 400", time: "1 napja" },
+                  { text: "Új ügy létrehozva", time: "3 napja" },
                 ].map((a, i) => (
                   <div key={i} className="flex items-start gap-3">
                     <div className="mt-1.5 h-2 w-2 rounded-full bg-secondary shrink-0" />
