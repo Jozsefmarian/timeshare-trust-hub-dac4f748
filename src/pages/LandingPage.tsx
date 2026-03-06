@@ -15,13 +15,13 @@ const steps = [
   },
   {
     icon: Users,
-    title: "Vevő keresés és egyeztetés",
-    description: "Összekapcsoljuk Önt ellenőrzött vevőkkel és kezeljük a tárgyalási folyamatot.",
+    title: "Adásvételi szerződés",
+    description: "A rendszer elkészíti az adásvételi szerződést az Ön által megadott adatok alapján.",
   },
   {
     icon: CheckCircle,
-    title: "Biztonságos átruházás és fizetés",
-    description: "A jogi átruházás lezárul és az összeget biztonságosan kiutaljuk Önnek.",
+    title: "Szolgáltatási szerződés és fizetés",
+    description: "Az adásvételi szerződés aláírása után a szolgáltatási díj megfizetésével lezárjuk az ügyet.",
   },
 ];
 
