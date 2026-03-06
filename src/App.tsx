@@ -9,6 +9,8 @@ import SellerDashboard from "./pages/SellerDashboard";
 import NewCase from "./pages/NewCase";
 import CaseDetail from "./pages/CaseDetail";
 import AdminDashboard from "./pages/AdminDashboard";
+import AdminCases from "./pages/AdminCases";
+import AdminCaseDetail from "./pages/AdminCaseDetail";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -26,6 +28,8 @@ const App = () => (
           <Route path="/seller/new-case" element={<NewCase />} />
           <Route path="/seller/case/:caseId" element={<CaseDetail />} />
           <Route path="/admin" element={<AdminDashboard />} />
+          <Route path="/admin/cases" element={<AdminCases />} />
+          <Route path="/admin/case/:caseId" element={<AdminCaseDetail />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
