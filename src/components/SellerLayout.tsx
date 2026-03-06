@@ -17,13 +17,13 @@ import { cn } from "@/lib/utils";
 import { useState } from "react";
 
 const sellerNavItems = [
-  { title: "Dashboard", icon: LayoutDashboard, href: "/seller" },
-  { title: "My cases", icon: FolderOpen, href: "/seller/cases" },
-  { title: "Start new case", icon: PlusCircle, href: "/seller/new-case" },
-  { title: "Documents", icon: FileText, href: "/seller/documents" },
-  { title: "Contracts", icon: FileSignature, href: "/seller/contracts" },
-  { title: "Payments", icon: CreditCard, href: "/seller/payments" },
-  { title: "Profile", icon: User, href: "/seller/profile" },
+  { title: "Vezérlőpult", icon: LayoutDashboard, href: "/seller" },
+  { title: "Ügyeim", icon: FolderOpen, href: "/seller/cases" },
+  { title: "Új ügy indítása", icon: PlusCircle, href: "/seller/new-case" },
+  { title: "Dokumentumok", icon: FileText, href: "/seller/documents" },
+  { title: "Szerződések", icon: FileSignature, href: "/seller/contracts" },
+  { title: "Fizetések", icon: CreditCard, href: "/seller/payments" },
+  { title: "Profil", icon: User, href: "/seller/profile" },
 ];
 
 export default function SellerLayout({ children }: { children: ReactNode }) {
@@ -46,7 +46,7 @@ export default function SellerLayout({ children }: { children: ReactNode }) {
           )}
         >
           <Shield className="h-6 w-6 text-sidebar-primary shrink-0" />
-          {sidebarOpen && <span className="font-bold text-sm">TimeshareRelease</span>}
+          {sidebarOpen && <span className="font-bold text-sm">Eladói portál</span>}
         </div>
 
         <nav className="flex-1 py-4 space-y-1 px-2 overflow-hidden">
@@ -73,7 +73,7 @@ export default function SellerLayout({ children }: { children: ReactNode }) {
         <div className="p-3 border-t border-sidebar-border">
           <button className="flex items-center gap-3 px-3 py-2 text-sm text-sidebar-foreground/50 hover:text-sidebar-foreground transition-colors w-full rounded-lg">
             <LogOut className="h-4 w-4 shrink-0" />
-            {sidebarOpen && <span>Sign out</span>}
+            {sidebarOpen && <span>Kijelentkezés</span>}
           </button>
         </div>
       </aside>

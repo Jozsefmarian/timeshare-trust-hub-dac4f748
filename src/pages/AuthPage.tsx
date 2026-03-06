@@ -17,9 +17,9 @@ export default function AuthPage() {
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_left,_hsla(174,84%,40%,0.2),_transparent_60%)]" />
         <div className="relative z-10 max-w-md">
           <Shield className="h-12 w-12 text-secondary mb-8" />
-          <h2 className="text-3xl font-bold text-primary-foreground mb-4">Welcome back</h2>
+          <h2 className="text-3xl font-bold text-primary-foreground mb-4">Üdvözöljük újra</h2>
           <p className="text-primary-foreground/70 text-lg">
-            Access your timeshare transfer dashboard, track your cases, and manage documents securely.
+            Kezelje üdülési jog átruházási ügyeit, kövesse nyomon dokumentumait és fizetéseit biztonságosan.
           </p>
         </div>
       </div>
@@ -32,18 +32,18 @@ export default function AuthPage() {
             <span className="text-xl font-bold text-primary">TimeshareRelease</span>
           </Link>
 
-          <h1 className="text-2xl font-bold text-foreground mb-2">Sign in to your account</h1>
-          <p className="text-muted-foreground mb-8">Enter your credentials to access the platform</p>
+          <h1 className="text-2xl font-bold text-foreground mb-2">Bejelentkezés a fiókjába</h1>
+          <p className="text-muted-foreground mb-8">Adja meg hitelesítő adatait a platform eléréséhez</p>
 
           <form onSubmit={(e) => e.preventDefault()} className="space-y-5">
             <div className="space-y-2">
-              <Label htmlFor="email">Email address</Label>
+              <Label htmlFor="email">E-mail cím</Label>
               <div className="relative">
                 <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
                   id="email"
                   type="email"
-                  placeholder="you@example.com"
+                  placeholder="pelda@email.com"
                   className="pl-10"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
@@ -53,9 +53,9 @@ export default function AuthPage() {
 
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <Label htmlFor="password">Password</Label>
+                <Label htmlFor="password">Jelszó</Label>
                 <a href="#" className="text-sm text-secondary hover:underline">
-                  Forgot password?
+                  Elfelejtett jelszó?
                 </a>
               </div>
               <div className="relative">
@@ -72,14 +72,14 @@ export default function AuthPage() {
             </div>
 
             <Button type="submit" className="w-full bg-secondary text-secondary-foreground hover:bg-secondary/90 py-5">
-              Sign in
+              Bejelentkezés
               <ArrowRight className="ml-2 h-4 w-4" />
             </Button>
           </form>
 
           <div className="my-8 flex items-center gap-4">
             <Separator className="flex-1" />
-            <span className="text-sm text-muted-foreground">or</span>
+            <span className="text-sm text-muted-foreground">vagy</span>
             <Separator className="flex-1" />
           </div>
 
@@ -87,23 +87,23 @@ export default function AuthPage() {
           <div className="glass rounded-xl p-5">
             <div className="flex items-center gap-2 mb-3">
               <Sparkles className="h-4 w-4 text-secondary" />
-              <span className="text-sm font-medium text-foreground">Sign in with Magic Link</span>
+              <span className="text-sm font-medium text-foreground">Bejelentkezés mágikus linkkel</span>
             </div>
             <p className="text-sm text-muted-foreground mb-4">
-              We'll send a secure link to your email — no password needed.
+              Biztonságos linket küldünk az e-mail címére — jelszó nélkül.
             </p>
             <div className="flex gap-2">
-              <Input type="email" placeholder="you@example.com" className="flex-1" />
+              <Input type="email" placeholder="pelda@email.com" className="flex-1" />
               <Button variant="outline" size="sm">
-                Send link
+                Link küldése
               </Button>
             </div>
           </div>
 
           <p className="text-sm text-muted-foreground text-center mt-8">
-            Don't have an account?{" "}
+            Még nincs fiókja?{" "}
             <a href="#" className="text-secondary font-medium hover:underline">
-              Contact us to get started
+              Vegye fel velünk a kapcsolatot
             </a>
           </p>
         </div>
