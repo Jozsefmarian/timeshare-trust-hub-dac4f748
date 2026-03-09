@@ -419,54 +419,174 @@ export type Database = {
           },
         ]
       }
+      document_types: {
+        Row: {
+          code: string
+          created_at: string
+          description: string | null
+          id: string
+          is_active: boolean
+          is_required: boolean
+          label: string
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          is_required?: boolean
+          label: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          is_required?: boolean
+          label?: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      document_versions: {
+        Row: {
+          created_at: string
+          document_id: string
+          file_size_bytes: number | null
+          id: string
+          mime_type: string | null
+          original_file_name: string
+          storage_bucket: string
+          storage_path: string
+          uploaded_by_user_id: string
+          version_no: number
+        }
+        Insert: {
+          created_at?: string
+          document_id: string
+          file_size_bytes?: number | null
+          id?: string
+          mime_type?: string | null
+          original_file_name: string
+          storage_bucket?: string
+          storage_path: string
+          uploaded_by_user_id: string
+          version_no: number
+        }
+        Update: {
+          created_at?: string
+          document_id?: string
+          file_size_bytes?: number | null
+          id?: string
+          mime_type?: string | null
+          original_file_name?: string
+          storage_bucket?: string
+          storage_path?: string
+          uploaded_by_user_id?: string
+          version_no?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "document_versions_document_id_fkey"
+            columns: ["document_id"]
+            isOneToOne: false
+            referencedRelation: "documents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "document_versions_uploaded_by_user_id_fkey"
+            columns: ["uploaded_by_user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       documents: {
         Row: {
+          ai_status: string
           case_id: string
           created_at: string
           document_type: string
+          document_type_id: string | null
           file_name: string
           file_path: string
           file_size: number | null
+          file_size_bytes: number | null
           id: string
           is_latest: boolean
           mime_type: string | null
           ocr_status: string
+          original_file_name: string | null
           parse_status: string
+          review_status: string
+          seller_user_id: string | null
+          storage_bucket: string
+          storage_path: string | null
           updated_at: string
+          upload_status: string
+          uploaded_at: string
           uploaded_by_user_id: string | null
           validation_status: string
           version_no: number
         }
         Insert: {
+          ai_status?: string
           case_id: string
           created_at?: string
           document_type: string
+          document_type_id?: string | null
           file_name: string
           file_path: string
           file_size?: number | null
+          file_size_bytes?: number | null
           id?: string
           is_latest?: boolean
           mime_type?: string | null
           ocr_status?: string
+          original_file_name?: string | null
           parse_status?: string
+          review_status?: string
+          seller_user_id?: string | null
+          storage_bucket?: string
+          storage_path?: string | null
           updated_at?: string
+          upload_status?: string
+          uploaded_at?: string
           uploaded_by_user_id?: string | null
           validation_status?: string
           version_no?: number
         }
         Update: {
+          ai_status?: string
           case_id?: string
           created_at?: string
           document_type?: string
+          document_type_id?: string | null
           file_name?: string
           file_path?: string
           file_size?: number | null
+          file_size_bytes?: number | null
           id?: string
           is_latest?: boolean
           mime_type?: string | null
           ocr_status?: string
+          original_file_name?: string | null
           parse_status?: string
+          review_status?: string
+          seller_user_id?: string | null
+          storage_bucket?: string
+          storage_path?: string | null
           updated_at?: string
+          upload_status?: string
+          uploaded_at?: string
           uploaded_by_user_id?: string | null
           validation_status?: string
           version_no?: number
@@ -477,6 +597,20 @@ export type Database = {
             columns: ["case_id"]
             isOneToOne: false
             referencedRelation: "cases"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "documents_document_type_id_fkey"
+            columns: ["document_type_id"]
+            isOneToOne: false
+            referencedRelation: "document_types"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "documents_seller_user_id_fkey"
+            columns: ["seller_user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
           {
