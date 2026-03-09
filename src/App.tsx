@@ -16,6 +16,7 @@ import AdminPolicyDetail from "./pages/AdminPolicyDetail";
 import AdminInventory from "./pages/AdminInventory";
 import AdminInventoryDetail from "./pages/AdminInventoryDetail";
 import NotFound from "./pages/NotFound";
+import ProtectedRoute from "./components/ProtectedRoute";
 
 const queryClient = new QueryClient();
 
@@ -28,16 +29,89 @@ const App = () => (
         <Routes>
           <Route path="/" element={<LandingPage />} />
           <Route path="/auth" element={<AuthPage />} />
-          <Route path="/seller" element={<SellerDashboard />} />
-          <Route path="/seller/new-case" element={<NewCase />} />
-          <Route path="/seller/case/:caseId" element={<CaseDetail />} />
-          <Route path="/admin" element={<AdminDashboard />} />
-          <Route path="/admin/cases" element={<AdminCases />} />
-          <Route path="/admin/case/:caseId" element={<AdminCaseDetail />} />
-          <Route path="/admin/policies" element={<AdminPolicies />} />
-          <Route path="/admin/policy/:policyId" element={<AdminPolicyDetail />} />
-          <Route path="/admin/inventory" element={<AdminInventory />} />
-          <Route path="/admin/inventory/:assetId" element={<AdminInventoryDetail />} />
+
+          <Route
+            path="/seller"
+            element={
+              <ProtectedRoute allowedRoles={["seller"]}>
+                <SellerDashboard />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/seller/new-case"
+            element={
+              <ProtectedRoute allowedRoles={["seller"]}>
+                <NewCase />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/seller/case/:caseId"
+            element={
+              <ProtectedRoute allowedRoles={["seller"]}>
+                <CaseDetail />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/admin"
+            element={
+              <ProtectedRoute allowedRoles={["admin"]}>
+                <AdminDashboard />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/cases"
+            element={
+              <ProtectedRoute allowedRoles={["admin"]}>
+                <AdminCases />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/case/:caseId"
+            element={
+              <ProtectedRoute allowedRoles={["admin"]}>
+                <AdminCaseDetail />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/policies"
+            element={
+              <ProtectedRoute allowedRoles={["admin"]}>
+                <AdminPolicies />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/policy/:policyId"
+            element={
+              <ProtectedRoute allowedRoles={["admin"]}>
+                <AdminPolicyDetail />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/inventory"
+            element={
+              <ProtectedRoute allowedRoles={["admin"]}>
+                <AdminInventory />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/inventory/:assetId"
+            element={
+              <ProtectedRoute allowedRoles={["admin"]}>
+                <AdminInventoryDetail />
+              </ProtectedRoute>
+            }
+          />
+
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
