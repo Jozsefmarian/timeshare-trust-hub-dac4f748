@@ -124,9 +124,52 @@ export default function NewCase() {
     }
   };
 
-  const handleSubmit = () => {
-    setSubmitted(true);
-    toast({ title: "Ügy sikeresen beküldve!", description: `Ügyszám: ${caseNumber}` });
+  const handleSubmit = async () => {
+    try {
+      setIsSubmitting(true);
+
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        toast({ title: "Sikertelen mentés", description: "Nincs bejelentkezett felhasználó.", variant: "destructive" });
+        return;
+      }
+
+      const { data: sellerProfile } = await (supabase as any)
+        .from("seller_profiles")
+        .select("id")
+        .eq("user_id", session.user.id)
+        .maybeSingle();
+
+      const now = new Date().toISOString();
+      const generatedCaseNumber = `TS-${new Date().getFullYear()}-${Date.now().toString().slice(-6)}`;
+
+      const { data, error } = await (supabase as any)
+        .from("cases")
+        .insert({
+          case_number: generatedCaseNumber,
+          seller_user_id: session.user.id,
+          seller_profile_id: sellerProfile?.id ?? null,
+          status: "draft",
+          status_group: "intake",
+          current_step: "seller_started",
+          priority: "normal",
+          source: "seller_portal",
+          created_at: now,
+          updated_at: now,
+        })
+        .select("id")
+        .single();
+
+      if (error) throw error;
+
+      toast({ title: "Ügy létrehozva", description: "Az új ügy sikeresen létrejött." });
+      navigate(`/seller/case/${data.id}`, { replace: true });
+    } catch (err: any) {
+      console.error("NewCase insert error:", err);
+      toast({ title: "Sikertelen mentés", description: err?.message || "Az ügy létrehozása nem sikerült.", variant: "destructive" });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   if (submitted) {
