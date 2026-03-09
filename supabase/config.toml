@@ -2,3 +2,6 @@ project_id = "nowfrwpknymkzujijgsz"
 
 [functions.upload-document-init]
 verify_jwt = false
+
+[functions.confirm-document-upload]
+verify_jwt = false
