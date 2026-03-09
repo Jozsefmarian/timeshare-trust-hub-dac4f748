@@ -141,10 +141,9 @@ Deno.serve(async (req) => {
         mime_type: mime_type || null,
         file_size_bytes: file_size_bytes || null,
         file_size: file_size_bytes || null,
-        upload_status: "uploaded",
+        upload_status: "initiated",
         review_status: "pending",
         ai_status: "pending",
-        uploaded_at: new Date().toISOString(),
         uploaded_by_user_id: userId,
       })
       .select(
