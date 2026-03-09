@@ -1,5 +1,5 @@
-import { ReactNode } from "react";
-import { Link, useLocation } from "react-router-dom";
+import { ReactNode, useEffect, useState } from "react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   LayoutDashboard,
   FolderOpen,
@@ -14,7 +14,8 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { useState } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { getInitials, getSessionAndProfile, type AppProfile } from "@/lib/auth";
 
 const sellerNavItems = [
   { title: "Vezérlőpult", icon: LayoutDashboard, href: "/seller" },
@@ -28,7 +29,35 @@ const sellerNavItems = [
 
 export default function SellerLayout({ children }: { children: ReactNode }) {
   const location = useLocation();
+  const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [profile, setProfile] = useState<AppProfile | null>(null);
+  const [isSigningOut, setIsSigningOut] = useState(false);
+
+  useEffect(() => {
+    const loadProfile = async () => {
+      try {
+        const { profile } = await getSessionAndProfile();
+        setProfile(profile);
+      } catch (error) {
+        console.error("SellerLayout profile load error:", error);
+      }
+    };
+
+    loadProfile();
+  }, []);
+
+  const handleSignOut = async () => {
+    try {
+      setIsSigningOut(true);
+      await supabase.auth.signOut();
+      navigate("/auth", { replace: true });
+    } catch (error) {
+      console.error("Seller sign out error:", error);
+    } finally {
+      setIsSigningOut(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-background flex">
@@ -71,9 +100,13 @@ export default function SellerLayout({ children }: { children: ReactNode }) {
         </nav>
 
         <div className="p-3 border-t border-sidebar-border">
-          <button className="flex items-center gap-3 px-3 py-2 text-sm text-sidebar-foreground/50 hover:text-sidebar-foreground transition-colors w-full rounded-lg">
+          <button
+            onClick={handleSignOut}
+            disabled={isSigningOut}
+            className="flex items-center gap-3 px-3 py-2 text-sm text-sidebar-foreground/50 hover:text-sidebar-foreground transition-colors w-full rounded-lg"
+          >
             <LogOut className="h-4 w-4 shrink-0" />
-            {sidebarOpen && <span>Kijelentkezés</span>}
+            {sidebarOpen && <span>{isSigningOut ? "Kijelentkezés..." : "Kijelentkezés"}</span>}
           </button>
         </div>
       </aside>
@@ -87,7 +120,7 @@ export default function SellerLayout({ children }: { children: ReactNode }) {
           <div className="flex-1" />
           <div className="flex items-center gap-3">
             <div className="h-8 w-8 rounded-full bg-secondary/20 flex items-center justify-center text-secondary text-sm font-bold">
-              S
+              {getInitials(profile)}
             </div>
           </div>
         </header>
