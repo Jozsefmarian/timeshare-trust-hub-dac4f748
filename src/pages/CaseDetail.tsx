@@ -305,7 +305,9 @@ export default function CaseDetail() {
 
     const { data, error } = await supabase
       .from("documents")
-      .select("id, original_file_name, upload_status, review_status, ai_status, uploaded_at, document_type_id, storage_bucket, storage_path")
+      .select(
+        "id, original_file_name, upload_status, review_status, ai_status, uploaded_at, document_type_id, storage_bucket, storage_path",
+      )
       .eq("case_id", caseId)
       .order("created_at", { ascending: false });
 
@@ -319,9 +321,11 @@ export default function CaseDetail() {
     if (!caseId) return;
     const { data } = await (supabase as any)
       .from("contracts")
-      .select("id, status, generated_file_name, generated_storage_bucket, generated_storage_path, signed_file_name, signed_storage_bucket, signed_storage_path, generated_at, signed_uploaded_at")
+      .select(
+        "id, status, generated_file_name, generated_storage_bucket, generated_storage_path, signed_file_name, signed_storage_bucket, signed_storage_path, generated_at, signed_uploaded_at",
+      )
       .eq("case_id", caseId)
-      .eq("contract_type", "sale_contract")
+      .eq("contract_type", "sale_purchase")
       .maybeSingle();
     setContract(data as ContractRow | null);
   }, [caseId]);
@@ -382,9 +386,7 @@ export default function CaseDetail() {
     }
     try {
       setPreviewLoadingId(doc.id);
-      const { data, error } = await supabase.storage
-        .from(doc.storage_bucket)
-        .createSignedUrl(doc.storage_path, 60);
+      const { data, error } = await supabase.storage.from(doc.storage_bucket).createSignedUrl(doc.storage_path, 60);
       if (error) throw error;
       if (data?.signedUrl) {
         window.open(data.signedUrl, "_blank", "noopener,noreferrer");
@@ -413,39 +415,76 @@ export default function CaseDetail() {
   const handleUploadSigned = async () => {
     setSignedUploadMsg(null);
     setSignedUploadErr(null);
-    if (!signedFile || !caseId || !contract) {
+
+    if (!signedFile || !caseId || !contract || !caseData) {
       setSignedUploadErr("Kérjük, válassz ki egy fájlt.");
       return;
     }
+
     try {
       setIsUploadingSigned(true);
+
       const ts = Date.now();
+      const now = new Date().toISOString();
+      const previousStatus = caseData.status;
       const storagePath = `cases/${caseId}/contracts/signed/${ts}-${signedFile.name}`;
       const bucket = "signed-contracts";
 
-      const { error: uploadErr } = await supabase.storage
-        .from(bucket)
-        .upload(storagePath, signedFile, {
-          contentType: signedFile.type || "application/octet-stream",
-          upsert: false,
-        });
+      // 1. Storage upload
+      const { error: uploadErr } = await supabase.storage.from(bucket).upload(storagePath, signedFile, {
+        contentType: signedFile.type || "application/octet-stream",
+        upsert: false,
+      });
       if (uploadErr) throw uploadErr;
 
-      const { error: updateErr } = await (supabase as any)
+      // 2. Contract update
+      const { error: contractUpdateErr } = await (supabase as any)
         .from("contracts")
         .update({
           signed_storage_bucket: bucket,
           signed_storage_path: storagePath,
           signed_file_name: signedFile.name,
-          signed_uploaded_at: new Date().toISOString(),
+          signed_uploaded_at: now,
           status: "signed_uploaded",
         })
         .eq("id", contract.id);
-      if (updateErr) throw updateErr;
+      if (contractUpdateErr) throw contractUpdateErr;
+
+      // 3. Case status update
+      const { error: caseUpdateErr } = await supabase
+        .from("cases")
+        .update({
+          status: "signed_contract_uploaded",
+        })
+        .eq("id", caseId);
+      if (caseUpdateErr) throw caseUpdateErr;
+
+      // 4. Case status history insert
+      const { error: historyErr } = await supabase.from("case_status_history").insert({
+        case_id: caseId,
+        from_status: previousStatus,
+        to_status: "signed_contract_uploaded",
+        change_source: "seller_frontend",
+        note: "Seller uploaded signed sale contract",
+        created_at: now,
+      });
+      if (historyErr) throw historyErr;
+
+      // 5. Local UI refresh
+      setCaseData((prev) =>
+        prev
+          ? {
+              ...prev,
+              status: "signed_contract_uploaded",
+              updated_at: now,
+            }
+          : prev,
+      );
 
       setSignedUploadMsg("Az aláírt szerződés sikeresen feltöltve.");
       setSignedFile(null);
       if (signedFileRef.current) signedFileRef.current.value = "";
+
       await loadContract();
     } catch (err: any) {
       setSignedUploadErr(err?.message || "A feltöltés nem sikerült.");
@@ -456,12 +495,18 @@ export default function CaseDetail() {
 
   const contractStatusLabel = (s: string): string => {
     switch (s) {
-      case "pending_generation": return "Generálásra vár";
-      case "generated": return "Generálva";
-      case "awaiting_signature": return "Aláírásra vár";
-      case "signed_uploaded": return "Aláírt példány feltöltve";
-      case "verified": return "Ellenőrizve";
-      default: return s;
+      case "pending_generation":
+        return "Generálásra vár";
+      case "generated":
+        return "Generálva";
+      case "awaiting_signature":
+        return "Aláírásra vár";
+      case "signed_uploaded":
+        return "Aláírt példány feltöltve";
+      case "verified":
+        return "Ellenőrizve";
+      default:
+        return s;
     }
   };
 
@@ -743,7 +788,11 @@ export default function CaseDetail() {
                   {uploadError && <p className="text-sm text-destructive">{uploadError}</p>}
                   {uploadSuccessMessage && <p className="text-sm text-success">{uploadSuccessMessage}</p>}
 
-                  <Button onClick={handleUpload} disabled={isUploading || !selectedDocumentTypeId || !selectedFile} className="w-full">
+                  <Button
+                    onClick={handleUpload}
+                    disabled={isUploading || !selectedDocumentTypeId || !selectedFile}
+                    className="w-full"
+                  >
                     {isUploading ? (
                       <>
                         <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -828,10 +877,14 @@ export default function CaseDetail() {
                       <p className="text-xs text-muted-foreground">Fájl: {contract.generated_file_name}</p>
                     )}
                     {contract.generated_at && (
-                      <p className="text-xs text-muted-foreground">Generálva: {formatDateTime(contract.generated_at)}</p>
+                      <p className="text-xs text-muted-foreground">
+                        Generálva: {formatDateTime(contract.generated_at)}
+                      </p>
                     )}
                     {contract.signed_uploaded_at && (
-                      <p className="text-xs text-muted-foreground">Aláírt feltöltve: {formatDateTime(contract.signed_uploaded_at)}</p>
+                      <p className="text-xs text-muted-foreground">
+                        Aláírt feltöltve: {formatDateTime(contract.signed_uploaded_at)}
+                      </p>
                     )}
                   </div>
 
