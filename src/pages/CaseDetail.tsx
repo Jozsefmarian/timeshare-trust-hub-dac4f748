@@ -5,13 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -66,7 +60,7 @@ type UploadedDocument = {
   upload_status: string;
   review_status: string;
   ai_status: string;
-  uploaded_at: string;
+  uploaded_at: null;
   document_type_id: string | null;
 };
 
@@ -119,16 +113,51 @@ function aiStatusLabel(s: string): string {
 const timelineSteps = [
   { key: "draft", label: "Piszkozat", icon: Circle, description: "Az ügy létrejött, de még nincs beküldve." },
   { key: "submitted", label: "Beküldve", icon: SendHorizonal, description: "Az ügy sikeresen beküldve." },
-  { key: "docs_uploaded", label: "Dokumentumok feltöltve", icon: Upload, description: "A szükséges dokumentumok feltöltése megtörtént." },
-  { key: "ai_processing", label: "AI feldolgozás", icon: FileSearch, description: "Az ügy automatikus feldolgozás alatt áll." },
+  {
+    key: "docs_uploaded",
+    label: "Dokumentumok feltöltve",
+    icon: Upload,
+    description: "A szükséges dokumentumok feltöltése megtörtént.",
+  },
+  {
+    key: "ai_processing",
+    label: "AI feldolgozás",
+    icon: FileSearch,
+    description: "Az ügy automatikus feldolgozás alatt áll.",
+  },
   { key: "yellow_review", label: "Sárga ellenőrzés", icon: AlertTriangle, description: "Kézi ellenőrzés szükséges." },
   { key: "red_rejected", label: "Elutasítva", icon: XCircle, description: "Az ügy elutasításra került." },
   { key: "green_approved", label: "Jóváhagyva", icon: CheckCircle, description: "Az ügy jóváhagyásra került." },
-  { key: "contract_generated", label: "Szerződés generálva", icon: FileText, description: "Az adásvételi szerződés elkészült." },
-  { key: "awaiting_signed_contract", label: "Aláírt szerződésre vár", icon: PenLine, description: "Az aláírt szerződés feltöltése szükséges." },
-  { key: "signed_contract_uploaded", label: "Aláírt szerződés feltöltve", icon: Upload, description: "Az aláírt szerződés beérkezett." },
-  { key: "service_agreement_accepted", label: "Szolgáltatási szerződés elfogadva", icon: FileCheck, description: "A szolgáltatási szerződés elfogadása megtörtént." },
-  { key: "payment_pending", label: "Fizetés függőben", icon: CreditCard, description: "A fizetés még nem érkezett meg." },
+  {
+    key: "contract_generated",
+    label: "Szerződés generálva",
+    icon: FileText,
+    description: "Az adásvételi szerződés elkészült.",
+  },
+  {
+    key: "awaiting_signed_contract",
+    label: "Aláírt szerződésre vár",
+    icon: PenLine,
+    description: "Az aláírt szerződés feltöltése szükséges.",
+  },
+  {
+    key: "signed_contract_uploaded",
+    label: "Aláírt szerződés feltöltve",
+    icon: Upload,
+    description: "Az aláírt szerződés beérkezett.",
+  },
+  {
+    key: "service_agreement_accepted",
+    label: "Szolgáltatási szerződés elfogadva",
+    icon: FileCheck,
+    description: "A szolgáltatási szerződés elfogadása megtörtént.",
+  },
+  {
+    key: "payment_pending",
+    label: "Fizetés függőben",
+    icon: CreditCard,
+    description: "A fizetés még nem érkezett meg.",
+  },
   { key: "paid", label: "Fizetve", icon: CreditCard, description: "A fizetés megérkezett." },
   { key: "closed", label: "Lezárva", icon: Lock, description: "Az ügy sikeresen lezárult." },
 ];
@@ -143,8 +172,14 @@ const statusBadgeMap: Record<string, { label: string; className: string }> = {
   green_approved: { label: "Jóváhagyva", className: "bg-success/15 text-success border-success/30" },
   contract_generated: { label: "Szerződés generálva", className: "bg-secondary/15 text-secondary border-secondary/30" },
   awaiting_signed_contract: { label: "Aláírásra vár", className: "bg-warning/15 text-warning border-warning/30" },
-  signed_contract_uploaded: { label: "Aláírt szerződés feltöltve", className: "bg-secondary/15 text-secondary border-secondary/30" },
-  service_agreement_accepted: { label: "Szolgáltatási szerződés elfogadva", className: "bg-secondary/15 text-secondary border-secondary/30" },
+  signed_contract_uploaded: {
+    label: "Aláírt szerződés feltöltve",
+    className: "bg-secondary/15 text-secondary border-secondary/30",
+  },
+  service_agreement_accepted: {
+    label: "Szolgáltatási szerződés elfogadva",
+    className: "bg-secondary/15 text-secondary border-secondary/30",
+  },
   payment_pending: { label: "Fizetés függőben", className: "bg-warning/15 text-warning border-warning/30" },
   paid: { label: "Fizetve", className: "bg-success/15 text-success border-success/30" },
   closed: { label: "Lezárt ügy", className: "bg-success/15 text-success border-success/30" },
@@ -209,7 +244,7 @@ export default function CaseDetail() {
         const { data, error } = await (supabase as any)
           .from("cases")
           .select(
-            "id, case_number, status, status_group, current_step, priority, source, created_at, updated_at, submitted_at, closed_at"
+            "id, case_number, status, status_group, current_step, priority, source, created_at, updated_at, submitted_at, closed_at",
           )
           .eq("id", caseId)
           .maybeSingle();
@@ -311,10 +346,12 @@ export default function CaseDetail() {
 
   const currentStatus = useMemo(() => {
     if (!caseData?.status) return statusBadgeMap.draft;
-    return statusBadgeMap[caseData.status] || {
-      label: caseData.status,
-      className: "bg-muted text-muted-foreground",
-    };
+    return (
+      statusBadgeMap[caseData.status] || {
+        label: caseData.status,
+        className: "bg-muted text-muted-foreground",
+      }
+    );
   }, [caseData]);
 
   const currentStepIndex = useMemo(() => {
@@ -329,7 +366,10 @@ export default function CaseDetail() {
     return (
       <SellerLayout>
         <div className="space-y-6">
-          <Link to="/seller" className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors">
+          <Link
+            to="/seller"
+            className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+          >
             <ArrowLeft className="h-4 w-4" />
             Vissza a vezérlőpultra
           </Link>
@@ -347,7 +387,10 @@ export default function CaseDetail() {
     return (
       <SellerLayout>
         <div className="space-y-6">
-          <Link to="/seller" className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors">
+          <Link
+            to="/seller"
+            className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+          >
             <ArrowLeft className="h-4 w-4" />
             Vissza a vezérlőpultra
           </Link>
@@ -366,7 +409,10 @@ export default function CaseDetail() {
     return (
       <SellerLayout>
         <div className="space-y-6">
-          <Link to="/seller" className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors">
+          <Link
+            to="/seller"
+            className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+          >
             <ArrowLeft className="h-4 w-4" />
             Vissza a vezérlőpultra
           </Link>
@@ -388,7 +434,10 @@ export default function CaseDetail() {
   return (
     <SellerLayout>
       <div className="space-y-6">
-        <Link to="/seller" className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors">
+        <Link
+          to="/seller"
+          className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+        >
           <ArrowLeft className="h-4 w-4" />
           Vissza a vezérlőpultra
         </Link>
@@ -464,32 +513,48 @@ export default function CaseDetail() {
                     return (
                       <div key={step.key} className="flex gap-4 relative">
                         {!isLast && (
-                          <div className={cn(
-                            "absolute left-[17px] top-[36px] w-0.5 h-[calc(100%-12px)]",
-                            completed ? "bg-success" : current ? "bg-primary" : "bg-border"
-                          )} />
+                          <div
+                            className={cn(
+                              "absolute left-[17px] top-[36px] w-0.5 h-[calc(100%-12px)]",
+                              completed ? "bg-success" : current ? "bg-primary" : "bg-border",
+                            )}
+                          />
                         )}
 
-                        <div className={cn(
-                          "relative z-10 flex items-center justify-center h-9 w-9 rounded-full shrink-0 border-2 transition-colors",
-                          completed ? "bg-success border-success text-success-foreground"
-                            : current ? "bg-primary border-primary text-primary-foreground"
-                            : "bg-muted border-border text-muted-foreground"
-                        )}>
-                          {completed ? <CheckCircle2 className="h-4 w-4" /> : current ? <Icon className="h-4 w-4" /> : <Circle className="h-4 w-4" />}
+                        <div
+                          className={cn(
+                            "relative z-10 flex items-center justify-center h-9 w-9 rounded-full shrink-0 border-2 transition-colors",
+                            completed
+                              ? "bg-success border-success text-success-foreground"
+                              : current
+                                ? "bg-primary border-primary text-primary-foreground"
+                                : "bg-muted border-border text-muted-foreground",
+                          )}
+                        >
+                          {completed ? (
+                            <CheckCircle2 className="h-4 w-4" />
+                          ) : current ? (
+                            <Icon className="h-4 w-4" />
+                          ) : (
+                            <Circle className="h-4 w-4" />
+                          )}
                         </div>
 
                         <div className={cn("pb-8", isLast && "pb-0")}>
-                          <p className={cn(
-                            "text-sm font-medium leading-tight",
-                            completed ? "text-success" : current ? "text-foreground" : "text-muted-foreground"
-                          )}>
+                          <p
+                            className={cn(
+                              "text-sm font-medium leading-tight",
+                              completed ? "text-success" : current ? "text-foreground" : "text-muted-foreground",
+                            )}
+                          >
                             {step.label}
                           </p>
-                          <p className={cn(
-                            "text-xs mt-0.5",
-                            completed || current ? "text-muted-foreground" : "text-muted-foreground/60"
-                          )}>
+                          <p
+                            className={cn(
+                              "text-xs mt-0.5",
+                              completed || current ? "text-muted-foreground" : "text-muted-foreground/60",
+                            )}
+                          >
                             {step.description}
                           </p>
                         </div>
@@ -548,18 +613,10 @@ export default function CaseDetail() {
                     />
                   </div>
 
-                  {uploadError && (
-                    <p className="text-sm text-destructive">{uploadError}</p>
-                  )}
-                  {uploadSuccessMessage && (
-                    <p className="text-sm text-success">{uploadSuccessMessage}</p>
-                  )}
+                  {uploadError && <p className="text-sm text-destructive">{uploadError}</p>}
+                  {uploadSuccessMessage && <p className="text-sm text-success">{uploadSuccessMessage}</p>}
 
-                  <Button
-                    onClick={handleUpload}
-                    disabled={isUploading}
-                    className="w-full"
-                  >
+                  <Button onClick={handleUpload} disabled={isUploading} className="w-full">
                     {isUploading ? (
                       <>
                         <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -585,18 +642,13 @@ export default function CaseDetail() {
                   ) : (
                     <div className="space-y-3">
                       {uploadedDocuments.map((doc) => (
-                        <div
-                          key={doc.id}
-                          className="rounded-md border border-border p-3 space-y-1.5 text-sm"
-                        >
+                        <div key={doc.id} className="rounded-md border border-border p-3 space-y-1.5 text-sm">
                           <div className="flex items-start justify-between gap-2">
                             <div className="space-y-0.5 min-w-0">
                               <p className="font-medium text-foreground truncate">
                                 {doc.original_file_name || "Névtelen fájl"}
                               </p>
-                              <p className="text-xs text-muted-foreground">
-                                {getDocTypeLabel(doc.document_type_id)}
-                              </p>
+                              <p className="text-xs text-muted-foreground">{getDocTypeLabel(doc.document_type_id)}</p>
                             </div>
                           </div>
                           <div className="flex flex-wrap gap-2">
@@ -610,9 +662,7 @@ export default function CaseDetail() {
                               AI: {aiStatusLabel(doc.ai_status)}
                             </Badge>
                           </div>
-                          <p className="text-xs text-muted-foreground">
-                            Feltöltve: {formatDateTime(doc.uploaded_at)}
-                          </p>
+                          <p className="text-xs text-muted-foreground">Feltöltve: {formatDateTime(doc.uploaded_at)}</p>
                         </div>
                       ))}
                     </div>
@@ -630,9 +680,7 @@ export default function CaseDetail() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-sm text-muted-foreground">
-                  Az ügy aktuális állapota: {currentStatus.label}
-                </p>
+                <p className="text-sm text-muted-foreground">Az ügy aktuális állapota: {currentStatus.label}</p>
                 <p className="text-sm text-muted-foreground mt-1">
                   Jelenlegi lépés: {caseData.current_step || "Nincs megadva"}
                 </p>
@@ -642,9 +690,7 @@ export default function CaseDetail() {
                   </p>
                 )}
                 {caseData.status === "cancelled" && (
-                  <p className="text-sm text-destructive mt-2">
-                    Ez az ügy megszakított státuszban van.
-                  </p>
+                  <p className="text-sm text-destructive mt-2">Ez az ügy megszakított státuszban van.</p>
                 )}
                 <Button variant="outline" className="mt-4" asChild>
                   <Link to="/seller">Vissza a vezérlőpultra</Link>
