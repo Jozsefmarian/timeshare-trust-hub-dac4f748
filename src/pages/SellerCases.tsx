@@ -60,10 +60,9 @@ export default function SellerCases() {
           .eq("seller_id", session.user.id)
           .order("created_at", { ascending: false });
 
-        const { data, error: queryError } = (await query) as {
-          data: CaseRow[] | null;
-          error: any;
-        };
+        const result = (await query) as any;
+        const data = (result.data ?? []) as CaseRow[];
+        const queryError = result.error;
 
         if (queryError) throw queryError;
         setCases((data as CaseRow[]) ?? []);
