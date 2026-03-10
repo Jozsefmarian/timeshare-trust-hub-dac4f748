@@ -48,6 +48,15 @@ type CaseDocument = {
   storage_path: string | null;
 };
 
+type AiValidationResult = {
+  id: string;
+  document_id: string;
+  validation_status: string;
+  field_match_score: number | null;
+  keyword_flags: Record<string, unknown> | null;
+  notes: string | null;
+};
+
 type DocumentType = {
   id: string;
   code: string;
@@ -204,6 +213,7 @@ export default function AdminCaseDetail() {
   const [seller, setSeller] = useState<SellerProfile | null>(null);
   const [documents, setDocuments] = useState<CaseDocument[]>([]);
   const [documentTypes, setDocumentTypes] = useState<DocumentType[]>([]);
+  const [validationResults, setValidationResults] = useState<AiValidationResult[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [comment, setComment] = useState("");
   const [isSavingNote, setIsSavingNote] = useState(false);
@@ -270,13 +280,26 @@ export default function AdminCaseDetail() {
     if (data) setDocumentTypes(data as DocumentType[]);
   }, []);
 
+  // Load AI validation results
+  const loadValidationResults = useCallback(async () => {
+    if (!caseId) return;
+    const { data } = await supabase
+      .from("ai_validation_results" as any)
+      .select("id, document_id, validation_status, field_match_score, keyword_flags, notes")
+      .eq("case_id", caseId)
+      .order("created_at", { ascending: false });
+
+    if (data) setValidationResults(data as any as AiValidationResult[]);
+  }, [caseId]);
+
   useEffect(() => {
     if (caseId) {
       loadCase();
       loadDocuments();
       loadDocumentTypes();
+      loadValidationResults();
     }
-  }, [caseId, loadCase, loadDocuments, loadDocumentTypes]);
+  }, [caseId, loadCase, loadDocuments, loadDocumentTypes, loadValidationResults]);
 
   // Actions
   const handleDocReview = async (docId: string, status: string) => {
@@ -528,6 +551,63 @@ export default function AdminCaseDetail() {
                 </div>
               </CardContent>
             </Card>
+
+            {/* Ellenőrzési eredmény */}
+            {validationResults.length > 0 && (
+              <Card className="shadow-sm">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <ShieldCheck className="h-4 w-4 text-primary" />
+                    Ellenőrzési eredmény
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-0">
+                  <div className="divide-y divide-border">
+                    {validationResults.map((vr) => {
+                      const docName =
+                        documents.find((d) => d.id === vr.document_id)?.original_file_name ||
+                        documents.find((d) => d.id === vr.document_id)?.file_name ||
+                        "Ismeretlen dokumentum";
+                      return (
+                        <div key={vr.id} className="px-6 py-4 space-y-2">
+                          <p className="text-sm font-medium text-foreground">{docName}</p>
+                          <div className="flex items-center gap-4 flex-wrap">
+                            <Badge
+                              variant="outline"
+                              className={
+                                vr.validation_status === "completed"
+                                  ? "bg-success/10 text-success"
+                                  : vr.validation_status === "processing"
+                                  ? "bg-warning/10 text-warning"
+                                  : vr.validation_status === "failed"
+                                  ? "bg-destructive/10 text-destructive"
+                                  : "bg-muted text-muted-foreground"
+                              }
+                            >
+                              {vr.validation_status === "completed"
+                                ? "Kész"
+                                : vr.validation_status === "processing"
+                                ? "Feldolgozás alatt"
+                                : vr.validation_status === "failed"
+                                ? "Sikertelen"
+                                : "Függőben"}
+                            </Badge>
+                            {vr.field_match_score != null && (
+                              <span className="text-sm text-foreground">
+                                Egyezési pont: <strong>{vr.field_match_score}%</strong>
+                              </span>
+                            )}
+                          </div>
+                          {vr.notes && (
+                            <p className="text-xs text-muted-foreground">{vr.notes}</p>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
           </div>
 
           {/* Right column */}

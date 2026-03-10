@@ -14,6 +14,57 @@ export type Database = {
   }
   public: {
     Tables: {
+      ai_validation_results: {
+        Row: {
+          case_id: string
+          created_at: string
+          document_id: string
+          field_match_score: number | null
+          id: string
+          keyword_flags: Json | null
+          notes: string | null
+          updated_at: string
+          validation_status: string
+        }
+        Insert: {
+          case_id: string
+          created_at?: string
+          document_id: string
+          field_match_score?: number | null
+          id?: string
+          keyword_flags?: Json | null
+          notes?: string | null
+          updated_at?: string
+          validation_status?: string
+        }
+        Update: {
+          case_id?: string
+          created_at?: string
+          document_id?: string
+          field_match_score?: number | null
+          id?: string
+          keyword_flags?: Json | null
+          notes?: string | null
+          updated_at?: string
+          validation_status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_validation_results_case_id_fkey"
+            columns: ["case_id"]
+            isOneToOne: false
+            referencedRelation: "cases"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_validation_results_document_id_fkey"
+            columns: ["document_id"]
+            isOneToOne: false
+            referencedRelation: "documents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       audit_logs: {
         Row: {
           action: string

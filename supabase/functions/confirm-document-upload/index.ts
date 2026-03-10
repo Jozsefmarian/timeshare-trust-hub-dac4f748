@@ -101,7 +101,6 @@ Deno.serve(async (req) => {
     }
 
     // 5. Verify the file actually exists in storage
-    //    Use service role client to check storage without path-based RLS issues
     const serviceClient = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
@@ -169,7 +168,15 @@ Deno.serve(async (req) => {
       );
     }
 
-    // 7. Return
+    // 7. Start AI validation pipeline (fire-and-forget via service client)
+    try {
+      await startDocumentValidation(serviceClient, document_id, doc.case_id);
+    } catch (valErr) {
+      // Log but don't fail the confirm endpoint
+      console.error("AI validation error (non-blocking):", valErr);
+    }
+
+    // 8. Return
     return new Response(JSON.stringify(updated), {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -185,3 +192,53 @@ Deno.serve(async (req) => {
     );
   }
 });
+
+// ---------- AI Validation Pipeline (placeholder) ----------
+
+async function startDocumentValidation(
+  serviceClient: ReturnType<typeof createClient>,
+  documentId: string,
+  caseId: string
+) {
+  // 1. Set document ai_status to processing
+  await serviceClient
+    .from("documents")
+    .update({ ai_status: "processing" })
+    .eq("id", documentId);
+
+  // 2. Create validation result row
+  const { data: valRow, error: insertErr } = await serviceClient
+    .from("ai_validation_results")
+    .insert({
+      document_id: documentId,
+      case_id: caseId,
+      validation_status: "processing",
+    })
+    .select("id")
+    .single();
+
+  if (insertErr) {
+    console.error("Failed to create ai_validation_results row:", insertErr);
+    throw insertErr;
+  }
+
+  // 3. Simulate validation (placeholder – will be replaced by real AI call)
+  const fieldMatchScore = Math.round(70 + Math.random() * 30); // 70-100
+
+  // 4. Update validation result
+  await serviceClient
+    .from("ai_validation_results")
+    .update({
+      validation_status: "completed",
+      field_match_score: fieldMatchScore,
+      keyword_flags: {},
+      notes: "AI validation placeholder",
+    })
+    .eq("id", valRow.id);
+
+  // 5. Update document ai_status
+  await serviceClient
+    .from("documents")
+    .update({ ai_status: "completed" })
+    .eq("id", documentId);
+}
