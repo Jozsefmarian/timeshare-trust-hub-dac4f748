@@ -43,7 +43,7 @@ export async function getSessionAndProfile(): Promise<{
 
 export function getDefaultRouteForRole(role?: string | null) {
   if (role === "admin") return "/admin";
-  if (role === "seller") return "/seller";
+  if (role === "seller") return "/app/dashboard";
   return "/auth";
 }
 

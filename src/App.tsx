@@ -6,15 +6,18 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import LandingPage from "./pages/LandingPage";
 import AuthPage from "./pages/AuthPage";
 import SellerDashboard from "./pages/SellerDashboard";
-import NewCase from "./pages/NewCase";
+import SellerCases from "./pages/SellerCases";
 import CaseDetail from "./pages/CaseDetail";
+import NewCase from "./pages/NewCase";
+import SellerCaseContracts from "./pages/SellerCaseContracts";
+import SellerCasePayment from "./pages/SellerCasePayment";
 import AdminDashboard from "./pages/AdminDashboard";
 import AdminCases from "./pages/AdminCases";
 import AdminCaseDetail from "./pages/AdminCaseDetail";
 import AdminPolicies from "./pages/AdminPolicies";
-import AdminPolicyDetail from "./pages/AdminPolicyDetail";
+import AdminResorts from "./pages/AdminResorts";
 import AdminInventory from "./pages/AdminInventory";
-import AdminInventoryDetail from "./pages/AdminInventoryDetail";
+import AdminPayments from "./pages/AdminPayments";
 import NotFound from "./pages/NotFound";
 import ProtectedRoute from "./components/ProtectedRoute";
 
@@ -27,11 +30,13 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <Routes>
+          {/* Public */}
           <Route path="/" element={<LandingPage />} />
           <Route path="/auth" element={<AuthPage />} />
 
+          {/* Seller */}
           <Route
-            path="/seller"
+            path="/app/dashboard"
             element={
               <ProtectedRoute allowedRoles={["seller"]}>
                 <SellerDashboard />
@@ -39,7 +44,23 @@ const App = () => (
             }
           />
           <Route
-            path="/seller/new-case"
+            path="/app/cases"
+            element={
+              <ProtectedRoute allowedRoles={["seller"]}>
+                <SellerCases />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/app/cases/:id"
+            element={
+              <ProtectedRoute allowedRoles={["seller"]}>
+                <CaseDetail />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/app/cases/:id/upload"
             element={
               <ProtectedRoute allowedRoles={["seller"]}>
                 <NewCase />
@@ -47,14 +68,23 @@ const App = () => (
             }
           />
           <Route
-            path="/seller/case/:caseId"
+            path="/app/cases/:id/contracts"
             element={
               <ProtectedRoute allowedRoles={["seller"]}>
-                <CaseDetail />
+                <SellerCaseContracts />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/app/cases/:id/payment"
+            element={
+              <ProtectedRoute allowedRoles={["seller"]}>
+                <SellerCasePayment />
               </ProtectedRoute>
             }
           />
 
+          {/* Admin */}
           <Route
             path="/admin"
             element={
@@ -72,7 +102,7 @@ const App = () => (
             }
           />
           <Route
-            path="/admin/case/:caseId"
+            path="/admin/cases/:id"
             element={
               <ProtectedRoute allowedRoles={["admin"]}>
                 <AdminCaseDetail />
@@ -88,15 +118,15 @@ const App = () => (
             }
           />
           <Route
-            path="/admin/policy/:policyId"
+            path="/admin/resorts"
             element={
               <ProtectedRoute allowedRoles={["admin"]}>
-                <AdminPolicyDetail />
+                <AdminResorts />
               </ProtectedRoute>
             }
           />
           <Route
-            path="/admin/inventory"
+            path="/admin/assets"
             element={
               <ProtectedRoute allowedRoles={["admin"]}>
                 <AdminInventory />
@@ -104,14 +134,15 @@ const App = () => (
             }
           />
           <Route
-            path="/admin/inventory/:assetId"
+            path="/admin/payments"
             element={
               <ProtectedRoute allowedRoles={["admin"]}>
-                <AdminInventoryDetail />
+                <AdminPayments />
               </ProtectedRoute>
             }
           />
 
+          {/* Catch-all */}
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
