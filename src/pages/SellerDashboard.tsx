@@ -52,7 +52,9 @@ export default function SellerDashboard() {
   useEffect(() => {
     const fetchCases = async () => {
       try {
-        const { data: { session } } = await supabase.auth.getSession();
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
         if (!session) {
           setError("Nincs bejelentkezett felhasználó.");
           setLoading(false);
@@ -60,8 +62,10 @@ export default function SellerDashboard() {
         }
 
         const { data, error: queryError } = await (supabase as any)
-          ..from("cases")
-          .select("id, case_number, status, status_group, current_step, priority, source, created_at, updated_at, submitted_at, closed_at")
+          .from("cases")
+          .select(
+            "id, case_number, status, status_group, current_step, priority, source, created_at, updated_at, submitted_at, closed_at",
+          )
           .eq("seller_id", session.user.id)
           .order("created_at", { ascending: false });
 
@@ -79,9 +83,13 @@ export default function SellerDashboard() {
   }, []);
 
   const totalCases = cases.length;
-  const activeCases = cases.filter((c) => c.closed_at === null && c.status !== "closed" && c.status !== "completed").length;
+  const activeCases = cases.filter(
+    (c) => c.closed_at === null && c.status !== "closed" && c.status !== "completed",
+  ).length;
   const submittedCases = cases.filter((c) => c.submitted_at !== null).length;
-  const closedCases = cases.filter((c) => c.closed_at !== null || c.status === "closed" || c.status === "completed").length;
+  const closedCases = cases.filter(
+    (c) => c.closed_at !== null || c.status === "closed" || c.status === "completed",
+  ).length;
 
   return (
     <SellerLayout>
@@ -95,17 +103,41 @@ export default function SellerDashboard() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             {Array.from({ length: 4 }).map((_, i) => (
               <Card key={i} className="shadow-sm">
-                <CardHeader className="pb-2"><Skeleton className="h-4 w-24" /></CardHeader>
-                <CardContent><Skeleton className="h-8 w-16" /></CardContent>
+                <CardHeader className="pb-2">
+                  <Skeleton className="h-4 w-24" />
+                </CardHeader>
+                <CardContent>
+                  <Skeleton className="h-8 w-16" />
+                </CardContent>
               </Card>
             ))}
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <DashboardCard title="Összes ügy" value={String(totalCases)} icon={<FolderOpen className="h-4 w-4" />} variant="accent" />
-            <DashboardCard title="Aktív ügyek" value={String(activeCases)} icon={<Clock className="h-4 w-4" />} variant="warning" />
-            <DashboardCard title="Beküldött ügyek" value={String(submittedCases)} icon={<Send className="h-4 w-4" />} variant="default" />
-            <DashboardCard title="Lezárt ügyek" value={String(closedCases)} icon={<FileCheck className="h-4 w-4" />} variant="success" />
+            <DashboardCard
+              title="Összes ügy"
+              value={String(totalCases)}
+              icon={<FolderOpen className="h-4 w-4" />}
+              variant="accent"
+            />
+            <DashboardCard
+              title="Aktív ügyek"
+              value={String(activeCases)}
+              icon={<Clock className="h-4 w-4" />}
+              variant="warning"
+            />
+            <DashboardCard
+              title="Beküldött ügyek"
+              value={String(submittedCases)}
+              icon={<Send className="h-4 w-4" />}
+              variant="default"
+            />
+            <DashboardCard
+              title="Lezárt ügyek"
+              value={String(closedCases)}
+              icon={<FileCheck className="h-4 w-4" />}
+              variant="success"
+            />
           </div>
         )}
 
@@ -174,7 +206,9 @@ export default function SellerDashboard() {
                       <div key={c.id} className="flex items-start gap-3">
                         <div className="mt-1.5 h-2 w-2 rounded-full bg-secondary shrink-0" />
                         <div>
-                          <p className="text-sm text-foreground">{c.case_number} — {statusLabel(c.status)}</p>
+                          <p className="text-sm text-foreground">
+                            {c.case_number} — {statusLabel(c.status)}
+                          </p>
                           <p className="text-xs text-muted-foreground">
                             {new Date(c.updated_at).toLocaleDateString("hu-HU")}
                           </p>
