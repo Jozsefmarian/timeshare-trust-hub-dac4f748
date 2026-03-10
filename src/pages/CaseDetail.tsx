@@ -63,6 +63,8 @@ type UploadedDocument = {
   uploaded_at: string | null;
   document_type_id: string | null;
   created_at?: string;
+  storage_bucket: string | null;
+  storage_path: string | null;
 };
 
 // ---------- Status label helpers ----------
