@@ -280,6 +280,18 @@ export default function AdminCaseDetail() {
     if (data) setDocumentTypes(data as DocumentType[]);
   }, []);
 
+  // Load AI validation results
+  const loadValidationResults = useCallback(async () => {
+    if (!caseId) return;
+    const { data } = await supabase
+      .from("ai_validation_results" as any)
+      .select("id, document_id, validation_status, field_match_score, keyword_flags, notes")
+      .eq("case_id", caseId)
+      .order("created_at", { ascending: false });
+
+    if (data) setValidationResults(data as any as AiValidationResult[]);
+  }, [caseId]);
+
   useEffect(() => {
     if (caseId) {
       loadCase();
