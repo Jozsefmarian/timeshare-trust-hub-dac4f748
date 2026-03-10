@@ -285,7 +285,7 @@ export default function CaseDetail() {
 
     const { data, error } = await supabase
       .from("documents")
-      .select("id, original_file_name, upload_status, review_status, ai_status, uploaded_at, document_type_id")
+      .select("id, original_file_name, upload_status, review_status, ai_status, uploaded_at, document_type_id, storage_bucket, storage_path")
       .eq("case_id", caseId)
       .order("created_at", { ascending: false });
 
