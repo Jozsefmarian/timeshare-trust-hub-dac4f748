@@ -5,3 +5,6 @@ verify_jwt = false
 
 [functions.confirm-document-upload]
 verify_jwt = false
+
+[functions.generate-sale-contract]
+verify_jwt = false

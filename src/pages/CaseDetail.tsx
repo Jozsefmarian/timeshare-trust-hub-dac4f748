@@ -232,6 +232,26 @@ export default function CaseDetail() {
   const [previewLoadingId, setPreviewLoadingId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Contract state
+  type ContractRow = {
+    id: string;
+    status: string;
+    generated_file_name: string | null;
+    generated_storage_bucket: string | null;
+    generated_storage_path: string | null;
+    signed_file_name: string | null;
+    signed_storage_bucket: string | null;
+    signed_storage_path: string | null;
+    generated_at: string | null;
+    signed_uploaded_at: string | null;
+  };
+  const [contract, setContract] = useState<ContractRow | null>(null);
+  const [signedFile, setSignedFile] = useState<File | null>(null);
+  const [isUploadingSigned, setIsUploadingSigned] = useState(false);
+  const [signedUploadMsg, setSignedUploadMsg] = useState<string | null>(null);
+  const [signedUploadErr, setSignedUploadErr] = useState<string | null>(null);
+  const signedFileRef = useRef<HTMLInputElement>(null);
+
   // Load case
   useEffect(() => {
     const loadCase = async () => {
@@ -294,12 +314,25 @@ export default function CaseDetail() {
     }
   }, [caseId]);
 
+  // Load contract
+  const loadContract = useCallback(async () => {
+    if (!caseId) return;
+    const { data } = await (supabase as any)
+      .from("contracts")
+      .select("id, status, generated_file_name, generated_storage_bucket, generated_storage_path, signed_file_name, signed_storage_bucket, signed_storage_path, generated_at, signed_uploaded_at")
+      .eq("case_id", caseId)
+      .eq("contract_type", "sale_contract")
+      .maybeSingle();
+    setContract(data as ContractRow | null);
+  }, [caseId]);
+
   useEffect(() => {
     if (caseId) {
       loadDocumentTypes();
       loadUploadedDocuments();
+      loadContract();
     }
-  }, [caseId, loadDocumentTypes, loadUploadedDocuments]);
+  }, [caseId, loadDocumentTypes, loadUploadedDocuments, loadContract]);
 
   // Upload handler
   const handleUpload = async () => {
@@ -363,7 +396,75 @@ export default function CaseDetail() {
     }
   };
 
-  // Helpers
+  // Contract handlers
+  const handleOpenContract = async () => {
+    if (!contract?.generated_storage_bucket || !contract?.generated_storage_path) return;
+    try {
+      const { data, error } = await supabase.storage
+        .from(contract.generated_storage_bucket)
+        .createSignedUrl(contract.generated_storage_path, 60);
+      if (error) throw error;
+      if (data?.signedUrl) window.open(data.signedUrl, "_blank", "noopener,noreferrer");
+    } catch {
+      setSignedUploadErr("A szerződés megnyitása nem sikerült.");
+    }
+  };
+
+  const handleUploadSigned = async () => {
+    setSignedUploadMsg(null);
+    setSignedUploadErr(null);
+    if (!signedFile || !caseId || !contract) {
+      setSignedUploadErr("Kérjük, válassz ki egy fájlt.");
+      return;
+    }
+    try {
+      setIsUploadingSigned(true);
+      const ts = Date.now();
+      const storagePath = `cases/${caseId}/contracts/signed/${ts}-${signedFile.name}`;
+      const bucket = "signed-contracts";
+
+      const { error: uploadErr } = await supabase.storage
+        .from(bucket)
+        .upload(storagePath, signedFile, {
+          contentType: signedFile.type || "application/octet-stream",
+          upsert: false,
+        });
+      if (uploadErr) throw uploadErr;
+
+      const { error: updateErr } = await (supabase as any)
+        .from("contracts")
+        .update({
+          signed_storage_bucket: bucket,
+          signed_storage_path: storagePath,
+          signed_file_name: signedFile.name,
+          signed_uploaded_at: new Date().toISOString(),
+          status: "signed_uploaded",
+        })
+        .eq("id", contract.id);
+      if (updateErr) throw updateErr;
+
+      setSignedUploadMsg("Az aláírt szerződés sikeresen feltöltve.");
+      setSignedFile(null);
+      if (signedFileRef.current) signedFileRef.current.value = "";
+      await loadContract();
+    } catch (err: any) {
+      setSignedUploadErr(err?.message || "A feltöltés nem sikerült.");
+    } finally {
+      setIsUploadingSigned(false);
+    }
+  };
+
+  const contractStatusLabel = (s: string): string => {
+    switch (s) {
+      case "pending_generation": return "Generálásra vár";
+      case "generated": return "Generálva";
+      case "awaiting_signature": return "Aláírásra vár";
+      case "signed_uploaded": return "Aláírt példány feltöltve";
+      case "verified": return "Ellenőrizve";
+      default: return s;
+    }
+  };
+
   const getDocTypeLabel = (docTypeId: string | null): string => {
     if (!docTypeId) return "—";
     const dt = documentTypes.find((t) => t.id === docTypeId);
@@ -705,6 +806,79 @@ export default function CaseDetail() {
                 </div>
               </CardContent>
             </Card>
+
+            {/* Szerződés */}
+            {contract && (
+              <Card className="shadow-sm">
+                <CardHeader>
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <FileText className="h-4 w-4" />
+                    Szerződés
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-muted-foreground">Státusz:</span>
+                      <Badge variant="outline" className="text-xs">
+                        {contractStatusLabel(contract.status)}
+                      </Badge>
+                    </div>
+                    {contract.generated_file_name && (
+                      <p className="text-xs text-muted-foreground">Fájl: {contract.generated_file_name}</p>
+                    )}
+                    {contract.generated_at && (
+                      <p className="text-xs text-muted-foreground">Generálva: {formatDateTime(contract.generated_at)}</p>
+                    )}
+                    {contract.signed_uploaded_at && (
+                      <p className="text-xs text-muted-foreground">Aláírt feltöltve: {formatDateTime(contract.signed_uploaded_at)}</p>
+                    )}
+                  </div>
+
+                  {contract.generated_storage_path && (
+                    <Button variant="outline" className="w-full" onClick={handleOpenContract}>
+                      <FileText className="h-4 w-4 mr-2" />
+                      Adásvételi szerződés megnyitása
+                    </Button>
+                  )}
+
+                  {/* Signed upload section */}
+                  {contract.status === "generated" || contract.status === "awaiting_signature" ? (
+                    <div className="space-y-3 border-t border-border pt-3">
+                      <p className="text-sm font-medium text-foreground">Aláírt szerződés feltöltése</p>
+                      <div className="space-y-1.5">
+                        <Label className="text-sm">Fájl kiválasztása</Label>
+                        <Input
+                          ref={signedFileRef}
+                          type="file"
+                          disabled={isUploadingSigned}
+                          onChange={(e) => setSignedFile(e.target.files?.[0] ?? null)}
+                        />
+                      </div>
+                      {signedUploadErr && <p className="text-sm text-destructive">{signedUploadErr}</p>}
+                      {signedUploadMsg && <p className="text-sm text-success">{signedUploadMsg}</p>}
+                      <Button
+                        className="w-full"
+                        disabled={isUploadingSigned || !signedFile}
+                        onClick={handleUploadSigned}
+                      >
+                        {isUploadingSigned ? (
+                          <>
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                            Feltöltés...
+                          </>
+                        ) : (
+                          <>
+                            <Upload className="h-4 w-4 mr-2" />
+                            Feltöltés
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  ) : null}
+                </CardContent>
+              </Card>
+            )}
 
             {/* Next action */}
             <Card className="shadow-sm">

@@ -368,9 +368,15 @@ export type Database = {
           contract_type: string
           created_at: string
           generated_at: string | null
+          generated_file_name: string | null
           generated_file_path: string | null
+          generated_storage_bucket: string | null
+          generated_storage_path: string | null
           id: string
           seller_uploaded_signed_file_path: string | null
+          signed_file_name: string | null
+          signed_storage_bucket: string | null
+          signed_storage_path: string | null
           signed_uploaded_at: string | null
           status: string | null
           template_version: string | null
@@ -381,9 +387,15 @@ export type Database = {
           contract_type?: string
           created_at?: string
           generated_at?: string | null
+          generated_file_name?: string | null
           generated_file_path?: string | null
+          generated_storage_bucket?: string | null
+          generated_storage_path?: string | null
           id?: string
           seller_uploaded_signed_file_path?: string | null
+          signed_file_name?: string | null
+          signed_storage_bucket?: string | null
+          signed_storage_path?: string | null
           signed_uploaded_at?: string | null
           status?: string | null
           template_version?: string | null
@@ -394,9 +406,15 @@ export type Database = {
           contract_type?: string
           created_at?: string
           generated_at?: string | null
+          generated_file_name?: string | null
           generated_file_path?: string | null
+          generated_storage_bucket?: string | null
+          generated_storage_path?: string | null
           id?: string
           seller_uploaded_signed_file_path?: string | null
+          signed_file_name?: string | null
+          signed_storage_bucket?: string | null
+          signed_storage_path?: string | null
           signed_uploaded_at?: string | null
           status?: string | null
           template_version?: string | null

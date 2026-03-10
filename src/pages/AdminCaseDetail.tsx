@@ -203,6 +203,42 @@ function formatDateTime(value?: string | null) {
   return d.toLocaleString("hu-HU", { year: "numeric", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 
+function contractStatusLabel(s: string): string {
+  switch (s) {
+    case "pending_generation": return "Generálásra vár";
+    case "generated": return "Generálva";
+    case "awaiting_signature": return "Aláírásra vár";
+    case "signed_uploaded": return "Aláírt példány feltöltve";
+    case "verified": return "Ellenőrizve";
+    default: return s;
+  }
+}
+
+function contractStatusClasses(s: string): string {
+  switch (s) {
+    case "generated": return "bg-primary/10 text-primary";
+    case "awaiting_signature": return "bg-warning/10 text-warning";
+    case "signed_uploaded": return "bg-success/10 text-success";
+    case "verified": return "bg-success/10 text-success";
+    default: return "bg-muted text-muted-foreground";
+  }
+}
+
+type ContractRow = {
+  id: string;
+  case_id: string;
+  contract_type: string;
+  status: string;
+  generated_file_name: string | null;
+  generated_storage_bucket: string | null;
+  generated_storage_path: string | null;
+  signed_file_name: string | null;
+  signed_storage_bucket: string | null;
+  signed_storage_path: string | null;
+  generated_at: string | null;
+  signed_uploaded_at: string | null;
+};
+
 // ---------- Component ----------
 
 export default function AdminCaseDetail() {
@@ -214,6 +250,8 @@ export default function AdminCaseDetail() {
   const [documents, setDocuments] = useState<CaseDocument[]>([]);
   const [documentTypes, setDocumentTypes] = useState<DocumentType[]>([]);
   const [validationResults, setValidationResults] = useState<AiValidationResult[]>([]);
+  const [contract, setContract] = useState<ContractRow | null>(null);
+  const [isGeneratingContract, setIsGeneratingContract] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [comment, setComment] = useState("");
   const [isSavingNote, setIsSavingNote] = useState(false);
@@ -292,14 +330,28 @@ export default function AdminCaseDetail() {
     if (data) setValidationResults(data as any as AiValidationResult[]);
   }, [caseId]);
 
+  // Load contract
+  const loadContract = useCallback(async () => {
+    if (!caseId) return;
+    const { data } = await (supabase as any)
+      .from("contracts")
+      .select("id, case_id, contract_type, status, generated_file_name, generated_storage_bucket, generated_storage_path, signed_file_name, signed_storage_bucket, signed_storage_path, generated_at, signed_uploaded_at")
+      .eq("case_id", caseId)
+      .eq("contract_type", "sale_contract")
+      .maybeSingle();
+
+    setContract(data as ContractRow | null);
+  }, [caseId]);
+
   useEffect(() => {
     if (caseId) {
       loadCase();
       loadDocuments();
       loadDocumentTypes();
       loadValidationResults();
+      loadContract();
     }
-  }, [caseId, loadCase, loadDocuments, loadDocumentTypes, loadValidationResults]);
+  }, [caseId, loadCase, loadDocuments, loadDocumentTypes, loadValidationResults, loadContract]);
 
   // Actions
   const handleDocReview = async (docId: string, status: string) => {
@@ -345,7 +397,59 @@ export default function AdminCaseDetail() {
     }
   };
 
-  const handleOpenDocument = async (doc: CaseDocument) => {
+  const handleGenerateContract = async () => {
+    if (!caseId) return;
+    try {
+      setIsGeneratingContract(true);
+      const { data, error } = await supabase.functions.invoke("generate-sale-contract", {
+        body: { case_id: caseId },
+      });
+      if (error) throw error;
+      toast.success("Adásvételi szerződés sikeresen generálva.");
+      await Promise.all([loadContract(), loadCase()]);
+    } catch (err: any) {
+      toast.error(err?.message || "A szerződés generálása nem sikerült.");
+    } finally {
+      setIsGeneratingContract(false);
+    }
+  };
+
+  const handleOpenContract = async () => {
+    if (!contract?.generated_storage_bucket || !contract?.generated_storage_path) {
+      toast.error("A szerződés fájl útvonala hiányzik.");
+      return;
+    }
+    try {
+      const { data, error } = await supabase.storage
+        .from(contract.generated_storage_bucket)
+        .createSignedUrl(contract.generated_storage_path, 60);
+      if (error) throw error;
+      if (data?.signedUrl) {
+        window.open(data.signedUrl, "_blank", "noopener,noreferrer");
+      }
+    } catch {
+      toast.error("A szerződés megnyitása nem sikerült.");
+    }
+  };
+
+  const handleOpenSignedContract = async () => {
+    if (!contract?.signed_storage_bucket || !contract?.signed_storage_path) {
+      toast.error("Az aláírt szerződés fájl útvonala hiányzik.");
+      return;
+    }
+    try {
+      const { data, error } = await supabase.storage
+        .from(contract.signed_storage_bucket)
+        .createSignedUrl(contract.signed_storage_path, 60);
+      if (error) throw error;
+      if (data?.signedUrl) {
+        window.open(data.signedUrl, "_blank", "noopener,noreferrer");
+      }
+    } catch {
+      toast.error("Az aláírt szerződés megnyitása nem sikerült.");
+    }
+  };
+
     if (!doc.storage_bucket || !doc.storage_path) {
       toast.error("A dokumentum tárolási útvonala hiányzik.");
       return;
@@ -612,6 +716,75 @@ export default function AdminCaseDetail() {
 
           {/* Right column */}
           <div className="space-y-6">
+            {/* Szerződés */}
+            <Card className="shadow-sm">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <FileText className="h-4 w-4 text-primary" />
+                  Szerződés
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {contract ? (
+                  <>
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-muted-foreground">Státusz:</span>
+                        <Badge variant="outline" className={contractStatusClasses(contract.status)}>
+                          {contractStatusLabel(contract.status)}
+                        </Badge>
+                      </div>
+                      {contract.generated_file_name && (
+                        <p className="text-xs text-muted-foreground">
+                          Fájl: {contract.generated_file_name}
+                        </p>
+                      )}
+                      {contract.generated_at && (
+                        <p className="text-xs text-muted-foreground">
+                          Generálva: {formatDateTime(contract.generated_at)}
+                        </p>
+                      )}
+                      {contract.signed_uploaded_at && (
+                        <p className="text-xs text-muted-foreground">
+                          Aláírt feltöltve: {formatDateTime(contract.signed_uploaded_at)}
+                        </p>
+                      )}
+                    </div>
+                    <div className="flex flex-col gap-2">
+                      {contract.generated_storage_path && (
+                        <Button variant="outline" size="sm" onClick={handleOpenContract}>
+                          <Eye className="h-3.5 w-3.5 mr-1" />
+                          Generált szerződés megnyitása
+                        </Button>
+                      )}
+                      {contract.signed_storage_path && (
+                        <Button variant="outline" size="sm" onClick={handleOpenSignedContract}>
+                          <Eye className="h-3.5 w-3.5 mr-1" />
+                          Aláírt szerződés megnyitása
+                        </Button>
+                      )}
+                    </div>
+                  </>
+                ) : (
+                  <p className="text-sm text-muted-foreground">Még nincs generált szerződés.</p>
+                )}
+                <Button
+                  className="w-full"
+                  disabled={isGeneratingContract}
+                  onClick={handleGenerateContract}
+                >
+                  {isGeneratingContract ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                      Generálás...
+                    </>
+                  ) : (
+                    "Adásvételi szerződés generálása"
+                  )}
+                </Button>
+              </CardContent>
+            </Card>
+
             {/* Besorolás */}
             <Card className="shadow-sm">
               <CardHeader className="pb-3">
