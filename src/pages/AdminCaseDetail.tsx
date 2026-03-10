@@ -203,6 +203,42 @@ function formatDateTime(value?: string | null) {
   return d.toLocaleString("hu-HU", { year: "numeric", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 
+function contractStatusLabel(s: string): string {
+  switch (s) {
+    case "pending_generation": return "Generálásra vár";
+    case "generated": return "Generálva";
+    case "awaiting_signature": return "Aláírásra vár";
+    case "signed_uploaded": return "Aláírt példány feltöltve";
+    case "verified": return "Ellenőrizve";
+    default: return s;
+  }
+}
+
+function contractStatusClasses(s: string): string {
+  switch (s) {
+    case "generated": return "bg-primary/10 text-primary";
+    case "awaiting_signature": return "bg-warning/10 text-warning";
+    case "signed_uploaded": return "bg-success/10 text-success";
+    case "verified": return "bg-success/10 text-success";
+    default: return "bg-muted text-muted-foreground";
+  }
+}
+
+type ContractRow = {
+  id: string;
+  case_id: string;
+  contract_type: string;
+  status: string;
+  generated_file_name: string | null;
+  generated_storage_bucket: string | null;
+  generated_storage_path: string | null;
+  signed_file_name: string | null;
+  signed_storage_bucket: string | null;
+  signed_storage_path: string | null;
+  generated_at: string | null;
+  signed_uploaded_at: string | null;
+};
+
 // ---------- Component ----------
 
 export default function AdminCaseDetail() {
@@ -214,6 +250,8 @@ export default function AdminCaseDetail() {
   const [documents, setDocuments] = useState<CaseDocument[]>([]);
   const [documentTypes, setDocumentTypes] = useState<DocumentType[]>([]);
   const [validationResults, setValidationResults] = useState<AiValidationResult[]>([]);
+  const [contract, setContract] = useState<ContractRow | null>(null);
+  const [isGeneratingContract, setIsGeneratingContract] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [comment, setComment] = useState("");
   const [isSavingNote, setIsSavingNote] = useState(false);
