@@ -6,9 +6,21 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
 import {
-  ArrowLeft, Download, Eye, FileText, User, MapPin, Calendar,
-  CheckCircle2, AlertTriangle, MessageSquare, RotateCcw,
-  ShieldCheck, ShieldAlert, ShieldX, Loader2,
+  ArrowLeft,
+  Download,
+  Eye,
+  FileText,
+  User,
+  MapPin,
+  Calendar,
+  CheckCircle2,
+  AlertTriangle,
+  MessageSquare,
+  RotateCcw,
+  ShieldCheck,
+  ShieldAlert,
+  ShieldX,
+  Loader2,
 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
@@ -66,10 +78,7 @@ type DocumentType = {
 // ---------- Helpers ----------
 
 async function updateDocumentReviewStatus(documentId: string, status: string) {
-  const { error } = await supabase
-    .from("documents")
-    .update({ review_status: status })
-    .eq("id", documentId);
+  const { error } = await supabase.from("documents").update({ review_status: status }).eq("id", documentId);
   if (error) throw error;
 }
 
@@ -108,7 +117,7 @@ async function recalculateCaseStatus(caseId: string) {
   // Rule 3: all required docs approved → ready_for_contract
   if (requiredIds.size > 0) {
     const approvedTypeIds = new Set(
-      docs.filter((d) => d.review_status === "approved" && d.document_type_id).map((d) => d.document_type_id!)
+      docs.filter((d) => d.review_status === "approved" && d.document_type_id).map((d) => d.document_type_id!),
     );
     const allRequiredApproved = [...requiredIds].every((id) => approvedTypeIds.has(id));
     if (allRequiredApproved) {
@@ -153,39 +162,57 @@ async function updateCaseInternalNote(caseId: string, note: string) {
 
 function reviewStatusLabel(s: string): string {
   switch (s) {
-    case "pending": return "Függőben";
-    case "approved": return "Jóváhagyva";
-    case "rejected": return "Elutasítva";
-    case "needs_reupload": return "Újrafeltöltés szükséges";
-    default: return s;
+    case "pending":
+      return "Függőben";
+    case "approved":
+      return "Jóváhagyva";
+    case "rejected":
+      return "Elutasítva";
+    case "needs_reupload":
+      return "Újrafeltöltés szükséges";
+    default:
+      return s;
   }
 }
 
 function reviewStatusClasses(s: string): string {
   switch (s) {
-    case "pending": return "bg-muted text-muted-foreground";
-    case "approved": return "bg-success/10 text-success";
-    case "rejected": return "bg-destructive/10 text-destructive";
-    case "needs_reupload": return "bg-warning/10 text-warning";
-    default: return "bg-muted text-muted-foreground";
+    case "pending":
+      return "bg-muted text-muted-foreground";
+    case "approved":
+      return "bg-success/10 text-success";
+    case "rejected":
+      return "bg-destructive/10 text-destructive";
+    case "needs_reupload":
+      return "bg-warning/10 text-warning";
+    default:
+      return "bg-muted text-muted-foreground";
   }
 }
 
 function classificationLabel(c: string | null): string {
   switch (c) {
-    case "green": return "Zöld";
-    case "yellow": return "Sárga";
-    case "red": return "Piros";
-    default: return "Nincs besorolva";
+    case "green":
+      return "Zöld";
+    case "yellow":
+      return "Sárga";
+    case "red":
+      return "Piros";
+    default:
+      return "Nincs besorolva";
   }
 }
 
 function classificationClasses(c: string | null): string {
   switch (c) {
-    case "green": return "bg-success/10 text-success";
-    case "yellow": return "bg-warning/10 text-warning";
-    case "red": return "bg-destructive/10 text-destructive";
-    default: return "bg-muted text-muted-foreground";
+    case "green":
+      return "bg-success/10 text-success";
+    case "yellow":
+      return "bg-warning/10 text-warning";
+    case "red":
+      return "bg-destructive/10 text-destructive";
+    default:
+      return "bg-muted text-muted-foreground";
   }
 }
 
@@ -200,27 +227,44 @@ function formatDateTime(value?: string | null) {
   if (!value) return "—";
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleString("hu-HU", { year: "numeric", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit" });
+  return d.toLocaleString("hu-HU", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 function contractStatusLabel(s: string): string {
   switch (s) {
-    case "pending_generation": return "Generálásra vár";
-    case "generated": return "Generálva";
-    case "awaiting_signature": return "Aláírásra vár";
-    case "signed_uploaded": return "Aláírt példány feltöltve";
-    case "verified": return "Ellenőrizve";
-    default: return s;
+    case "pending_generation":
+      return "Generálásra vár";
+    case "generated":
+      return "Generálva";
+    case "awaiting_signature":
+      return "Aláírásra vár";
+    case "signed_uploaded":
+      return "Aláírt példány feltöltve";
+    case "verified":
+      return "Ellenőrizve";
+    default:
+      return s;
   }
 }
 
 function contractStatusClasses(s: string): string {
   switch (s) {
-    case "generated": return "bg-primary/10 text-primary";
-    case "awaiting_signature": return "bg-warning/10 text-warning";
-    case "signed_uploaded": return "bg-success/10 text-success";
-    case "verified": return "bg-success/10 text-success";
-    default: return "bg-muted text-muted-foreground";
+    case "generated":
+      return "bg-primary/10 text-primary";
+    case "awaiting_signature":
+      return "bg-warning/10 text-warning";
+    case "signed_uploaded":
+      return "bg-success/10 text-success";
+    case "verified":
+      return "bg-success/10 text-success";
+    default:
+      return "bg-muted text-muted-foreground";
   }
 }
 
@@ -266,7 +310,9 @@ export default function AdminCaseDetail() {
     try {
       const { data, error } = await supabase
         .from("cases")
-        .select("id, case_number, status, classification, internal_note, created_at, updated_at, submitted_at, seller_user_id" as any)
+        .select(
+          "id, case_number, status, classification, internal_note, created_at, updated_at, submitted_at, seller_user_id" as any,
+        )
         .eq("id", caseId)
         .maybeSingle();
 
@@ -301,7 +347,9 @@ export default function AdminCaseDetail() {
     if (!caseId) return;
     const { data } = await supabase
       .from("documents")
-      .select("id, original_file_name, file_name, document_type, document_type_id, upload_status, review_status, ai_status, uploaded_at, storage_bucket, storage_path")
+      .select(
+        "id, original_file_name, file_name, document_type, document_type_id, upload_status, review_status, ai_status, uploaded_at, storage_bucket, storage_path",
+      )
       .eq("case_id", caseId)
       .order("created_at", { ascending: false });
 
@@ -310,10 +358,7 @@ export default function AdminCaseDetail() {
 
   // Load document types
   const loadDocumentTypes = useCallback(async () => {
-    const { data } = await supabase
-      .from("document_types")
-      .select("id, code, label")
-      .eq("is_active", true);
+    const { data } = await supabase.from("document_types").select("id, code, label").eq("is_active", true);
 
     if (data) setDocumentTypes(data as DocumentType[]);
   }, []);
@@ -335,7 +380,9 @@ export default function AdminCaseDetail() {
     if (!caseId) return;
     const { data } = await (supabase as any)
       .from("contracts")
-      .select("id, case_id, contract_type, status, generated_file_name, generated_storage_bucket, generated_storage_path, signed_file_name, signed_storage_bucket, signed_storage_path, generated_at, signed_uploaded_at")
+      .select(
+        "id, case_id, contract_type, status, generated_file_name, generated_storage_bucket, generated_storage_path, signed_file_name, signed_storage_bucket, signed_storage_path, generated_at, signed_uploaded_at",
+      )
       .eq("case_id", caseId)
       .eq("contract_type", "sale_contract")
       .maybeSingle();
@@ -450,16 +497,19 @@ export default function AdminCaseDetail() {
     }
   };
 
+  const handleOpenDocument = async (doc: CaseDocument) => {
     if (!doc.storage_bucket || !doc.storage_path) {
       toast.error("A dokumentum tárolási útvonala hiányzik.");
       return;
     }
+
     try {
       setPreviewLoadingId(doc.id);
-      const { data, error } = await supabase.storage
-        .from(doc.storage_bucket)
-        .createSignedUrl(doc.storage_path, 60);
+
+      const { data, error } = await supabase.storage.from(doc.storage_bucket).createSignedUrl(doc.storage_path, 60);
+
       if (error) throw error;
+
       if (data?.signedUrl) {
         window.open(data.signedUrl, "_blank", "noopener,noreferrer");
       }
@@ -515,16 +565,14 @@ export default function AdminCaseDetail() {
           <div className="flex-1">
             <div className="flex items-center gap-3 flex-wrap">
               <h1 className="text-2xl font-bold text-foreground">{caseData.case_number}</h1>
-              <Badge variant="outline" className="bg-muted text-muted-foreground">{caseData.status}</Badge>
+              <Badge variant="outline" className="bg-muted text-muted-foreground">
+                {caseData.status}
+              </Badge>
               <Badge variant="outline" className={classificationClasses(caseData.classification)}>
                 {classificationLabel(caseData.classification)}
               </Badge>
             </div>
-            {seller && (
-              <p className="text-muted-foreground text-sm mt-0.5">
-                {seller.full_name || seller.email}
-              </p>
-            )}
+            {seller && <p className="text-muted-foreground text-sm mt-0.5">{seller.full_name || seller.email}</p>}
           </div>
         </div>
 
@@ -575,9 +623,7 @@ export default function AdminCaseDetail() {
                               <p className="text-xs text-muted-foreground truncate">
                                 {doc.original_file_name || doc.file_name}
                               </p>
-                              <p className="text-xs text-muted-foreground">
-                                {formatDateTime(doc.uploaded_at)}
-                              </p>
+                              <p className="text-xs text-muted-foreground">{formatDateTime(doc.uploaded_at)}</p>
                             </div>
                           </div>
                           <div className="flex items-center gap-2 shrink-0">
@@ -682,19 +728,19 @@ export default function AdminCaseDetail() {
                                 vr.validation_status === "completed"
                                   ? "bg-success/10 text-success"
                                   : vr.validation_status === "processing"
-                                  ? "bg-warning/10 text-warning"
-                                  : vr.validation_status === "failed"
-                                  ? "bg-destructive/10 text-destructive"
-                                  : "bg-muted text-muted-foreground"
+                                    ? "bg-warning/10 text-warning"
+                                    : vr.validation_status === "failed"
+                                      ? "bg-destructive/10 text-destructive"
+                                      : "bg-muted text-muted-foreground"
                               }
                             >
                               {vr.validation_status === "completed"
                                 ? "Kész"
                                 : vr.validation_status === "processing"
-                                ? "Feldolgozás alatt"
-                                : vr.validation_status === "failed"
-                                ? "Sikertelen"
-                                : "Függőben"}
+                                  ? "Feldolgozás alatt"
+                                  : vr.validation_status === "failed"
+                                    ? "Sikertelen"
+                                    : "Függőben"}
                             </Badge>
                             {vr.field_match_score != null && (
                               <span className="text-sm text-foreground">
@@ -702,9 +748,7 @@ export default function AdminCaseDetail() {
                               </span>
                             )}
                           </div>
-                          {vr.notes && (
-                            <p className="text-xs text-muted-foreground">{vr.notes}</p>
-                          )}
+                          {vr.notes && <p className="text-xs text-muted-foreground">{vr.notes}</p>}
                         </div>
                       );
                     })}
@@ -735,9 +779,7 @@ export default function AdminCaseDetail() {
                         </Badge>
                       </div>
                       {contract.generated_file_name && (
-                        <p className="text-xs text-muted-foreground">
-                          Fájl: {contract.generated_file_name}
-                        </p>
+                        <p className="text-xs text-muted-foreground">Fájl: {contract.generated_file_name}</p>
                       )}
                       {contract.generated_at && (
                         <p className="text-xs text-muted-foreground">
@@ -768,11 +810,7 @@ export default function AdminCaseDetail() {
                 ) : (
                   <p className="text-sm text-muted-foreground">Még nincs generált szerződés.</p>
                 )}
-                <Button
-                  className="w-full"
-                  disabled={isGeneratingContract}
-                  onClick={handleGenerateContract}
-                >
+                <Button className="w-full" disabled={isGeneratingContract} onClick={handleGenerateContract}>
                   {isGeneratingContract ? (
                     <>
                       <Loader2 className="h-4 w-4 animate-spin mr-2" />
@@ -833,11 +871,7 @@ export default function AdminCaseDetail() {
                   onChange={(e) => setComment(e.target.value)}
                   rows={4}
                 />
-                <Button
-                  className="w-full"
-                  disabled={isSavingNote}
-                  onClick={handleSaveNote}
-                >
+                <Button className="w-full" disabled={isSavingNote} onClick={handleSaveNote}>
                   {isSavingNote ? (
                     <>
                       <Loader2 className="h-4 w-4 animate-spin mr-2" />
