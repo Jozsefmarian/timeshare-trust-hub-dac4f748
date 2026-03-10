@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { FolderOpen, PlusCircle, ArrowRight } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+const supabaseAny: any = supabase;
 
 interface CaseRow {
   id: string;
@@ -47,25 +48,21 @@ export default function SellerCases() {
       try {
         const {
           data: { session },
-        } = await supabase.auth.getSession();
+        } = await supabaseAny.auth.getSession();
         if (!session) {
           setError("Nincs bejelentkezett felhasználó.");
           setLoading(false);
           return;
         }
 
-        const query = (supabase as any)
+        const { data, error: queryError } = await supabaseAny
           .from("cases")
           .select("id, case_number, status, created_at")
-          .eq("seller_user_id", session.user.id)
+          .eq("seller_id", session.user.id)
           .order("created_at", { ascending: false });
 
-        const result = (await query) as any;
-        const data = (result.data ?? []) as CaseRow[];
-        const queryError = result.error;
-
         if (queryError) throw queryError;
-        setCases((data as CaseRow[]) ?? []);
+        setCases((data ?? []) as CaseRow[]);
       } catch (err: any) {
         console.error("SellerCases fetch error:", err);
         setError("Hiba történt az ügyek betöltésekor.");
