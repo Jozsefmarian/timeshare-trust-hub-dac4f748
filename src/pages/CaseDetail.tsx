@@ -807,6 +807,79 @@ export default function CaseDetail() {
               </CardContent>
             </Card>
 
+            {/* Szerződés */}
+            {contract && (
+              <Card className="shadow-sm">
+                <CardHeader>
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <FileText className="h-4 w-4" />
+                    Szerződés
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-muted-foreground">Státusz:</span>
+                      <Badge variant="outline" className="text-xs">
+                        {contractStatusLabel(contract.status)}
+                      </Badge>
+                    </div>
+                    {contract.generated_file_name && (
+                      <p className="text-xs text-muted-foreground">Fájl: {contract.generated_file_name}</p>
+                    )}
+                    {contract.generated_at && (
+                      <p className="text-xs text-muted-foreground">Generálva: {formatDateTime(contract.generated_at)}</p>
+                    )}
+                    {contract.signed_uploaded_at && (
+                      <p className="text-xs text-muted-foreground">Aláírt feltöltve: {formatDateTime(contract.signed_uploaded_at)}</p>
+                    )}
+                  </div>
+
+                  {contract.generated_storage_path && (
+                    <Button variant="outline" className="w-full" onClick={handleOpenContract}>
+                      <FileText className="h-4 w-4 mr-2" />
+                      Adásvételi szerződés megnyitása
+                    </Button>
+                  )}
+
+                  {/* Signed upload section */}
+                  {contract.status === "generated" || contract.status === "awaiting_signature" ? (
+                    <div className="space-y-3 border-t border-border pt-3">
+                      <p className="text-sm font-medium text-foreground">Aláírt szerződés feltöltése</p>
+                      <div className="space-y-1.5">
+                        <Label className="text-sm">Fájl kiválasztása</Label>
+                        <Input
+                          ref={signedFileRef}
+                          type="file"
+                          disabled={isUploadingSigned}
+                          onChange={(e) => setSignedFile(e.target.files?.[0] ?? null)}
+                        />
+                      </div>
+                      {signedUploadErr && <p className="text-sm text-destructive">{signedUploadErr}</p>}
+                      {signedUploadMsg && <p className="text-sm text-success">{signedUploadMsg}</p>}
+                      <Button
+                        className="w-full"
+                        disabled={isUploadingSigned || !signedFile}
+                        onClick={handleUploadSigned}
+                      >
+                        {isUploadingSigned ? (
+                          <>
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                            Feltöltés...
+                          </>
+                        ) : (
+                          <>
+                            <Upload className="h-4 w-4 mr-2" />
+                            Feltöltés
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  ) : null}
+                </CardContent>
+              </Card>
+            )}
+
             {/* Next action */}
             <Card className="shadow-sm">
               <CardHeader>
