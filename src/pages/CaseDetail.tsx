@@ -256,28 +256,36 @@ export default function CaseDetail() {
 
   // Load case
   useEffect(() => {
-    const {
-  data: { session },
-} = await supabaseAny.auth.getSession();
+    const loadCase = async () => {
+      try {
+        if (!caseId) {
+          setLoadError("Hiányzó ügyazonosító.");
+          setIsLoading(false);
+          return;
+        }
 
-if (!session) {
-  setLoadError("Nincs bejelentkezett felhasználó.");
-  setIsLoading(false);
-  return;
-}
+        const {
+          data: { session },
+        } = await supabaseAny.auth.getSession();
 
-const { data, error } = await supabaseAny
-  .from("cases")
-  .select(
-    "id, case_number, status, status_group, current_step, priority, source, created_at, updated_at, submitted_at, closed_at",
-  )
-  .eq("id", caseId)
-  .eq("seller_id", session.user.id)
-  .maybeSingle();
+        if (!session) {
+          setLoadError("Nincs bejelentkezett felhasználó.");
+          setIsLoading(false);
+          return;
+        }
 
-if (error) throw error;
+        const { data, error } = await supabaseAny
+          .from("cases")
+          .select(
+            "id, case_number, status, status_group, current_step, priority, source, created_at, updated_at, submitted_at, closed_at",
+          )
+          .eq("id", caseId)
+          .eq("seller_id", session.user.id)
+          .maybeSingle();
 
-setCaseData((data as CaseRow | null) ?? null);
+        if (error) throw error;
+
+        setCaseData((data as CaseRow | null) ?? null);
       } catch (error: any) {
         setLoadError(error?.message || "Az ügy betöltése nem sikerült.");
       } finally {
@@ -291,10 +299,10 @@ setCaseData((data as CaseRow | null) ?? null);
   // Load document types
   const loadDocumentTypes = useCallback(async () => {
     const { data, error } = await supabaseAny
-  .from("document_types")
-  .select("id, code, label, description, is_required, sort_order")
-  .eq("is_active", true)
-  .order("sort_order", { ascending: true });
+      .from("document_types")
+      .select("id, code, label, description, is_required, sort_order")
+      .eq("is_active", true)
+      .order("sort_order", { ascending: true });
 
     if (!error && data) {
       setDocumentTypes(data as DocumentType[]);
@@ -306,12 +314,12 @@ setCaseData((data as CaseRow | null) ?? null);
     if (!caseId) return;
 
     const { data, error } = await supabaseAny
-  .from("documents")
-  .select(
-    "id, original_file_name, upload_status, review_status, ai_status, uploaded_at, document_type_id, storage_bucket, storage_path",
-  )
-  .eq("case_id", caseId)
-  .order("created_at", { ascending: false });
+      .from("documents")
+      .select(
+        "id, original_file_name, upload_status, review_status, ai_status, uploaded_at, document_type_id, storage_bucket, storage_path",
+      )
+      .eq("case_id", caseId)
+      .order("created_at", { ascending: false });
 
     if (!error && data) {
       setUploadedDocuments(data as UploadedDocument[]);
@@ -321,7 +329,7 @@ setCaseData((data as CaseRow | null) ?? null);
   // Load contract
   const loadContract = useCallback(async () => {
     if (!caseId) return;
-    const { data } = await (supabase as any)
+    const { data } = await supabaseAny
       .from("contracts")
       .select(
         "id, status, generated_file_name, generated_storage_bucket, generated_storage_path, signed_file_name, signed_storage_bucket, signed_storage_path, generated_at, signed_uploaded_at",
@@ -440,7 +448,7 @@ setCaseData((data as CaseRow | null) ?? null);
       if (uploadErr) throw uploadErr;
 
       // 2. Contract update
-      const { error: contractUpdateErr } = await (supabase as any)
+      const { error: contractUpdateErr } = await supabaseAny
         .from("contracts")
         .update({
           signed_storage_bucket: bucket,
@@ -453,7 +461,7 @@ setCaseData((data as CaseRow | null) ?? null);
       if (contractUpdateErr) throw contractUpdateErr;
 
       // 3. Case status update
-      const { error: caseUpdateErr } = await supabase
+      const { error: caseUpdateErr } = await supabaseAny
         .from("cases")
         .update({
           status: "signed_contract_uploaded",
@@ -462,7 +470,7 @@ setCaseData((data as CaseRow | null) ?? null);
       if (caseUpdateErr) throw caseUpdateErr;
 
       // 4. Case status history insert
-      const { error: historyErr } = await supabase.from("case_status_history").insert({
+      const { error: historyErr } = await supabaseAny.from("case_status_history").insert({
         case_id: caseId,
         from_status: previousStatus,
         to_status: "signed_contract_uploaded",
