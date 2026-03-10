@@ -54,10 +54,10 @@ export default function SellerCases() {
           return;
         }
 
-        const query = supabase
+        const query = (supabase as any)
           .from("cases")
           .select("id, case_number, status, created_at")
-          .eq("seller_id", session.user.id)
+          .eq("seller_user_id", session.user.id)
           .order("created_at", { ascending: false });
 
         const result = (await query) as any;
