@@ -54,11 +54,16 @@ export default function SellerCases() {
           return;
         }
 
-        const { data, error: queryError } = await supabase
+        const query = supabase
           .from("cases")
           .select("id, case_number, status, created_at")
           .eq("seller_id", session.user.id)
           .order("created_at", { ascending: false });
+
+        const { data, error: queryError } = (await query) as {
+          data: CaseRow[] | null;
+          error: any;
+        };
 
         if (queryError) throw queryError;
         setCases((data as CaseRow[]) ?? []);
