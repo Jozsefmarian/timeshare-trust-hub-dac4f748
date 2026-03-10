@@ -1,10 +1,19 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import SellerLayout from "@/components/SellerLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   CheckCircle2,
   Circle,
@@ -20,9 +29,13 @@ import {
   FileCheck,
   CreditCard,
   Lock,
+  Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
+import { uploadCaseDocument } from "@/lib/documentUpload";
+
+// ---------- Local types ----------
 
 type CaseRow = {
   id: string;
@@ -37,6 +50,71 @@ type CaseRow = {
   submitted_at: string | null;
   closed_at: string | null;
 };
+
+type DocumentType = {
+  id: string;
+  code: string;
+  label: string;
+  description: string | null;
+  is_required: boolean;
+  sort_order: number;
+};
+
+type UploadedDocument = {
+  id: string;
+  original_file_name: string | null;
+  upload_status: string;
+  review_status: string;
+  ai_status: string;
+  uploaded_at: string;
+  document_type_id: string | null;
+};
+
+// ---------- Status label helpers ----------
+
+function uploadStatusLabel(s: string): string {
+  switch (s) {
+    case "pending":
+    case "initiated":
+      return "Előkészítve";
+    case "uploaded":
+      return "Feltöltve";
+    case "failed":
+      return "Sikertelen";
+    default:
+      return s;
+  }
+}
+
+function reviewStatusLabel(s: string): string {
+  switch (s) {
+    case "pending":
+      return "Függőben";
+    case "approved":
+      return "Jóváhagyva";
+    case "rejected":
+      return "Elutasítva";
+    default:
+      return s;
+  }
+}
+
+function aiStatusLabel(s: string): string {
+  switch (s) {
+    case "pending":
+      return "Feldolgozásra vár";
+    case "processing":
+      return "Feldolgozás alatt";
+    case "completed":
+      return "Feldolgozva";
+    case "failed":
+      return "Sikertelen";
+    default:
+      return s;
+  }
+}
+
+// ---------- Constants ----------
 
 const timelineSteps = [
   { key: "draft", label: "Piszkozat", icon: Circle, description: "Az ügy létrejött, de még nincs beküldve." },
@@ -84,12 +162,38 @@ function formatDate(value?: string | null) {
   });
 }
 
+function formatDateTime(value?: string | null) {
+  if (!value) return "—";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleString("hu-HU", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+// ---------- Component ----------
+
 export default function CaseDetail() {
   const { caseId } = useParams();
   const [caseData, setCaseData] = useState<CaseRow | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
+  // Document upload state
+  const [documentTypes, setDocumentTypes] = useState<DocumentType[]>([]);
+  const [selectedDocumentTypeId, setSelectedDocumentTypeId] = useState<string>("");
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [uploadSuccessMessage, setUploadSuccessMessage] = useState<string | null>(null);
+  const [uploadedDocuments, setUploadedDocuments] = useState<UploadedDocument[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Load case
   useEffect(() => {
     const loadCase = async () => {
       if (!caseId) {
@@ -123,6 +227,88 @@ export default function CaseDetail() {
     loadCase();
   }, [caseId]);
 
+  // Load document types
+  const loadDocumentTypes = useCallback(async () => {
+    const { data, error } = await (supabase as any)
+      .from("document_types")
+      .select("id, code, label, description, is_required, sort_order")
+      .eq("is_active", true)
+      .order("sort_order", { ascending: true });
+
+    if (!error && data) {
+      setDocumentTypes(data as DocumentType[]);
+    }
+  }, []);
+
+  // Load uploaded documents
+  const loadUploadedDocuments = useCallback(async () => {
+    if (!caseId) return;
+
+    const { data, error } = await (supabase as any)
+      .from("documents")
+      .select("id, original_file_name, upload_status, review_status, ai_status, uploaded_at, document_type_id")
+      .eq("case_id", caseId)
+      .order("created_at", { ascending: false });
+
+    if (!error && data) {
+      setUploadedDocuments(data as UploadedDocument[]);
+    }
+  }, [caseId]);
+
+  useEffect(() => {
+    if (caseId) {
+      loadDocumentTypes();
+      loadUploadedDocuments();
+    }
+  }, [caseId, loadDocumentTypes, loadUploadedDocuments]);
+
+  // Upload handler
+  const handleUpload = async () => {
+    setUploadError(null);
+    setUploadSuccessMessage(null);
+
+    if (!selectedDocumentTypeId) {
+      setUploadError("Kérjük, válassz dokumentumtípust.");
+      return;
+    }
+    if (!selectedFile) {
+      setUploadError("Kérjük, válassz ki egy fájlt.");
+      return;
+    }
+    if (!caseId) {
+      setUploadError("Hiányzó ügyazonosító.");
+      return;
+    }
+
+    try {
+      setIsUploading(true);
+
+      await uploadCaseDocument({
+        caseId,
+        documentTypeId: selectedDocumentTypeId,
+        file: selectedFile,
+      });
+
+      setUploadSuccessMessage("A dokumentum sikeresen feltöltve.");
+      setSelectedFile(null);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+      await loadUploadedDocuments();
+    } catch (err: any) {
+      setUploadError(err?.message || "A feltöltés nem sikerült.");
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  // Helpers
+  const getDocTypeLabel = (docTypeId: string | null): string => {
+    if (!docTypeId) return "—";
+    const dt = documentTypes.find((t) => t.id === docTypeId);
+    return dt?.label || "Ismeretlen típus";
+  };
+
   const currentStatus = useMemo(() => {
     if (!caseData?.status) return statusBadgeMap.draft;
     return statusBadgeMap[caseData.status] || {
@@ -136,6 +322,8 @@ export default function CaseDetail() {
     const idx = timelineSteps.findIndex((step) => step.key === caseData.status);
     return idx >= 0 ? idx : 0;
   }, [caseData]);
+
+  // ---------- Render: loading / error / not found ----------
 
   if (isLoading) {
     return (
@@ -194,6 +382,8 @@ export default function CaseDetail() {
       </SellerLayout>
     );
   }
+
+  // ---------- Render: main ----------
 
   return (
     <SellerLayout>
@@ -313,6 +503,124 @@ export default function CaseDetail() {
 
           {/* Right column */}
           <div className="lg:col-span-3 space-y-6">
+            {/* Document upload */}
+            <Card className="shadow-sm">
+              <CardHeader>
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Upload className="h-4 w-4" />
+                  Dokumentumfeltöltés
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <p className="text-sm text-muted-foreground">
+                  Töltsd fel az ügyhöz kapcsolódó szükséges dokumentumokat.
+                </p>
+
+                <div className="space-y-3">
+                  <div className="space-y-1.5">
+                    <Label className="text-sm">Dokumentumtípus</Label>
+                    <Select
+                      value={selectedDocumentTypeId}
+                      onValueChange={setSelectedDocumentTypeId}
+                      disabled={isUploading}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Válassz dokumentumtípust" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {documentTypes.map((dt) => (
+                          <SelectItem key={dt.id} value={dt.id}>
+                            {dt.label}
+                            {dt.is_required && " *"}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label className="text-sm">Fájl kiválasztása</Label>
+                    <Input
+                      ref={fileInputRef}
+                      type="file"
+                      disabled={isUploading}
+                      onChange={(e) => setSelectedFile(e.target.files?.[0] ?? null)}
+                    />
+                  </div>
+
+                  {uploadError && (
+                    <p className="text-sm text-destructive">{uploadError}</p>
+                  )}
+                  {uploadSuccessMessage && (
+                    <p className="text-sm text-success">{uploadSuccessMessage}</p>
+                  )}
+
+                  <Button
+                    onClick={handleUpload}
+                    disabled={isUploading}
+                    className="w-full"
+                  >
+                    {isUploading ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Feltöltés folyamatban...
+                      </>
+                    ) : (
+                      <>
+                        <Upload className="h-4 w-4 mr-2" />
+                        Dokumentum feltöltése
+                      </>
+                    )}
+                  </Button>
+                </div>
+
+                {/* Uploaded documents list */}
+                <Separator />
+
+                <div className="space-y-3">
+                  <h3 className="text-sm font-semibold text-foreground">Feltöltött dokumentumok</h3>
+
+                  {uploadedDocuments.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">Még nincs feltöltött dokumentum.</p>
+                  ) : (
+                    <div className="space-y-3">
+                      {uploadedDocuments.map((doc) => (
+                        <div
+                          key={doc.id}
+                          className="rounded-md border border-border p-3 space-y-1.5 text-sm"
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="space-y-0.5 min-w-0">
+                              <p className="font-medium text-foreground truncate">
+                                {doc.original_file_name || "Névtelen fájl"}
+                              </p>
+                              <p className="text-xs text-muted-foreground">
+                                {getDocTypeLabel(doc.document_type_id)}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            <Badge variant="outline" className="text-xs">
+                              Feltöltés: {uploadStatusLabel(doc.upload_status)}
+                            </Badge>
+                            <Badge variant="outline" className="text-xs">
+                              Ellenőrzés: {reviewStatusLabel(doc.review_status)}
+                            </Badge>
+                            <Badge variant="outline" className="text-xs">
+                              AI: {aiStatusLabel(doc.ai_status)}
+                            </Badge>
+                          </div>
+                          <p className="text-xs text-muted-foreground">
+                            Feltöltve: {formatDateTime(doc.uploaded_at)}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+
             {/* Next action */}
             <Card className="shadow-sm">
               <CardHeader>
