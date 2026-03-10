@@ -63,6 +63,8 @@ type UploadedDocument = {
   uploaded_at: string | null;
   document_type_id: string | null;
   created_at?: string;
+  storage_bucket: string | null;
+  storage_path: string | null;
 };
 
 // ---------- Status label helpers ----------
@@ -227,6 +229,7 @@ export default function CaseDetail() {
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [uploadSuccessMessage, setUploadSuccessMessage] = useState<string | null>(null);
   const [uploadedDocuments, setUploadedDocuments] = useState<UploadedDocument[]>([]);
+  const [previewLoadingId, setPreviewLoadingId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Load case
@@ -282,7 +285,7 @@ export default function CaseDetail() {
 
     const { data, error } = await supabase
       .from("documents")
-      .select("id, original_file_name, upload_status, review_status, ai_status, uploaded_at, document_type_id")
+      .select("id, original_file_name, upload_status, review_status, ai_status, uploaded_at, document_type_id, storage_bucket, storage_path")
       .eq("case_id", caseId)
       .order("created_at", { ascending: false });
 
@@ -335,6 +338,28 @@ export default function CaseDetail() {
       setUploadError(err?.message || "A feltöltés nem sikerült.");
     } finally {
       setIsUploading(false);
+    }
+  };
+
+  // Open document via signed URL
+  const handleOpenDocument = async (doc: UploadedDocument) => {
+    if (!doc.storage_bucket || !doc.storage_path) {
+      setUploadError("A dokumentum tárolási útvonala hiányzik.");
+      return;
+    }
+    try {
+      setPreviewLoadingId(doc.id);
+      const { data, error } = await supabase.storage
+        .from(doc.storage_bucket)
+        .createSignedUrl(doc.storage_path, 60);
+      if (error) throw error;
+      if (data?.signedUrl) {
+        window.open(data.signedUrl, "_blank", "noopener,noreferrer");
+      }
+    } catch (err: any) {
+      setUploadError(err?.message || "A dokumentum megnyitása nem sikerült.");
+    } finally {
+      setPreviewLoadingId(null);
     }
   };
 
@@ -645,12 +670,21 @@ export default function CaseDetail() {
                       {uploadedDocuments.map((doc) => (
                         <div key={doc.id} className="rounded-md border border-border p-3 space-y-1.5 text-sm">
                           <div className="flex items-start justify-between gap-2">
-                            <div className="space-y-0.5 min-w-0">
+                            <div className="space-y-0.5 min-w-0 flex-1">
                               <p className="font-medium text-foreground truncate">
                                 {doc.original_file_name || "Névtelen fájl"}
                               </p>
                               <p className="text-xs text-muted-foreground">{getDocTypeLabel(doc.document_type_id)}</p>
                             </div>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="shrink-0 text-xs"
+                              disabled={previewLoadingId === doc.id || !doc.storage_bucket || !doc.storage_path}
+                              onClick={() => handleOpenDocument(doc)}
+                            >
+                              {previewLoadingId === doc.id ? "Megnyitás..." : "Megnyitás"}
+                            </Button>
                           </div>
                           <div className="flex flex-wrap gap-2">
                             <Badge variant="outline" className="text-xs">
