@@ -397,7 +397,59 @@ export default function AdminCaseDetail() {
     }
   };
 
-  const handleOpenDocument = async (doc: CaseDocument) => {
+  const handleGenerateContract = async () => {
+    if (!caseId) return;
+    try {
+      setIsGeneratingContract(true);
+      const { data, error } = await supabase.functions.invoke("generate-sale-contract", {
+        body: { case_id: caseId },
+      });
+      if (error) throw error;
+      toast.success("Adásvételi szerződés sikeresen generálva.");
+      await Promise.all([loadContract(), loadCase()]);
+    } catch (err: any) {
+      toast.error(err?.message || "A szerződés generálása nem sikerült.");
+    } finally {
+      setIsGeneratingContract(false);
+    }
+  };
+
+  const handleOpenContract = async () => {
+    if (!contract?.generated_storage_bucket || !contract?.generated_storage_path) {
+      toast.error("A szerződés fájl útvonala hiányzik.");
+      return;
+    }
+    try {
+      const { data, error } = await supabase.storage
+        .from(contract.generated_storage_bucket)
+        .createSignedUrl(contract.generated_storage_path, 60);
+      if (error) throw error;
+      if (data?.signedUrl) {
+        window.open(data.signedUrl, "_blank", "noopener,noreferrer");
+      }
+    } catch {
+      toast.error("A szerződés megnyitása nem sikerült.");
+    }
+  };
+
+  const handleOpenSignedContract = async () => {
+    if (!contract?.signed_storage_bucket || !contract?.signed_storage_path) {
+      toast.error("Az aláírt szerződés fájl útvonala hiányzik.");
+      return;
+    }
+    try {
+      const { data, error } = await supabase.storage
+        .from(contract.signed_storage_bucket)
+        .createSignedUrl(contract.signed_storage_path, 60);
+      if (error) throw error;
+      if (data?.signedUrl) {
+        window.open(data.signedUrl, "_blank", "noopener,noreferrer");
+      }
+    } catch {
+      toast.error("Az aláírt szerződés megnyitása nem sikerült.");
+    }
+  };
+
     if (!doc.storage_bucket || !doc.storage_path) {
       toast.error("A dokumentum tárolási útvonala hiányzik.");
       return;
