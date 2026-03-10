@@ -280,11 +280,13 @@ export default function AdminCaseDetail() {
 
   // Actions
   const handleDocReview = async (docId: string, status: string) => {
+    if (!caseId) return;
     try {
       setUpdatingDocId(docId);
       await updateDocumentReviewStatus(docId, status);
+      await recalculateCaseStatus(caseId);
       toast.success(`Dokumentum státusz frissítve: ${reviewStatusLabel(status)}`);
-      await loadDocuments();
+      await Promise.all([loadDocuments(), loadCase()]);
     } catch {
       toast.error("A dokumentum státusz frissítése nem sikerült.");
     } finally {
