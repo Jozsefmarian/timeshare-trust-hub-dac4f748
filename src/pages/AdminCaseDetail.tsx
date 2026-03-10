@@ -297,8 +297,9 @@ export default function AdminCaseDetail() {
       loadCase();
       loadDocuments();
       loadDocumentTypes();
+      loadValidationResults();
     }
-  }, [caseId, loadCase, loadDocuments, loadDocumentTypes]);
+  }, [caseId, loadCase, loadDocuments, loadDocumentTypes, loadValidationResults]);
 
   // Actions
   const handleDocReview = async (docId: string, status: string) => {
