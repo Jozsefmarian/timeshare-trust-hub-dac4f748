@@ -617,7 +617,7 @@ export default function CaseDetail() {
                   {uploadError && <p className="text-sm text-destructive">{uploadError}</p>}
                   {uploadSuccessMessage && <p className="text-sm text-success">{uploadSuccessMessage}</p>}
 
-                  <Button onClick={handleUpload} disabled={isUploading} className="w-full">
+                  <Button onClick={handleUpload} disabled={isUploading || !selectedDocumentTypeId || !selectedFile} className="w-full">
                     {isUploading ? (
                       <>
                         <Loader2 className="h-4 w-4 mr-2 animate-spin" />
