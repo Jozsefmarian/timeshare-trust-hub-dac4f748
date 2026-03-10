@@ -330,14 +330,28 @@ export default function AdminCaseDetail() {
     if (data) setValidationResults(data as any as AiValidationResult[]);
   }, [caseId]);
 
+  // Load contract
+  const loadContract = useCallback(async () => {
+    if (!caseId) return;
+    const { data } = await (supabase as any)
+      .from("contracts")
+      .select("id, case_id, contract_type, status, generated_file_name, generated_storage_bucket, generated_storage_path, signed_file_name, signed_storage_bucket, signed_storage_path, generated_at, signed_uploaded_at")
+      .eq("case_id", caseId)
+      .eq("contract_type", "sale_contract")
+      .maybeSingle();
+
+    setContract(data as ContractRow | null);
+  }, [caseId]);
+
   useEffect(() => {
     if (caseId) {
       loadCase();
       loadDocuments();
       loadDocumentTypes();
       loadValidationResults();
+      loadContract();
     }
-  }, [caseId, loadCase, loadDocuments, loadDocumentTypes, loadValidationResults]);
+  }, [caseId, loadCase, loadDocuments, loadDocumentTypes, loadValidationResults, loadContract]);
 
   // Actions
   const handleDocReview = async (docId: string, status: string) => {
