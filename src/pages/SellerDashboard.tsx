@@ -66,7 +66,7 @@ export default function SellerDashboard() {
           .select(
             "id, case_number, status, status_group, current_step, priority, source, created_at, updated_at, submitted_at, closed_at",
           )
-          .eq("seller_id", session.user.id)
+          .eq("seller_user_id", session.user.id)
           .order("created_at", { ascending: false });
 
         if (queryError) throw queryError;
@@ -172,7 +172,7 @@ export default function SellerDashboard() {
                     {cases.map((c) => (
                       <Link
                         key={c.id}
-                        to={`/seller/case/${c.id}`}
+                        to={`/seller/cases/${c.id}`}
                         className="flex items-center justify-between p-4 rounded-xl border border-border hover:bg-muted/30 transition-colors"
                       >
                         <div>
