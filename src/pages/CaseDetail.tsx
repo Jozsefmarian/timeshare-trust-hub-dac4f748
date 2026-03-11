@@ -280,7 +280,7 @@ export default function CaseDetail() {
             "id, case_number, status, status_group, current_step, priority, source, created_at, updated_at, submitted_at, closed_at",
           )
           .eq("id", caseId)
-          .eq("seller_id", session.user.id)
+          .eq("seller_user_id", session.user.id)
           .maybeSingle();
 
         if (error) throw error;
