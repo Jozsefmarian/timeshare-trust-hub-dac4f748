@@ -192,7 +192,7 @@ export default function NewCase() {
 
       if (weekOfferError) throw weekOfferError;
 
-      toast({ title: "Ügy létrehozva", description: "Az ügy létrejött. A folytatás az ügy adatlapján történik." });
+      toast({ title: "Ügy beküldve", description: "Az ügy sikeresen beküldve. Kövesse nyomon a feldolgozást az ügy oldalán." });
       navigate(`/seller/cases/${data.id}`, { replace: true });
     } catch (err: any) {
       console.error("NewCase insert error:", err);

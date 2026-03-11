@@ -1,37 +1,25 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import SellerLayout from "@/components/SellerLayout";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-  CheckCircle2,
-  Circle,
-  AlertTriangle,
-  ArrowLeft,
-  SendHorizonal,
-  Upload,
-  FileSearch,
-  XCircle,
-  CheckCircle,
-  FileText,
-  PenLine,
-  FileCheck,
-  CreditCard,
-  Lock,
-  Loader2,
-} from "lucide-react";
-import { cn } from "@/lib/utils";
+import { Card, CardContent } from "@/components/ui/card";
+import { ArrowLeft } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { uploadCaseDocument } from "@/lib/documentUpload";
+
+// Components
+import CaseTimeline from "@/components/seller/CaseTimeline";
+import CaseSummaryCard from "@/components/seller/CaseSummaryCard";
+import AiProcessingPanel from "@/components/seller/panels/AiProcessingPanel";
+import ManualReviewPanel from "@/components/seller/panels/ManualReviewPanel";
+import RejectedPanel from "@/components/seller/panels/RejectedPanel";
+import CorrectionPanel from "@/components/seller/panels/CorrectionPanel";
+import ContractPanel from "@/components/seller/panels/ContractPanel";
+import ServiceAgreementPanel from "@/components/seller/panels/ServiceAgreementPanel";
+import PaymentPanel from "@/components/seller/panels/PaymentPanel";
+import SubmittedDocumentsPanel from "@/components/seller/panels/SubmittedDocumentsPanel";
 
 const supabaseAny: any = supabase;
 
-// ---------- Local types ----------
+// ---------- Types ----------
 
 type CaseRow = {
   id: string;
@@ -39,21 +27,18 @@ type CaseRow = {
   status: string;
   status_group: string | null;
   current_step: string | null;
-  priority: string | null;
-  source: string | null;
   created_at: string;
   updated_at: string;
   submitted_at: string | null;
   closed_at: string | null;
+  classification: string | null;
 };
 
-type DocumentType = {
-  id: string;
-  code: string;
-  label: string;
-  description: string | null;
-  is_required: boolean;
-  sort_order: number;
+type WeekOffer = {
+  resort_name_raw: string | null;
+  week_number: number | null;
+  unit_type: string | null;
+  season_label: string | null;
 };
 
 type UploadedDocument = {
@@ -64,155 +49,52 @@ type UploadedDocument = {
   ai_status: string;
   uploaded_at: string | null;
   document_type_id: string | null;
-  created_at?: string;
   storage_bucket: string | null;
   storage_path: string | null;
 };
 
-// ---------- Status label helpers ----------
-
-function uploadStatusLabel(s: string): string {
-  switch (s) {
-    case "pending":
-    case "initiated":
-      return "Előkészítve";
-    case "uploaded":
-      return "Feltöltve";
-    case "failed":
-      return "Sikertelen";
-    default:
-      return s;
-  }
-}
-
-function reviewStatusLabel(s: string): string {
-  switch (s) {
-    case "pending":
-      return "Függőben";
-    case "approved":
-      return "Jóváhagyva";
-    case "rejected":
-      return "Elutasítva";
-    default:
-      return s;
-  }
-}
-
-function aiStatusLabel(s: string): string {
-  switch (s) {
-    case "pending":
-      return "Feldolgozásra vár";
-    case "processing":
-      return "Feldolgozás alatt";
-    case "completed":
-      return "Feldolgozva";
-    case "failed":
-      return "Sikertelen";
-    default:
-      return s;
-  }
-}
-
-// ---------- Constants ----------
-
-const timelineSteps = [
-  { key: "draft", label: "Piszkozat", icon: Circle, description: "Az ügy létrejött, de még nincs beküldve." },
-  { key: "submitted", label: "Beküldve", icon: SendHorizonal, description: "Az ügy sikeresen beküldve." },
-  {
-    key: "docs_uploaded",
-    label: "Dokumentumok feltöltve",
-    icon: Upload,
-    description: "A szükséges dokumentumok feltöltése megtörtént.",
-  },
-  {
-    key: "ai_processing",
-    label: "AI feldolgozás",
-    icon: FileSearch,
-    description: "Az ügy automatikus feldolgozás alatt áll.",
-  },
-  { key: "yellow_review", label: "Sárga ellenőrzés", icon: AlertTriangle, description: "Kézi ellenőrzés szükséges." },
-  { key: "red_rejected", label: "Elutasítva", icon: XCircle, description: "Az ügy elutasításra került." },
-  { key: "green_approved", label: "Jóváhagyva", icon: CheckCircle, description: "Az ügy jóváhagyásra került." },
-  {
-    key: "contract_generated",
-    label: "Szerződés generálva",
-    icon: FileText,
-    description: "Az adásvételi szerződés elkészült.",
-  },
-  {
-    key: "awaiting_signed_contract",
-    label: "Aláírt szerződésre vár",
-    icon: PenLine,
-    description: "Az aláírt szerződés feltöltése szükséges.",
-  },
-  {
-    key: "signed_contract_uploaded",
-    label: "Aláírt szerződés feltöltve",
-    icon: Upload,
-    description: "Az aláírt szerződés beérkezett.",
-  },
-  {
-    key: "service_agreement_accepted",
-    label: "Szolgáltatási szerződés elfogadva",
-    icon: FileCheck,
-    description: "A szolgáltatási szerződés elfogadása megtörtént.",
-  },
-  {
-    key: "payment_pending",
-    label: "Fizetés függőben",
-    icon: CreditCard,
-    description: "A fizetés még nem érkezett meg.",
-  },
-  { key: "paid", label: "Fizetve", icon: CreditCard, description: "A fizetés megérkezett." },
-  { key: "closed", label: "Lezárva", icon: Lock, description: "Az ügy sikeresen lezárult." },
-];
-
-const statusBadgeMap: Record<string, { label: string; className: string }> = {
-  draft: { label: "Piszkozat", className: "bg-muted text-muted-foreground" },
-  submitted: { label: "Beküldve", className: "bg-primary/15 text-primary border-primary/30" },
-  docs_uploaded: { label: "Dokumentumok feltöltve", className: "bg-secondary/15 text-secondary border-secondary/30" },
-  ai_processing: { label: "AI feldolgozás", className: "bg-secondary/15 text-secondary border-secondary/30" },
-  yellow_review: { label: "Ellenőrzés alatt", className: "bg-warning/15 text-warning border-warning/30" },
-  red_rejected: { label: "Elutasítva", className: "bg-destructive/15 text-destructive border-destructive/30" },
-  green_approved: { label: "Jóváhagyva", className: "bg-success/15 text-success border-success/30" },
-  contract_generated: { label: "Szerződés generálva", className: "bg-secondary/15 text-secondary border-secondary/30" },
-  awaiting_signed_contract: { label: "Aláírásra vár", className: "bg-warning/15 text-warning border-warning/30" },
-  signed_contract_uploaded: {
-    label: "Aláírt szerződés feltöltve",
-    className: "bg-secondary/15 text-secondary border-secondary/30",
-  },
-  service_agreement_accepted: {
-    label: "Szolgáltatási szerződés elfogadva",
-    className: "bg-secondary/15 text-secondary border-secondary/30",
-  },
-  payment_pending: { label: "Fizetés függőben", className: "bg-warning/15 text-warning border-warning/30" },
-  paid: { label: "Fizetve", className: "bg-success/15 text-success border-success/30" },
-  closed: { label: "Lezárt ügy", className: "bg-success/15 text-success border-success/30" },
-  cancelled: { label: "Megszakítva", className: "bg-destructive/15 text-destructive border-destructive/30" },
+type DocumentType = {
+  id: string;
+  label: string;
 };
 
-function formatDate(value?: string | null) {
-  if (!value) return "—";
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleDateString("hu-HU", {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-  });
-}
+type ContractRow = {
+  id: string;
+  status: string;
+  generated_file_name: string | null;
+  generated_storage_bucket: string | null;
+  generated_storage_path: string | null;
+  signed_file_name: string | null;
+  signed_storage_bucket: string | null;
+  signed_storage_path: string | null;
+  generated_at: string | null;
+  signed_uploaded_at: string | null;
+};
 
-function formatDateTime(value?: string | null) {
-  if (!value) return "—";
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleString("hu-HU", {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+type ClassificationRow = {
+  reason_summary: string | null;
+};
+
+type CheckResult = {
+  id: string;
+  check_type: string;
+  result: string;
+  message: string | null;
+  severity: string | null;
+  details: any;
+  document_id: string | null;
+};
+
+// ---------- Status helpers ----------
+
+const STATUS_ORDER = [
+  "draft", "submitted", "ai_processing", "green_approved",
+  "contract_generated", "awaiting_signed_contract", "signed_contract_uploaded",
+  "service_agreement_accepted", "payment_pending", "paid", "closed",
+];
+
+function isAtOrPast(current: string, target: string): boolean {
+  return STATUS_ORDER.indexOf(current) >= STATUS_ORDER.indexOf(target);
 }
 
 // ---------- Component ----------
@@ -220,124 +102,104 @@ function formatDateTime(value?: string | null) {
 export default function CaseDetail() {
   const { caseId } = useParams();
   const [caseData, setCaseData] = useState<CaseRow | null>(null);
+  const [weekOffer, setWeekOffer] = useState<WeekOffer | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
-  // Document upload state
   const [documentTypes, setDocumentTypes] = useState<DocumentType[]>([]);
-  const [selectedDocumentTypeId, setSelectedDocumentTypeId] = useState<string>("");
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [isUploading, setIsUploading] = useState(false);
-  const [uploadError, setUploadError] = useState<string | null>(null);
-  const [uploadSuccessMessage, setUploadSuccessMessage] = useState<string | null>(null);
   const [uploadedDocuments, setUploadedDocuments] = useState<UploadedDocument[]>([]);
-  const [previewLoadingId, setPreviewLoadingId] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  // Contract state
-  type ContractRow = {
-    id: string;
-    status: string;
-    generated_file_name: string | null;
-    generated_storage_bucket: string | null;
-    generated_storage_path: string | null;
-    signed_file_name: string | null;
-    signed_storage_bucket: string | null;
-    signed_storage_path: string | null;
-    generated_at: string | null;
-    signed_uploaded_at: string | null;
-  };
   const [contract, setContract] = useState<ContractRow | null>(null);
-  const [signedFile, setSignedFile] = useState<File | null>(null);
-  const [isUploadingSigned, setIsUploadingSigned] = useState(false);
-  const [signedUploadMsg, setSignedUploadMsg] = useState<string | null>(null);
-  const [signedUploadErr, setSignedUploadErr] = useState<string | null>(null);
-  const signedFileRef = useRef<HTMLInputElement>(null);
+  const [classification, setClassification] = useState<ClassificationRow | null>(null);
+  const [checkResults, setCheckResults] = useState<CheckResult[]>([]);
 
-  // Load case
+  // Load case + week offer
   useEffect(() => {
-    const loadCase = async () => {
+    const load = async () => {
       try {
-        if (!caseId) {
-          setLoadError("Hiányzó ügyazonosító.");
-          setIsLoading(false);
-          return;
-        }
+        if (!caseId) { setLoadError("Hiányzó ügyazonosító."); setIsLoading(false); return; }
 
-        const {
-          data: { session },
-        } = await supabaseAny.auth.getSession();
-
-        if (!session) {
-          setLoadError("Nincs bejelentkezett felhasználó.");
-          setIsLoading(false);
-          return;
-        }
+        const { data: { session } } = await supabaseAny.auth.getSession();
+        if (!session) { setLoadError("Nincs bejelentkezett felhasználó."); setIsLoading(false); return; }
 
         const { data, error } = await supabaseAny
           .from("cases")
-          .select(
-            "id, case_number, status, status_group, current_step, priority, source, created_at, updated_at, submitted_at, closed_at",
-          )
+          .select("id, case_number, status, status_group, current_step, created_at, updated_at, submitted_at, closed_at, classification")
           .eq("id", caseId)
           .eq("seller_user_id", session.user.id)
           .maybeSingle();
 
         if (error) throw error;
+        setCaseData(data as CaseRow | null);
 
-        setCaseData((data as CaseRow | null) ?? null);
-      } catch (error: any) {
-        setLoadError(error?.message || "Az ügy betöltése nem sikerült.");
+        // Load week offer
+        if (data) {
+          const { data: wo } = await supabaseAny
+            .from("week_offers")
+            .select("resort_name_raw, week_number, unit_type, season_label")
+            .eq("case_id", caseId)
+            .maybeSingle();
+          setWeekOffer(wo as WeekOffer | null);
+        }
+      } catch (err: any) {
+        setLoadError(err?.message || "Az ügy betöltése nem sikerült.");
       } finally {
         setIsLoading(false);
       }
     };
-
-    loadCase();
+    load();
   }, [caseId]);
 
-  // Load document types
+  // Load supporting data
   const loadDocumentTypes = useCallback(async () => {
-    const { data, error } = await supabaseAny
+    const { data } = await supabaseAny
       .from("document_types")
-      .select("id, code, label, description, is_required, sort_order")
+      .select("id, label")
       .eq("is_active", true)
       .order("sort_order", { ascending: true });
-
-    if (!error && data) {
-      setDocumentTypes(data as DocumentType[]);
-    }
+    if (data) setDocumentTypes(data as DocumentType[]);
   }, []);
 
-  // Load uploaded documents
   const loadUploadedDocuments = useCallback(async () => {
     if (!caseId) return;
-
-    const { data, error } = await supabaseAny
+    const { data } = await supabaseAny
       .from("documents")
-      .select(
-        "id, original_file_name, upload_status, review_status, ai_status, uploaded_at, document_type_id, storage_bucket, storage_path",
-      )
+      .select("id, original_file_name, upload_status, review_status, ai_status, uploaded_at, document_type_id, storage_bucket, storage_path")
       .eq("case_id", caseId)
       .order("created_at", { ascending: false });
-
-    if (!error && data) {
-      setUploadedDocuments(data as UploadedDocument[]);
-    }
+    if (data) setUploadedDocuments(data as UploadedDocument[]);
   }, [caseId]);
 
-  // Load contract
   const loadContract = useCallback(async () => {
     if (!caseId) return;
     const { data } = await supabaseAny
       .from("contracts")
-      .select(
-        "id, status, generated_file_name, generated_storage_bucket, generated_storage_path, signed_file_name, signed_storage_bucket, signed_storage_path, generated_at, signed_uploaded_at",
-      )
+      .select("id, status, generated_file_name, generated_storage_bucket, generated_storage_path, signed_file_name, signed_storage_bucket, signed_storage_path, generated_at, signed_uploaded_at")
       .eq("case_id", caseId)
       .eq("contract_type", "sale_purchase")
       .maybeSingle();
     setContract(data as ContractRow | null);
+  }, [caseId]);
+
+  const loadClassification = useCallback(async () => {
+    if (!caseId) return;
+    const { data } = await supabaseAny
+      .from("classifications")
+      .select("reason_summary")
+      .eq("case_id", caseId)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    setClassification(data as ClassificationRow | null);
+  }, [caseId]);
+
+  const loadCheckResults = useCallback(async () => {
+    if (!caseId) return;
+    const { data } = await supabaseAny
+      .from("check_results")
+      .select("id, check_type, result, message, severity, details, document_id")
+      .eq("case_id", caseId)
+      .order("created_at", { ascending: false });
+    if (data) setCheckResults(data as CheckResult[]);
   }, [caseId]);
 
   useEffect(() => {
@@ -345,216 +207,37 @@ export default function CaseDetail() {
       loadDocumentTypes();
       loadUploadedDocuments();
       loadContract();
+      loadClassification();
+      loadCheckResults();
     }
-  }, [caseId, loadDocumentTypes, loadUploadedDocuments, loadContract]);
+  }, [caseId, loadDocumentTypes, loadUploadedDocuments, loadContract, loadClassification, loadCheckResults]);
 
-  // Upload handler
-  const handleUpload = async () => {
-    setUploadError(null);
-    setUploadSuccessMessage(null);
+  // Build dynamic correction requirements from check results
+  const corrections = useMemo(() => {
+    return checkResults
+      .filter((cr) => cr.result === "correction_required" || cr.severity === "correction")
+      .map((cr) => ({
+        type: (cr.check_type === "document_check" ? "document_replace" : "field_correction") as "document_replace" | "field_correction",
+        message: cr.message || "Javítás szükséges.",
+        document_type_id: cr.details?.document_type_id,
+        document_type_label: cr.details?.document_type_label,
+        field_name: cr.details?.field_name,
+        field_label: cr.details?.field_label,
+        current_value: cr.details?.current_value,
+      }));
+  }, [checkResults]);
 
-    if (!selectedDocumentTypeId) {
-      setUploadError("Kérjük, válassz dokumentumtípust.");
-      return;
-    }
-    if (!selectedFile) {
-      setUploadError("Kérjük, válassz ki egy fájlt.");
-      return;
-    }
-    if (!caseId) {
-      setUploadError("Hiányzó ügyazonosító.");
-      return;
-    }
-
-    try {
-      setIsUploading(true);
-
-      await uploadCaseDocument({
-        caseId,
-        documentTypeId: selectedDocumentTypeId,
-        file: selectedFile,
-      });
-
-      setUploadSuccessMessage("A dokumentum sikeresen feltöltve.");
-      setSelectedFile(null);
-      if (fileInputRef.current) {
-        fileInputRef.current.value = "";
-      }
-      await loadUploadedDocuments();
-    } catch (err: any) {
-      setUploadError(err?.message || "A feltöltés nem sikerült.");
-    } finally {
-      setIsUploading(false);
-    }
+  const handleCaseStatusUpdate = (newStatus: string) => {
+    setCaseData((prev) => prev ? { ...prev, status: newStatus, updated_at: new Date().toISOString() } : prev);
   };
 
-  // Open document via signed URL
-  const handleOpenDocument = async (doc: UploadedDocument) => {
-    if (!doc.storage_bucket || !doc.storage_path) {
-      setUploadError("A dokumentum tárolási útvonala hiányzik.");
-      return;
-    }
-    try {
-      setPreviewLoadingId(doc.id);
-      const { data, error } = await supabase.storage.from(doc.storage_bucket).createSignedUrl(doc.storage_path, 60);
-      if (error) throw error;
-      if (data?.signedUrl) {
-        window.open(data.signedUrl, "_blank", "noopener,noreferrer");
-      }
-    } catch (err: any) {
-      setUploadError(err?.message || "A dokumentum megnyitása nem sikerült.");
-    } finally {
-      setPreviewLoadingId(null);
-    }
-  };
-
-  // Contract handlers
-  const handleOpenContract = async () => {
-    if (!contract?.generated_storage_bucket || !contract?.generated_storage_path) return;
-    try {
-      const { data, error } = await supabase.storage
-        .from(contract.generated_storage_bucket)
-        .createSignedUrl(contract.generated_storage_path, 60);
-      if (error) throw error;
-      if (data?.signedUrl) window.open(data.signedUrl, "_blank", "noopener,noreferrer");
-    } catch {
-      setSignedUploadErr("A szerződés megnyitása nem sikerült.");
-    }
-  };
-
-  const handleUploadSigned = async () => {
-    setSignedUploadMsg(null);
-    setSignedUploadErr(null);
-
-    if (!signedFile || !caseId || !contract || !caseData) {
-      setSignedUploadErr("Kérjük, válassz ki egy fájlt.");
-      return;
-    }
-
-    try {
-      setIsUploadingSigned(true);
-
-      const ts = Date.now();
-      const now = new Date().toISOString();
-      const previousStatus = caseData.status;
-      const storagePath = `cases/${caseId}/contracts/signed/${ts}-${signedFile.name}`;
-      const bucket = "signed-contracts";
-
-      // 1. Storage upload
-      const { error: uploadErr } = await supabase.storage.from(bucket).upload(storagePath, signedFile, {
-        contentType: signedFile.type || "application/octet-stream",
-        upsert: false,
-      });
-      if (uploadErr) throw uploadErr;
-
-      // 2. Contract update
-      const { error: contractUpdateErr } = await supabaseAny
-        .from("contracts")
-        .update({
-          signed_storage_bucket: bucket,
-          signed_storage_path: storagePath,
-          signed_file_name: signedFile.name,
-          signed_uploaded_at: now,
-          status: "signed_uploaded",
-        })
-        .eq("id", contract.id);
-      if (contractUpdateErr) throw contractUpdateErr;
-
-      // 3. Case status update
-      const { error: caseUpdateErr } = await supabaseAny
-        .from("cases")
-        .update({
-          status: "signed_contract_uploaded",
-        })
-        .eq("id", caseId);
-      if (caseUpdateErr) throw caseUpdateErr;
-
-      // 4. Case status history insert
-      const { error: historyErr } = await supabaseAny.from("case_status_history").insert({
-        case_id: caseId,
-        from_status: previousStatus,
-        to_status: "signed_contract_uploaded",
-        change_source: "seller_frontend",
-        note: "Seller uploaded signed sale contract",
-        created_at: now,
-      });
-      if (historyErr) throw historyErr;
-
-      // 5. Local UI refresh
-      setCaseData((prev) =>
-        prev
-          ? {
-              ...prev,
-              status: "signed_contract_uploaded",
-              updated_at: now,
-            }
-          : prev,
-      );
-
-      setSignedUploadMsg("Az aláírt szerződés sikeresen feltöltve.");
-      setSignedFile(null);
-      if (signedFileRef.current) signedFileRef.current.value = "";
-
-      await loadContract();
-    } catch (err: any) {
-      setSignedUploadErr(err?.message || "A feltöltés nem sikerült.");
-    } finally {
-      setIsUploadingSigned(false);
-    }
-  };
-
-  const contractStatusLabel = (s: string): string => {
-    switch (s) {
-      case "pending_generation":
-        return "Generálásra vár";
-      case "generated":
-        return "Generálva";
-      case "awaiting_signature":
-        return "Aláírásra vár";
-      case "signed_uploaded":
-        return "Aláírt példány feltöltve";
-      case "verified":
-        return "Ellenőrizve";
-      default:
-        return s;
-    }
-  };
-
-  const getDocTypeLabel = (docTypeId: string | null): string => {
-    if (!docTypeId) return "—";
-    const dt = documentTypes.find((t) => t.id === docTypeId);
-    return dt?.label || "Ismeretlen típus";
-  };
-
-  const currentStatus = useMemo(() => {
-    if (!caseData?.status) return statusBadgeMap.draft;
-    return (
-      statusBadgeMap[caseData.status] || {
-        label: caseData.status,
-        className: "bg-muted text-muted-foreground",
-      }
-    );
-  }, [caseData]);
-
-  const currentStepIndex = useMemo(() => {
-    if (!caseData?.status) return 0;
-    const idx = timelineSteps.findIndex((step) => step.key === caseData.status);
-    return idx >= 0 ? idx : 0;
-  }, [caseData]);
-
-  // ---------- Render: loading / error / not found ----------
+  // ---------- Render ----------
 
   if (isLoading) {
     return (
       <SellerLayout>
         <div className="space-y-6">
-          <Link
-            to="/seller/cases"
-            className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            Vissza az ügyeimhez
-          </Link>
+          <BackLink />
           <Card className="shadow-sm">
             <CardContent className="p-10 text-center">
               <p className="text-muted-foreground">Ügy betöltése...</p>
@@ -565,44 +248,18 @@ export default function CaseDetail() {
     );
   }
 
-  if (loadError) {
+  if (loadError || !caseData) {
     return (
       <SellerLayout>
         <div className="space-y-6">
-          <Link
-            to="/seller/cases"
-            className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            Vissza az ügyeimhez
-          </Link>
+          <BackLink />
           <Card className="shadow-sm">
             <CardContent className="p-10 text-center space-y-2">
-              <p className="text-lg font-semibold text-foreground">Hiba történt</p>
-              <p className="text-sm text-muted-foreground">{loadError}</p>
-            </CardContent>
-          </Card>
-        </div>
-      </SellerLayout>
-    );
-  }
-
-  if (!caseData) {
-    return (
-      <SellerLayout>
-        <div className="space-y-6">
-          <Link
-            to="/seller/cases"
-            className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            Vissza az ügyeimhez
-          </Link>
-          <Card className="shadow-sm">
-            <CardContent className="p-10 text-center space-y-2">
-              <p className="text-lg font-semibold text-foreground">Az ügy nem található</p>
+              <p className="text-lg font-semibold text-foreground">
+                {loadError ? "Hiba történt" : "Az ügy nem található"}
+              </p>
               <p className="text-sm text-muted-foreground">
-                Lehet, hogy nincs hozzáférésed ehhez az ügyhöz, vagy az ügy nem létezik.
+                {loadError || "Lehet, hogy nincs hozzáférésed ehhez az ügyhöz, vagy az ügy nem létezik."}
               </p>
             </CardContent>
           </Card>
@@ -611,402 +268,105 @@ export default function CaseDetail() {
     );
   }
 
-  // ---------- Render: main ----------
+  const status = caseData.status;
 
   return (
     <SellerLayout>
       <div className="space-y-6">
-        <Link
-          to="/seller/cases"
-          className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Vissza az ügyeimhez
-        </Link>
+        <BackLink />
 
-        {/* Header Card */}
-        <Card className="shadow-sm">
-          <CardContent className="p-6">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div className="space-y-1">
-                <p className="text-xs text-muted-foreground font-medium tracking-wide uppercase">Ügy száma</p>
-                <h1 className="text-2xl font-bold text-foreground">{caseData.case_number}</h1>
-              </div>
-              <Badge className={cn("text-xs font-semibold px-3 py-1", currentStatus.className)}>
-                {currentStatus.label}
-              </Badge>
-            </div>
-
-            <Separator className="my-4" />
-
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
-              <div>
-                <p className="text-muted-foreground">Létrehozva</p>
-                <p className="font-medium text-foreground">{formatDate(caseData.created_at)}</p>
-              </div>
-              <div>
-                <p className="text-muted-foreground">Frissítve</p>
-                <p className="font-medium text-foreground">{formatDate(caseData.updated_at)}</p>
-              </div>
-              <div>
-                <p className="text-muted-foreground">Jelenlegi lépés</p>
-                <p className="font-medium text-foreground">{caseData.current_step || "Nincs megadva"}</p>
-              </div>
-              <div>
-                <p className="text-muted-foreground">Státusz csoport</p>
-                <p className="font-medium text-foreground">{caseData.status_group || "—"}</p>
-              </div>
-              <div>
-                <p className="text-muted-foreground">Prioritás</p>
-                <p className="font-medium text-foreground">{caseData.priority || "normál"}</p>
-              </div>
-              <div>
-                <p className="text-muted-foreground">Forrás</p>
-                <p className="font-medium text-foreground">{caseData.source || "—"}</p>
-              </div>
-              <div>
-                <p className="text-muted-foreground">Beküldve</p>
-                <p className="font-medium text-foreground">{formatDate(caseData.submitted_at)}</p>
-              </div>
-              <div>
-                <p className="text-muted-foreground">Lezárva</p>
-                <p className="font-medium text-foreground">{formatDate(caseData.closed_at)}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+        {/* Summary Card */}
+        <CaseSummaryCard
+          caseNumber={caseData.case_number}
+          status={status}
+          createdAt={caseData.created_at}
+          submittedAt={caseData.submitted_at}
+          weekOffer={weekOffer}
+        />
 
         {/* Two-column layout */}
         <div className="grid lg:grid-cols-5 gap-6">
-          {/* Timeline */}
+          {/* Left: Timeline */}
           <div className="lg:col-span-2">
             <Card className="shadow-sm">
-              <CardHeader>
-                <CardTitle className="text-base">Ügy állapota</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="relative">
-                  {timelineSteps.map((step, i) => {
-                    const completed = i < currentStepIndex;
-                    const current = i === currentStepIndex;
-                    const Icon = step.icon;
-                    const isLast = i === timelineSteps.length - 1;
-
-                    return (
-                      <div key={step.key} className="flex gap-4 relative">
-                        {!isLast && (
-                          <div
-                            className={cn(
-                              "absolute left-[17px] top-[36px] w-0.5 h-[calc(100%-12px)]",
-                              completed ? "bg-success" : current ? "bg-primary" : "bg-border",
-                            )}
-                          />
-                        )}
-
-                        <div
-                          className={cn(
-                            "relative z-10 flex items-center justify-center h-9 w-9 rounded-full shrink-0 border-2 transition-colors",
-                            completed
-                              ? "bg-success border-success text-success-foreground"
-                              : current
-                                ? "bg-primary border-primary text-primary-foreground"
-                                : "bg-muted border-border text-muted-foreground",
-                          )}
-                        >
-                          {completed ? (
-                            <CheckCircle2 className="h-4 w-4" />
-                          ) : current ? (
-                            <Icon className="h-4 w-4" />
-                          ) : (
-                            <Circle className="h-4 w-4" />
-                          )}
-                        </div>
-
-                        <div className={cn("pb-8", isLast && "pb-0")}>
-                          <p
-                            className={cn(
-                              "text-sm font-medium leading-tight",
-                              completed ? "text-success" : current ? "text-foreground" : "text-muted-foreground",
-                            )}
-                          >
-                            {step.label}
-                          </p>
-                          <p
-                            className={cn(
-                              "text-xs mt-0.5",
-                              completed || current ? "text-muted-foreground" : "text-muted-foreground/60",
-                            )}
-                          >
-                            {step.description}
-                          </p>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
+              <CardContent className="p-6">
+                <h2 className="text-base font-semibold text-foreground mb-4">Ügy állapota</h2>
+                <CaseTimeline status={status} />
               </CardContent>
             </Card>
           </div>
 
-          {/* Right column */}
+          {/* Right: Status-based action panels */}
           <div className="lg:col-span-3 space-y-6">
-            {/* Document upload */}
-            <Card className="shadow-sm">
-              <CardHeader>
-                <CardTitle className="text-base flex items-center gap-2">
-                  <Upload className="h-4 w-4" />
-                  Dokumentumfeltöltés
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <p className="text-sm text-muted-foreground">
-                  Töltsd fel az ügyhöz kapcsolódó szükséges dokumentumokat.
-                </p>
-
-                <div className="space-y-3">
-                  <div className="space-y-1.5">
-                    <Label className="text-sm">Dokumentumtípus</Label>
-                    <Select
-                      value={selectedDocumentTypeId}
-                      onValueChange={setSelectedDocumentTypeId}
-                      disabled={isUploading}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Válassz dokumentumtípust" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {documentTypes.map((dt) => (
-                          <SelectItem key={dt.id} value={dt.id}>
-                            {dt.label}
-                            {dt.is_required && " *"}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <Label className="text-sm">Fájl kiválasztása</Label>
-                    <Input
-                      ref={fileInputRef}
-                      type="file"
-                      disabled={isUploading}
-                      onChange={(e) => setSelectedFile(e.target.files?.[0] ?? null)}
-                    />
-                  </div>
-
-                  {uploadError && <p className="text-sm text-destructive">{uploadError}</p>}
-                  {uploadSuccessMessage && <p className="text-sm text-success">{uploadSuccessMessage}</p>}
-
-                  <Button
-                    onClick={handleUpload}
-                    disabled={isUploading || !selectedDocumentTypeId || !selectedFile}
-                    className="w-full"
-                  >
-                    {isUploading ? (
-                      <>
-                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                        Feltöltés folyamatban...
-                      </>
-                    ) : (
-                      <>
-                        <Upload className="h-4 w-4 mr-2" />
-                        Dokumentum feltöltése
-                      </>
-                    )}
-                  </Button>
-                </div>
-
-                {/* Uploaded documents list */}
-                <Separator />
-
-                <div className="space-y-3">
-                  <h3 className="text-sm font-semibold text-foreground">Feltöltött dokumentumok</h3>
-
-                  {uploadedDocuments.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">Még nincs feltöltött dokumentum.</p>
-                  ) : (
-                    <div className="space-y-3">
-                      {uploadedDocuments.map((doc) => (
-                        <div key={doc.id} className="rounded-md border border-border p-3 space-y-1.5 text-sm">
-                          <div className="flex items-start justify-between gap-2">
-                            <div className="space-y-0.5 min-w-0 flex-1">
-                              <p className="font-medium text-foreground truncate">
-                                {doc.original_file_name || "Névtelen fájl"}
-                              </p>
-                              <p className="text-xs text-muted-foreground">{getDocTypeLabel(doc.document_type_id)}</p>
-                            </div>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="shrink-0 text-xs"
-                              disabled={previewLoadingId === doc.id || !doc.storage_bucket || !doc.storage_path}
-                              onClick={() => handleOpenDocument(doc)}
-                            >
-                              {previewLoadingId === doc.id ? "Megnyitás..." : "Megnyitás"}
-                            </Button>
-                          </div>
-                          <div className="flex flex-wrap gap-2">
-                            <Badge variant="outline" className="text-xs">
-                              Feltöltés: {uploadStatusLabel(doc.upload_status)}
-                            </Badge>
-                            <Badge variant="outline" className="text-xs">
-                              Ellenőrzés: {reviewStatusLabel(doc.review_status)}
-                            </Badge>
-                            <Badge variant="outline" className="text-xs">
-                              AI: {aiStatusLabel(doc.ai_status)}
-                            </Badge>
-                          </div>
-                          <p className="text-xs text-muted-foreground">Feltöltve: {formatDateTime(doc.uploaded_at)}</p>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Szerződés */}
-            {contract && (
-              <Card className="shadow-sm">
-                <CardHeader>
-                  <CardTitle className="text-base flex items-center gap-2">
-                    <FileText className="h-4 w-4" />
-                    Szerződés
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm text-muted-foreground">Státusz:</span>
-                      <Badge variant="outline" className="text-xs">
-                        {contractStatusLabel(contract.status)}
-                      </Badge>
-                    </div>
-                    {contract.generated_file_name && (
-                      <p className="text-xs text-muted-foreground">Fájl: {contract.generated_file_name}</p>
-                    )}
-                    {contract.generated_at && (
-                      <p className="text-xs text-muted-foreground">
-                        Generálva: {formatDateTime(contract.generated_at)}
-                      </p>
-                    )}
-                    {contract.signed_uploaded_at && (
-                      <p className="text-xs text-muted-foreground">
-                        Aláírt feltöltve: {formatDateTime(contract.signed_uploaded_at)}
-                      </p>
-                    )}
-                  </div>
-
-                  {contract.generated_storage_path && (
-                    <Button variant="outline" className="w-full" onClick={handleOpenContract}>
-                      <FileText className="h-4 w-4 mr-2" />
-                      Adásvételi szerződés megnyitása
-                    </Button>
-                  )}
-
-                  {/* Signed upload section */}
-                  {contract.status === "generated" || contract.status === "awaiting_signature" ? (
-                    <div className="space-y-3 border-t border-border pt-3">
-                      <p className="text-sm font-medium text-foreground">Aláírt szerződés feltöltése</p>
-                      <div className="space-y-1.5">
-                        <Label className="text-sm">Fájl kiválasztása</Label>
-                        <Input
-                          ref={signedFileRef}
-                          type="file"
-                          disabled={isUploadingSigned}
-                          onChange={(e) => setSignedFile(e.target.files?.[0] ?? null)}
-                        />
-                      </div>
-                      {signedUploadErr && <p className="text-sm text-destructive">{signedUploadErr}</p>}
-                      {signedUploadMsg && <p className="text-sm text-success">{signedUploadMsg}</p>}
-                      <Button
-                        className="w-full"
-                        disabled={isUploadingSigned || !signedFile}
-                        onClick={handleUploadSigned}
-                      >
-                        {isUploadingSigned ? (
-                          <>
-                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                            Feltöltés...
-                          </>
-                        ) : (
-                          <>
-                            <Upload className="h-4 w-4 mr-2" />
-                            Feltöltés
-                          </>
-                        )}
-                      </Button>
-                    </div>
-                  ) : null}
-                </CardContent>
-              </Card>
+            {/* AI Processing */}
+            {(status === "submitted" || status === "ai_processing") && (
+              <AiProcessingPanel />
             )}
 
-            {/* Next action */}
-            <Card className="shadow-sm">
-              <CardHeader>
-                <CardTitle className="text-base flex items-center gap-2">
-                  <AlertTriangle className="h-4 w-4" />
-                  Következő teendő
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-sm text-muted-foreground">Az ügy aktuális állapota: {currentStatus.label}</p>
-                <p className="text-sm text-muted-foreground mt-1">
-                  Jelenlegi lépés: {caseData.current_step || "Nincs megadva"}
-                </p>
-                {caseData.status === "red_rejected" && (
-                  <p className="text-sm text-destructive mt-2">
-                    Ez az ügy elutasított státuszban van. Az admin ellenőrzés eredményét kell áttekinteni.
-                  </p>
-                )}
-                {caseData.status === "cancelled" && (
-                  <p className="text-sm text-destructive mt-2">Ez az ügy megszakított státuszban van.</p>
-                )}
-                <Button variant="outline" className="mt-4" asChild>
-                  <Link to="/seller/cases">Vissza az ügyeimhez</Link>
-                </Button>
-              </CardContent>
-            </Card>
+            {/* Manual Review */}
+            {status === "yellow_review" && (
+              <ManualReviewPanel />
+            )}
 
-            {/* Case details */}
-            <Card className="shadow-sm">
-              <CardHeader>
-                <CardTitle className="text-base">Ügyadatok</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Ügy azonosító</span>
-                    <span className="font-medium text-foreground">{caseData.id}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Ügy száma</span>
-                    <span className="font-medium text-foreground">{caseData.case_number}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Státusz</span>
-                    <span className="font-medium text-foreground">{caseData.status}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Státusz csoport</span>
-                    <span className="font-medium text-foreground">{caseData.status_group || "—"}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Prioritás</span>
-                    <span className="font-medium text-foreground">{caseData.priority || "normál"}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Forrás</span>
-                    <span className="font-medium text-foreground">{caseData.source || "—"}</span>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+            {/* Rejected */}
+            {status === "red_rejected" && (
+              <RejectedPanel reasonSummary={classification?.reason_summary} />
+            )}
+
+            {/* Correction requests (policy-driven) */}
+            {corrections.length > 0 && (
+              <CorrectionPanel
+                caseId={caseId!}
+                corrections={corrections}
+                onCorrectionCompleted={() => { loadUploadedDocuments(); loadCheckResults(); }}
+              />
+            )}
+
+            {/* Contract panel */}
+            {contract && isAtOrPast(status, "green_approved") && status !== "red_rejected" && status !== "yellow_review" && (
+              <ContractPanel
+                contract={contract}
+                caseId={caseId!}
+                caseStatus={status}
+                onContractUpdated={loadContract}
+                onCaseStatusUpdated={handleCaseStatusUpdate}
+              />
+            )}
+
+            {/* Service Agreement */}
+            {isAtOrPast(status, "signed_contract_uploaded") && status !== "red_rejected" && status !== "yellow_review" && (
+              <ServiceAgreementPanel
+                caseId={caseId!}
+                caseStatus={status}
+                onAccepted={() => handleCaseStatusUpdate("service_agreement_accepted")}
+              />
+            )}
+
+            {/* Payment */}
+            {isAtOrPast(status, "service_agreement_accepted") && status !== "red_rejected" && status !== "yellow_review" && (
+              <PaymentPanel caseStatus={status} />
+            )}
+
+            {/* Submitted documents (read-only) */}
+            <SubmittedDocumentsPanel
+              documents={uploadedDocuments}
+              documentTypes={documentTypes}
+            />
           </div>
         </div>
       </div>
     </SellerLayout>
+  );
+}
+
+function BackLink() {
+  return (
+    <Link
+      to="/seller/cases"
+      className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+    >
+      <ArrowLeft className="h-4 w-4" />
+      Vissza az ügyeimhez
+    </Link>
   );
 }
