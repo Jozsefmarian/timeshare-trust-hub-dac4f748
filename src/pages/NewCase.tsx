@@ -130,11 +130,28 @@ export default function NewCase() {
         return;
       }
 
-      const { data: sellerProfile } = await supabaseAny
+      const sellerProfileNotes = [
+        ownerEmail?.trim() ? `Kapcsolattartó email: ${ownerEmail.trim()}` : null,
+        ownerPhone?.trim() ? `Kapcsolattartó telefon: ${ownerPhone.trim()}` : null,
+      ]
+        .filter(Boolean)
+        .join("\n");
+
+      const { data: sellerProfile, error: sellerProfileError } = await supabaseAny
         .from("seller_profiles")
+        .upsert(
+          {
+            user_id: session.user.id,
+            billing_name: ownerName.trim(),
+            billing_address: ownerAddress.trim(),
+            notes: sellerProfileNotes || null,
+          },
+          { onConflict: "user_id" },
+        )
         .select("id")
-        .eq("user_id", session.user.id)
-        .maybeSingle();
+        .single();
+
+      if (sellerProfileError) throw sellerProfileError;
 
       const now = new Date().toISOString();
       const generatedCaseNumber = `TS-${new Date().getFullYear()}-${Date.now().toString().slice(-6)}`;
