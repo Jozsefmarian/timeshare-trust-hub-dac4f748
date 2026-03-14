@@ -294,28 +294,34 @@ export default function NewCase() {
 
         // 2. Create case in draft status
         const now = new Date().toISOString();
-        const generatedCaseNumber = `TS-${new Date().getFullYear()}-${Date.now().toString().slice(-6)}`;
 
-        const { data: caseData, error: caseError } = await supabaseAny
-          .from("cases")
-          .insert({
-            case_number: generatedCaseNumber,
-            seller_user_id: session.user.id,
-            seller_profile_id: sellerProfile?.id ?? null,
-            status: "draft",
-            status_group: "intake",
-            current_step: "seller_started",
-            priority: "normal",
-            source: "seller_portal",
-            created_at: now,
-            updated_at: now,
-          })
-          .select("id")
-          .single();
+        let caseId = createdCaseRef.current;
 
-        if (caseError) throw caseError;
-        caseId = caseData.id;
-        createdCaseRef.current = caseId;
+        if (!caseId) {
+          const generatedCaseNumber = `TS-${new Date().getFullYear()}-${Date.now().toString().slice(-6)}`;
+
+          const { data: caseData, error: caseError } = await supabaseAny
+            .from("cases")
+            .insert({
+              case_number: generatedCaseNumber,
+              seller_user_id: session.user.id,
+              seller_profile_id: sellerProfile?.id ?? null,
+              status: "draft",
+              status_group: "intake",
+              current_step: "seller_started",
+              priority: "normal",
+              source: "seller_portal",
+              created_at: now,
+              updated_at: now,
+            })
+            .select("id")
+            .single();
+
+          if (caseError) throw caseError;
+
+          caseId = caseData.id;
+          createdCaseRef.current = caseId;
+        }
 
         // 3. Create week_offer
         const { error: weekOfferError } = await supabaseAny.from("week_offers").insert({
