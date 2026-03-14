@@ -101,6 +101,9 @@ export default function NewCase() {
   const [dragOver, setDragOver] = useState<string | null>(null);
   const [documentTypeMap, setDocumentTypeMap] = useState<Record<string, string>>({});
   const docTypesLoaded = useRef(false);
+  // Retry safety: remember the case created in this session so we never duplicate
+  const createdCaseRef = useRef<string | null>(null);
+  const submittingRef = useRef(false);
 
   // Load document_types mapping on first render of step 4
   const ensureDocTypesLoaded = useCallback(async () => {
