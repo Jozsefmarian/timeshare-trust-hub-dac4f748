@@ -36,27 +36,27 @@ const DOC_CATEGORIES = {
     required: true,
     alwaysVisible: true,
   },
-  share_sale_contract: {
+  standard_information_form: {
     label: "Standard Information Form",
     backendCode: "standard_information_form",
     required: true,
     alwaysVisible: true,
   },
-  share_sale_contract: {
+  maintenance_fee_invoice: {
     label: "Maintenance fee invoice",
     backendCode: "maintenance_fee_invoice",
     required: true,
     alwaysVisible: true,
   },
-  share_sale_contract: {
+  share_statement: {
     label: "Részvény adásvételi szerződés",
     backendCode: "share_statement",
     required: false, // conditionally required for Abbázia
     alwaysVisible: false, // only shown when share_related
   },
-  other: {
+  other_document: {
     label: "Egyéb dokumentum",
-    backendCode: "annual_fee_receipt",
+    backendCode: "other_document",
     required: false,
     alwaysVisible: true,
   },
