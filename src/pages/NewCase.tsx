@@ -32,13 +32,25 @@ const RESORTS = [
 const DOC_CATEGORIES = {
   timeshare_contract: {
     label: "Üdülőhasználati szerződés",
-    backendCode: "contract_copy",
+    backendCode: "timeshare_contract",
+    required: true,
+    alwaysVisible: true,
+  },
+  share_sale_contract: {
+    label: "Standard Information Form",
+    backendCode: "standard_information_form",
+    required: true,
+    alwaysVisible: true,
+  },
+  share_sale_contract: {
+    label: "Maintenance fee invoice",
+    backendCode: "maintenance_fee_invoice",
     required: true,
     alwaysVisible: true,
   },
   share_sale_contract: {
     label: "Részvény adásvételi szerződés",
-    backendCode: "property_deed",
+    backendCode: "share_statement",
     required: false, // conditionally required for Abbázia
     alwaysVisible: false, // only shown when share_related
   },
@@ -109,10 +121,7 @@ export default function NewCase() {
   const ensureDocTypesLoaded = useCallback(async () => {
     if (docTypesLoaded.current) return;
     docTypesLoaded.current = true;
-    const { data } = await supabaseAny
-      .from("document_types")
-      .select("id, code")
-      .eq("is_active", true);
+    const { data } = await supabaseAny.from("document_types").select("id, code").eq("is_active", true);
     if (data) {
       const map: Record<string, string> = {};
       for (const dt of data) map[dt.code] = dt.id;
@@ -134,7 +143,7 @@ export default function NewCase() {
   const visibleCategories: { key: DocCategoryKey; label: string; required: boolean }[] = [
     { key: "timeshare_contract", label: DOC_CATEGORIES.timeshare_contract.label, required: true },
     ...(isShareRelated
-      ? [{ key: "share_sale_contract" as DocCategoryKey, label: DOC_CATEGORIES.share_sale_contract.label, required: true }]
+      ? [{ key: "share_statement" as DocCategoryKey, label: DOC_CATEGORIES.share_statement.label, required: true }]
       : []),
     { key: "other", label: DOC_CATEGORIES.other.label, required: false },
   ];
@@ -166,9 +175,9 @@ export default function NewCase() {
       case 2:
         return decl1 && decl2 && decl3;
       case 3: {
-        // Required: timeshare_contract always, share_sale_contract if share-related
+        // Required: timeshare_contract always, share_statement if share-related
         const hasTimeshare = filesForCategory("timeshare_contract").length > 0;
-        const hasShare = !isShareRelated || filesForCategory("share_sale_contract").length > 0;
+        const hasShare = !isShareRelated || filesForCategory("share_statement").length > 0;
         return hasTimeshare && hasShare;
       }
       default:
@@ -339,7 +348,8 @@ export default function NewCase() {
       if (!allUploadsSucceeded) {
         toast({
           title: "Dokumentum feltöltési hiba",
-          description: "Egy vagy több dokumentum feltöltése sikertelen. Kérjük próbálja újra a sikertelen fájlokat, majd kattintson ismét a beküldésre.",
+          description:
+            "Egy vagy több dokumentum feltöltése sikertelen. Kérjük próbálja újra a sikertelen fájlokat, majd kattintson ismét a beküldésre.",
           variant: "destructive",
         });
         return;
@@ -438,20 +448,42 @@ export default function NewCase() {
               <div className="grid gap-4">
                 <div className="space-y-1.5">
                   <Label htmlFor="ownerName">Teljes név</Label>
-                  <Input id="ownerName" placeholder="Kovács János" value={ownerName} onChange={(e) => setOwnerName(e.target.value)} />
+                  <Input
+                    id="ownerName"
+                    placeholder="Kovács János"
+                    value={ownerName}
+                    onChange={(e) => setOwnerName(e.target.value)}
+                  />
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="ownerAddress">Lakcím</Label>
-                  <Input id="ownerAddress" placeholder="1011 Budapest, Fő utca 1." value={ownerAddress} onChange={(e) => setOwnerAddress(e.target.value)} />
+                  <Input
+                    id="ownerAddress"
+                    placeholder="1011 Budapest, Fő utca 1."
+                    value={ownerAddress}
+                    onChange={(e) => setOwnerAddress(e.target.value)}
+                  />
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-1.5">
                     <Label htmlFor="ownerEmail">E-mail cím</Label>
-                    <Input id="ownerEmail" type="email" placeholder="kovacs@example.com" value={ownerEmail} onChange={(e) => setOwnerEmail(e.target.value)} />
+                    <Input
+                      id="ownerEmail"
+                      type="email"
+                      placeholder="kovacs@example.com"
+                      value={ownerEmail}
+                      onChange={(e) => setOwnerEmail(e.target.value)}
+                    />
                   </div>
                   <div className="space-y-1.5">
                     <Label htmlFor="ownerPhone">Telefonszám</Label>
-                    <Input id="ownerPhone" type="tel" placeholder="+36 30 123 4567" value={ownerPhone} onChange={(e) => setOwnerPhone(e.target.value)} />
+                    <Input
+                      id="ownerPhone"
+                      type="tel"
+                      placeholder="+36 30 123 4567"
+                      value={ownerPhone}
+                      onChange={(e) => setOwnerPhone(e.target.value)}
+                    />
                   </div>
                 </div>
               </div>
@@ -462,10 +494,14 @@ export default function NewCase() {
                 <div className="space-y-1.5">
                   <Label>Üdülőhely neve</Label>
                   <Select value={resort} onValueChange={setResort}>
-                    <SelectTrigger><SelectValue placeholder="Válasszon üdülőhelyet" /></SelectTrigger>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Válasszon üdülőhelyet" />
+                    </SelectTrigger>
                     <SelectContent>
                       {RESORTS.map((r) => (
-                        <SelectItem key={r} value={r}>{r}</SelectItem>
+                        <SelectItem key={r} value={r}>
+                          {r}
+                        </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -473,31 +509,67 @@ export default function NewCase() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-1.5">
                     <Label htmlFor="weekNumber">Hét száma (1–52)</Label>
-                    <Input id="weekNumber" type="number" min={1} max={52} placeholder="pl. 32" value={weekNumber} onChange={(e) => setWeekNumber(e.target.value)} />
+                    <Input
+                      id="weekNumber"
+                      type="number"
+                      min={1}
+                      max={52}
+                      placeholder="pl. 32"
+                      value={weekNumber}
+                      onChange={(e) => setWeekNumber(e.target.value)}
+                    />
                   </div>
                   <div className="space-y-1.5">
                     <Label htmlFor="apartmentType">Apartman típus</Label>
-                    <Input id="apartmentType" placeholder="pl. Studio, 1 hálós" value={apartmentType} onChange={(e) => setApartmentType(e.target.value)} />
+                    <Input
+                      id="apartmentType"
+                      placeholder="pl. Studio, 1 hálós"
+                      value={apartmentType}
+                      onChange={(e) => setApartmentType(e.target.value)}
+                    />
                   </div>
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="seasonName">Szezon megnevezése</Label>
-                  <Input id="seasonName" placeholder="pl. Főszezon, Utószezon" value={seasonName} onChange={(e) => setSeasonName(e.target.value)} />
+                  <Input
+                    id="seasonName"
+                    placeholder="pl. Főszezon, Utószezon"
+                    value={seasonName}
+                    onChange={(e) => setSeasonName(e.target.value)}
+                  />
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-1.5">
                     <Label htmlFor="rightsStart">Jogosultság kezdete (év)</Label>
-                    <Input id="rightsStart" type="number" min={1990} max={2050} placeholder="pl. 2005" value={rightsStart} onChange={(e) => setRightsStart(e.target.value)} />
+                    <Input
+                      id="rightsStart"
+                      type="number"
+                      min={1990}
+                      max={2050}
+                      placeholder="pl. 2005"
+                      value={rightsStart}
+                      onChange={(e) => setRightsStart(e.target.value)}
+                    />
                   </div>
                   <div className="space-y-1.5">
                     <Label htmlFor="rightsEnd">Jogosultság vége (év)</Label>
-                    <Input id="rightsEnd" type="number" min={1990} max={2099} placeholder="pl. 2035" value={rightsEnd} onChange={(e) => setRightsEnd(e.target.value)} />
+                    <Input
+                      id="rightsEnd"
+                      type="number"
+                      min={1990}
+                      max={2099}
+                      placeholder="pl. 2035"
+                      value={rightsEnd}
+                      onChange={(e) => setRightsEnd(e.target.value)}
+                    />
                   </div>
                 </div>
                 <div className="space-y-1.5">
                   <Label>Kapcsolódik részvény?</Label>
                   <Select value={hasShares} onValueChange={setHasShares}>
-                    <SelectTrigger><SelectValue placeholder="Válasszon" /></SelectTrigger>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Válasszon" />
+                    </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="yes">Igen</SelectItem>
                       <SelectItem value="no">Nem</SelectItem>
@@ -507,7 +579,14 @@ export default function NewCase() {
                 {hasShares === "yes" && (
                   <div className="space-y-1.5">
                     <Label htmlFor="shareCount">Részvény darabszám</Label>
-                    <Input id="shareCount" type="number" min={1} placeholder="pl. 1" value={shareCount} onChange={(e) => setShareCount(e.target.value)} />
+                    <Input
+                      id="shareCount"
+                      type="number"
+                      min={1}
+                      placeholder="pl. 1"
+                      value={shareCount}
+                      onChange={(e) => setShareCount(e.target.value)}
+                    />
                   </div>
                 )}
               </div>
@@ -516,9 +595,19 @@ export default function NewCase() {
             {step === 2 && (
               <div className="space-y-5">
                 {[
-                  { id: "decl1", checked: decl1, set: setDecl1, text: "Kijelentem, hogy az üdülési jog jogos tulajdonosa vagyok." },
+                  {
+                    id: "decl1",
+                    checked: decl1,
+                    set: setDecl1,
+                    text: "Kijelentem, hogy az üdülési jog jogos tulajdonosa vagyok.",
+                  },
                   { id: "decl2", checked: decl2, set: setDecl2, text: "A megadott adatok a valóságnak megfelelnek." },
-                  { id: "decl3", checked: decl3, set: setDecl3, text: "Tudomásul veszem, hogy a rendszer automatikusan ellenőrzi a feltöltött dokumentumokat." },
+                  {
+                    id: "decl3",
+                    checked: decl3,
+                    set: setDecl3,
+                    text: "Tudomásul veszem, hogy a rendszer automatikusan ellenőrzi a feltöltött dokumentumokat.",
+                  },
                 ].map((d) => (
                   <label
                     key={d.id}
@@ -539,15 +628,26 @@ export default function NewCase() {
                     <div className="flex items-center gap-2">
                       <Label className="text-sm">{doc.label}</Label>
                       {doc.required ? (
-                        <Badge variant="outline" className="text-[10px] border-destructive/40 text-destructive">Kötelező</Badge>
+                        <Badge variant="outline" className="text-[10px] border-destructive/40 text-destructive">
+                          Kötelező
+                        </Badge>
                       ) : (
-                        <Badge variant="outline" className="text-[10px]">Opcionális</Badge>
+                        <Badge variant="outline" className="text-[10px]">
+                          Opcionális
+                        </Badge>
                       )}
                     </div>
                     <div
-                      onDragOver={(e) => { e.preventDefault(); setDragOver(doc.key); }}
+                      onDragOver={(e) => {
+                        e.preventDefault();
+                        setDragOver(doc.key);
+                      }}
                       onDragLeave={() => setDragOver(null)}
-                      onDrop={(e) => { e.preventDefault(); setDragOver(null); addFiles(doc.key, e.dataTransfer.files); }}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        setDragOver(null);
+                        addFiles(doc.key, e.dataTransfer.files);
+                      }}
                       className={cn(
                         "border-2 border-dashed rounded-xl p-4 text-center transition-colors cursor-pointer",
                         dragOver === doc.key ? "border-primary bg-primary/5" : "border-border hover:border-primary/40",
@@ -565,7 +665,10 @@ export default function NewCase() {
                       <p className="text-xs text-muted-foreground">Húzza ide a fájlt vagy kattintson a feltöltéshez</p>
                     </div>
                     {filesForCategory(doc.key).map((f) => (
-                      <div key={f.id} className="flex items-center gap-3 p-2 rounded-lg bg-muted/30 border border-border">
+                      <div
+                        key={f.id}
+                        className="flex items-center gap-3 p-2 rounded-lg bg-muted/30 border border-border"
+                      >
                         <File className="h-4 w-4 text-muted-foreground shrink-0" />
                         <div className="flex-1 min-w-0">
                           <p className="text-xs font-medium text-foreground truncate">{f.file.name}</p>
@@ -573,7 +676,10 @@ export default function NewCase() {
                         </div>
                         {f.status !== "uploading" && (
                           <button
-                            onClick={(e) => { e.stopPropagation(); removeFile(f.id); }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              removeFile(f.id);
+                            }}
                             className="text-muted-foreground hover:text-destructive transition-colors"
                           >
                             <X className="h-3.5 w-3.5" />
