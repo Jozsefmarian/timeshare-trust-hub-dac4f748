@@ -145,7 +145,7 @@ export default function NewCase() {
     ...(isShareRelated
       ? [{ key: "share_statement" as DocCategoryKey, label: DOC_CATEGORIES.share_statement.label, required: true }]
       : []),
-    { key: "other", label: DOC_CATEGORIES.other.label, required: false },
+    { key: "other_document", label: DOC_CATEGORIES.other_document.label, required: false },
   ];
 
   const addFiles = useCallback((category: DocCategoryKey, fileList: FileList | null) => {
