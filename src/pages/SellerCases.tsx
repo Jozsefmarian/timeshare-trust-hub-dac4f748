@@ -19,22 +19,30 @@ function statusLabel(status: string) {
   const map: Record<string, string> = {
     draft: "Piszkozat",
     submitted: "Beküldve",
-    in_review: "Felülvizsgálat alatt",
-    approved: "Jóváhagyva",
-    completed: "Lezárva",
-    signed: "Aláírva",
-    cancelled: "Törölve",
+    docs_uploaded: "Dokumentumok feltöltve",
+    ai_processing: "AI feldolgozás",
+    yellow_review: "Kézi ellenőrzés szükséges",
+    red_rejected: "Elutasítva",
+    green_approved: "Jóváhagyva",
+    contract_generated: "Szerződés generálva",
+    awaiting_signed_contract: "Aláírásra vár",
+    signed_contract_uploaded: "Aláírt szerződés feltöltve",
+    service_agreement_accepted: "Szolgáltatási szerződés elfogadva",
+    payment_pending: "Fizetés függőben",
+    paid: "Fizetve",
     closed: "Lezárva",
-    service_agreement_accepted: "Szerződés elfogadva",
+    cancelled: "Törölve",
   };
+
   return map[status] ?? status;
 }
 
 function statusColor(status: string) {
-  if (["completed", "signed", "closed"].includes(status)) return "bg-success";
-  if (status === "cancelled") return "bg-destructive";
+  if (["green_approved", "paid", "closed"].includes(status)) return "bg-success";
+  if (["red_rejected", "cancelled"].includes(status)) return "bg-destructive";
+  if (["yellow_review", "payment_pending", "awaiting_signed_contract"].includes(status)) return "bg-warning";
   if (status === "draft") return "bg-muted-foreground";
-  return "bg-warning";
+  return "bg-primary";
 }
 
 export default function SellerCases() {
