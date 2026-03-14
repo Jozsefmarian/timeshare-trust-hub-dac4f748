@@ -215,9 +215,12 @@ export default function NewCase() {
   };
 
   const handleSubmit = async () => {
-    try {
-      setIsSubmitting(true);
+    // Prevent concurrent submits
+    if (submittingRef.current) return;
+    submittingRef.current = true;
+    setIsSubmitting(true);
 
+    try {
       const {
         data: { session },
       } = await supabaseAny.auth.getSession();
@@ -239,72 +242,78 @@ export default function NewCase() {
         }
       }
 
-      // 1. Upsert seller profile
-      const sellerProfileNotes = [
-        ownerEmail?.trim() ? `Kapcsolattartó email: ${ownerEmail.trim()}` : null,
-        ownerPhone?.trim() ? `Kapcsolattartó telefon: ${ownerPhone.trim()}` : null,
-      ]
-        .filter(Boolean)
-        .join("\n");
+      let caseId = createdCaseRef.current;
 
-      const { data: sellerProfile, error: sellerProfileError } = await supabaseAny
-        .from("seller_profiles")
-        .upsert(
-          {
-            user_id: session.user.id,
-            billing_name: ownerName.trim(),
-            billing_address: ownerAddress.trim(),
-            notes: sellerProfileNotes || null,
-          },
-          { onConflict: "user_id" },
-        )
-        .select("id")
-        .single();
+      // Only create case + profile + week_offer if not already created in this session
+      if (!caseId) {
+        // 1. Upsert seller profile
+        const sellerProfileNotes = [
+          ownerEmail?.trim() ? `Kapcsolattartó email: ${ownerEmail.trim()}` : null,
+          ownerPhone?.trim() ? `Kapcsolattartó telefon: ${ownerPhone.trim()}` : null,
+        ]
+          .filter(Boolean)
+          .join("\n");
 
-      if (sellerProfileError) throw sellerProfileError;
+        const { data: sellerProfile, error: sellerProfileError } = await supabaseAny
+          .from("seller_profiles")
+          .upsert(
+            {
+              user_id: session.user.id,
+              billing_name: ownerName.trim(),
+              billing_address: ownerAddress.trim(),
+              notes: sellerProfileNotes || null,
+            },
+            { onConflict: "user_id" },
+          )
+          .select("id")
+          .single();
 
-      // 2. Create case in draft status first (so document uploads can reference it)
-      const now = new Date().toISOString();
-      const generatedCaseNumber = `TS-${new Date().getFullYear()}-${Date.now().toString().slice(-6)}`;
+        if (sellerProfileError) throw sellerProfileError;
 
-      const { data: caseData, error: caseError } = await supabaseAny
-        .from("cases")
-        .insert({
-          case_number: generatedCaseNumber,
-          seller_user_id: session.user.id,
-          seller_profile_id: sellerProfile?.id ?? null,
-          status: "draft",
-          status_group: "intake",
-          current_step: "seller_started",
-          priority: "normal",
-          source: "seller_portal",
+        // 2. Create case in draft status
+        const now = new Date().toISOString();
+        const generatedCaseNumber = `TS-${new Date().getFullYear()}-${Date.now().toString().slice(-6)}`;
+
+        const { data: caseData, error: caseError } = await supabaseAny
+          .from("cases")
+          .insert({
+            case_number: generatedCaseNumber,
+            seller_user_id: session.user.id,
+            seller_profile_id: sellerProfile?.id ?? null,
+            status: "draft",
+            status_group: "intake",
+            current_step: "seller_started",
+            priority: "normal",
+            source: "seller_portal",
+            created_at: now,
+            updated_at: now,
+          })
+          .select("id")
+          .single();
+
+        if (caseError) throw caseError;
+        caseId = caseData.id;
+        createdCaseRef.current = caseId;
+
+        // 3. Create week_offer
+        const { error: weekOfferError } = await supabaseAny.from("week_offers").insert({
+          case_id: caseId,
+          resort_name_raw: resort.trim(),
+          week_number: Number(weekNumber),
+          unit_type: apartmentType.trim(),
+          season_label: seasonName.trim(),
+          rights_start_year: Number(rightsStart),
+          rights_end_year: Number(rightsEnd),
+          share_related: isShareRelated,
+          share_count: isShareRelated && shareCount ? Number(shareCount) : null,
           created_at: now,
           updated_at: now,
-        })
-        .select("id")
-        .single();
+        });
 
-      if (caseError) throw caseError;
-      const caseId = caseData.id;
+        if (weekOfferError) throw weekOfferError;
+      }
 
-      // 3. Create week_offer
-      const { error: weekOfferError } = await supabaseAny.from("week_offers").insert({
-        case_id: caseId,
-        resort_name_raw: resort.trim(),
-        week_number: Number(weekNumber),
-        unit_type: apartmentType.trim(),
-        season_label: seasonName.trim(),
-        rights_start_year: Number(rightsStart),
-        rights_end_year: Number(rightsEnd),
-        share_related: isShareRelated,
-        share_count: isShareRelated && shareCount ? Number(shareCount) : null,
-        created_at: now,
-        updated_at: now,
-      });
-
-      if (weekOfferError) throw weekOfferError;
-
-      // 4. Upload all documents through the real pipeline
+      // 4. Upload only pending/failed files through the real pipeline
       const pendingFiles = files.filter((f) => f.status !== "uploaded");
       let allUploadsSucceeded = true;
 
@@ -321,10 +330,9 @@ export default function NewCase() {
           break;
         }
 
-        const result = await uploadSingleFile(tracked, caseId, docTypeId);
+        const result = await uploadSingleFile(tracked, caseId!, docTypeId);
         if (!result.success) {
           allUploadsSucceeded = false;
-          // Don't break — try uploading remaining files so we get full error picture
         }
       }
 
@@ -334,7 +342,6 @@ export default function NewCase() {
           description: "Egy vagy több dokumentum feltöltése sikertelen. Kérjük próbálja újra a sikertelen fájlokat, majd kattintson ismét a beküldésre.",
           variant: "destructive",
         });
-        // Don't finalize — leave case in draft so seller can retry
         return;
       }
 
@@ -365,6 +372,7 @@ export default function NewCase() {
         variant: "destructive",
       });
     } finally {
+      submittingRef.current = false;
       setIsSubmitting(false);
     }
   };
