@@ -250,6 +250,19 @@ export default function NewCase() {
           return;
         }
       }
+      for (const cat of requiredCategories) {
+        const catDef = DOC_CATEGORIES[cat.key];
+        const docTypeId = documentTypeMap[catDef.backendCode];
+
+        if (!docTypeId) {
+          toast({
+            title: "Konfigurációs hiba",
+            description: `A kötelező dokumentumtípus nincs beállítva: ${cat.label}`,
+            variant: "destructive",
+          });
+          return;
+        }
+      }
 
       let caseId = createdCaseRef.current;
 
@@ -330,13 +343,27 @@ export default function NewCase() {
         const catDef = DOC_CATEGORIES[tracked.category];
         const docTypeId = documentTypeMap[catDef.backendCode];
         if (!docTypeId) {
+          setFiles((prev) =>
+            prev.map((f) =>
+              f.id === tracked.id
+                ? {
+                    ...f,
+                    status: "failed" as UploadStatus,
+                    progress: 0,
+                    error: `Nincs aktív document_type ehhez: ${catDef.backendCode}`,
+                  }
+                : f,
+            ),
+          );
+
           toast({
             title: "Konfigurációs hiba",
-            description: `Ismeretlen dokumentumtípus: ${catDef.backendCode}. Kérjük lépjen kapcsolatba az ügyfélszolgálattal.`,
+            description: `A dokumentumtípus nincs összekötve a backenddel: ${catDef.label}`,
             variant: "destructive",
           });
+
           allUploadsSucceeded = false;
-          break;
+          continue;
         }
 
         const result = await uploadSingleFile(tracked, caseId!, docTypeId);
