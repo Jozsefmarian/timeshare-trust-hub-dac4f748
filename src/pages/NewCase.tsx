@@ -141,11 +141,35 @@ export default function NewCase() {
   const isShareRelated = hasShares === "yes";
 
   const visibleCategories: { key: DocCategoryKey; label: string; required: boolean }[] = [
-    { key: "timeshare_contract", label: DOC_CATEGORIES.timeshare_contract.label, required: true },
+    {
+      key: "timeshare_contract",
+      label: DOC_CATEGORIES.timeshare_contract.label,
+      required: true,
+    },
+    {
+      key: "standard_information_form",
+      label: DOC_CATEGORIES.standard_information_form.label,
+      required: true,
+    },
+    {
+      key: "maintenance_fee_invoice",
+      label: DOC_CATEGORIES.maintenance_fee_invoice.label,
+      required: true,
+    },
     ...(isShareRelated
-      ? [{ key: "share_statement" as DocCategoryKey, label: DOC_CATEGORIES.share_statement.label, required: true }]
+      ? [
+          {
+            key: "share_statement" as DocCategoryKey,
+            label: DOC_CATEGORIES.share_statement.label,
+            required: true,
+          },
+        ]
       : []),
-    { key: "other_document", label: DOC_CATEGORIES.other_document.label, required: false },
+    {
+      key: "other_document",
+      label: DOC_CATEGORIES.other_document.label,
+      required: false,
+    },
   ];
 
   const addFiles = useCallback((category: DocCategoryKey, fileList: FileList | null) => {
@@ -175,10 +199,12 @@ export default function NewCase() {
       case 2:
         return decl1 && decl2 && decl3;
       case 3: {
-        // Required: timeshare_contract always, share_statement if share-related
         const hasTimeshare = filesForCategory("timeshare_contract").length > 0;
+        const hasStandardInfo = filesForCategory("standard_information_form").length > 0;
+        const hasMaintenanceFee = filesForCategory("maintenance_fee_invoice").length > 0;
         const hasShare = !isShareRelated || filesForCategory("share_statement").length > 0;
-        return hasTimeshare && hasShare;
+
+        return hasTimeshare && hasStandardInfo && hasMaintenanceFee && hasShare;
       }
       default:
         return false;
