@@ -28,23 +28,27 @@ Deno.serve(async (req) => {
       });
     }
 
-    const supabase = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_ANON_KEY")!,
-      { global: { headers: { Authorization: authHeader } } }
-    );
+    const authClient = createClient(
+  Deno.env.get("SUPABASE_URL")!,
+  Deno.env.get("SUPABASE_ANON_KEY")!,
+  {
+    global: { headers: { Authorization: authHeader } },
+  }
+);
 
     const token = authHeader.replace("Bearer ", "");
-    const { data: claimsData, error: claimsError } =
-      await supabase.auth.getClaims(token);
-    if (claimsError || !claimsData?.claims) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
 
-    const userId = claimsData.claims.sub as string;
+const {
+  data: { user },
+  error: userError,
+} = await authClient.auth.getUser(token);
+
+if (userError || !user) {
+  return new Response(JSON.stringify({ error: "Unauthorized" }), {
+    status: 401,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+}
 
     // 2. Parse input
     const body = await req.json();
@@ -61,7 +65,7 @@ Deno.serve(async (req) => {
     }
 
     // 3. Fetch document — RLS ensures seller can only see own documents
-    const { data: doc, error: docError } = await supabase
+    const { data: doc, error: docError } = await authClient
       .from("documents")
       .select("id, case_id, seller_user_id, storage_bucket, storage_path, upload_status")
       .eq("id", document_id)
@@ -142,12 +146,12 @@ Deno.serve(async (req) => {
 
     // 6. Update document status
     const now = new Date().toISOString();
-    const { data: updated, error: updateError } = await supabase
-      .from("documents")
-      .update({
-        upload_status: "uploaded",
-        uploaded_at: now,
-      })
+    const { data: updated, error: updateError } = await serviceClient
+  .from("documents")
+  .update({
+    upload_status: "uploaded",
+    uploaded_at: now,
+  })
       .eq("id", document_id)
       .select(
         "id, case_id, storage_bucket, storage_path, original_file_name, upload_status, uploaded_at, mime_type, file_size_bytes"
