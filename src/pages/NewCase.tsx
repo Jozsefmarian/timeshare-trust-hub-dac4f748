@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import SellerLayout from "@/components/SellerLayout";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -8,8 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
-import { ArrowLeft, ArrowRight, Upload, CheckCircle2, FileText, X, File, AlertCircle, Loader2 } from "lucide-react";
+import { ArrowLeft, ArrowRight, Upload, CheckCircle2, File, X, AlertCircle, Loader2, RotateCcw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
@@ -28,7 +27,6 @@ const RESORTS = [
   "Hunguest Hotels",
 ];
 
-// Map seller-facing document categories to backend document_type codes
 const DOC_CATEGORIES = {
   timeshare_contract: {
     label: "Üdülőhasználati szerződés",
@@ -51,8 +49,8 @@ const DOC_CATEGORIES = {
   share_statement: {
     label: "Részvény adásvételi szerződés",
     backendCode: "share_statement",
-    required: false, // conditionally required for Abbázia
-    alwaysVisible: false, // only shown when share_related
+    required: false,
+    alwaysVisible: false,
   },
   other_document: {
     label: "Egyéb dokumentum",
@@ -63,16 +61,14 @@ const DOC_CATEGORIES = {
 } as const;
 
 type DocCategoryKey = keyof typeof DOC_CATEGORIES;
-
 type UploadStatus = "pending" | "uploading" | "uploaded" | "failed";
 
 interface TrackedFile {
-  id: string; // unique client-side id
+  id: string;
   file: File;
   category: DocCategoryKey;
   status: UploadStatus;
-  progress: number;
-  documentId?: string; // set after successful upload
+  documentId?: string;
   error?: string;
 }
 
@@ -87,13 +83,13 @@ export default function NewCase() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [step, setStep] = useState(0);
 
-  // Step 1 – owner data
+  // Step 1
   const [ownerName, setOwnerName] = useState("");
   const [ownerAddress, setOwnerAddress] = useState("");
   const [ownerEmail, setOwnerEmail] = useState("");
   const [ownerPhone, setOwnerPhone] = useState("");
 
-  // Step 2 – week data
+  // Step 2
   const [resort, setResort] = useState("");
   const [weekNumber, setWeekNumber] = useState("");
   const [apartmentType, setApartmentType] = useState("");
@@ -103,21 +99,25 @@ export default function NewCase() {
   const [hasShares, setHasShares] = useState<string>("");
   const [shareCount, setShareCount] = useState("");
 
-  // Step 3 – declarations
+  // Step 3
   const [decl1, setDecl1] = useState(false);
   const [decl2, setDecl2] = useState(false);
   const [decl3, setDecl3] = useState(false);
 
-  // Step 4 – files
+  // Step 4
   const [files, setFiles] = useState<TrackedFile[]>([]);
   const [dragOver, setDragOver] = useState<string | null>(null);
   const [documentTypeMap, setDocumentTypeMap] = useState<Record<string, string>>({});
   const docTypesLoaded = useRef(false);
-  // Retry safety: remember the case created in this session so we never duplicate
-  const createdCaseRef = useRef<string | null>(null);
-  const submittingRef = useRef(false);
 
-  // Load document_types mapping on first render of step 4
+  // Draft case refs
+  const createdCaseRef = useRef<string | null>(null);
+  const [draftCaseId, setDraftCaseId] = useState<string | null>(null);
+  const draftCreating = useRef(false);
+
+  const isShareRelated = hasShares === "yes";
+
+  // Load document_types mapping
   const ensureDocTypesLoaded = useCallback(async () => {
     if (docTypesLoaded.current) return;
     docTypesLoaded.current = true;
@@ -129,49 +129,139 @@ export default function NewCase() {
     }
   }, []);
 
-  // When step changes to 3 (step 4), load doc types
+  // Ensure draft case exists when entering Step 4
+  const ensureDraftCase = useCallback(async (): Promise<string | null> => {
+    if (createdCaseRef.current) return createdCaseRef.current;
+    if (draftCreating.current) return null;
+    draftCreating.current = true;
+
+    try {
+      const { data: { session } } = await supabaseAny.auth.getSession();
+      if (!session) {
+        toast({ title: "Hiba", description: "Nincs bejelentkezett felhasználó.", variant: "destructive" });
+        return null;
+      }
+
+      const now = new Date().toISOString();
+
+      // Upsert seller profile
+      const sellerProfileNotes = [
+        ownerEmail?.trim() ? `Kapcsolattartó email: ${ownerEmail.trim()}` : null,
+        ownerPhone?.trim() ? `Kapcsolattartó telefon: ${ownerPhone.trim()}` : null,
+      ].filter(Boolean).join("\n");
+
+      const { data: sellerProfile, error: spErr } = await supabaseAny
+        .from("seller_profiles")
+        .upsert({ user_id: session.user.id, billing_name: ownerName.trim(), billing_address: ownerAddress.trim(), notes: sellerProfileNotes || null }, { onConflict: "user_id" })
+        .select("id")
+        .single();
+      if (spErr) throw spErr;
+
+      // Create case
+      const generatedCaseNumber = `TS-${new Date().getFullYear()}-${Date.now().toString().slice(-6)}`;
+      const { data: caseData, error: caseErr } = await supabaseAny
+        .from("cases")
+        .insert({
+          case_number: generatedCaseNumber,
+          seller_user_id: session.user.id,
+          seller_profile_id: sellerProfile?.id ?? null,
+          status: "draft",
+          status_group: "intake",
+          current_step: "seller_started",
+          priority: "normal",
+          source: "seller_portal",
+          created_at: now,
+          updated_at: now,
+        })
+        .select("id")
+        .single();
+      if (caseErr) throw caseErr;
+
+      const caseId = caseData.id;
+
+      // Create week_offer
+      await supabaseAny.from("week_offers").insert({
+        case_id: caseId,
+        resort_name_raw: resort.trim(),
+        week_number: Number(weekNumber),
+        unit_type: apartmentType.trim(),
+        season_label: seasonName.trim(),
+        rights_start_year: Number(rightsStart),
+        rights_end_year: Number(rightsEnd),
+        share_related: isShareRelated,
+        share_count: isShareRelated && shareCount ? Number(shareCount) : null,
+        created_at: now,
+        updated_at: now,
+      });
+
+      createdCaseRef.current = caseId;
+      setDraftCaseId(caseId);
+      return caseId;
+    } catch (err: any) {
+      console.error("Draft case creation error:", err);
+      toast({ title: "Hiba", description: err?.message || "A piszkozat ügy létrehozása sikertelen.", variant: "destructive" });
+      return null;
+    } finally {
+      draftCreating.current = false;
+    }
+  }, [ownerName, ownerAddress, ownerEmail, ownerPhone, resort, weekNumber, apartmentType, seasonName, rightsStart, rightsEnd, isShareRelated, shareCount, toast]);
+
+  // When entering step 4, ensure doc types + draft case
   const handleStepChange = useCallback(
-    (newStep: number) => {
-      if (newStep === 3) ensureDocTypesLoaded();
+    async (newStep: number) => {
+      if (newStep === 3) {
+        ensureDocTypesLoaded();
+        ensureDraftCase();
+      }
       setStep(newStep);
     },
-    [ensureDocTypesLoaded],
+    [ensureDocTypesLoaded, ensureDraftCase],
   );
 
-  const isShareRelated = hasShares === "yes";
-
   const visibleCategories: { key: DocCategoryKey; label: string; required: boolean }[] = [
-    {
-      key: "timeshare_contract",
-      label: DOC_CATEGORIES.timeshare_contract.label,
-      required: true,
-    },
-    {
-      key: "standard_information_form",
-      label: DOC_CATEGORIES.standard_information_form.label,
-      required: true,
-    },
-    {
-      key: "maintenance_fee_invoice",
-      label: DOC_CATEGORIES.maintenance_fee_invoice.label,
-      required: true,
-    },
-    ...(isShareRelated
-      ? [
-          {
-            key: "share_statement" as DocCategoryKey,
-            label: DOC_CATEGORIES.share_statement.label,
-            required: true,
-          },
-        ]
-      : []),
-    {
-      key: "other_document",
-      label: DOC_CATEGORIES.other_document.label,
-      required: false,
-    },
+    { key: "timeshare_contract", label: DOC_CATEGORIES.timeshare_contract.label, required: true },
+    { key: "standard_information_form", label: DOC_CATEGORIES.standard_information_form.label, required: true },
+    { key: "maintenance_fee_invoice", label: DOC_CATEGORIES.maintenance_fee_invoice.label, required: true },
+    ...(isShareRelated ? [{ key: "share_statement" as DocCategoryKey, label: DOC_CATEGORIES.share_statement.label, required: true }] : []),
+    { key: "other_document", label: DOC_CATEGORIES.other_document.label, required: false },
   ];
 
+  const filesForCategory = (cat: DocCategoryKey) => files.filter((f) => f.category === cat);
+
+  // Immediate upload of a single file
+  const uploadFileImmediately = useCallback(async (tracked: TrackedFile) => {
+    const caseId = createdCaseRef.current;
+    if (!caseId) {
+      // Try to ensure draft case exists
+      const id = await ensureDraftCase();
+      if (!id) {
+        setFiles((prev) => prev.map((f) => f.id === tracked.id ? { ...f, status: "failed" as UploadStatus, error: "Piszkozat ügy létrehozása sikertelen." } : f));
+        return;
+      }
+    }
+
+    const catDef = DOC_CATEGORIES[tracked.category];
+    const docTypeId = documentTypeMap[catDef.backendCode];
+    if (!docTypeId) {
+      setFiles((prev) => prev.map((f) => f.id === tracked.id ? { ...f, status: "failed" as UploadStatus, error: `Hiányzó dokumentumtípus konfiguráció: ${catDef.backendCode}` } : f));
+      return;
+    }
+
+    setFiles((prev) => prev.map((f) => f.id === tracked.id ? { ...f, status: "uploading" as UploadStatus } : f));
+
+    try {
+      const result = await uploadCaseDocument({
+        caseId: createdCaseRef.current!,
+        documentTypeId: docTypeId,
+        file: tracked.file,
+      });
+      setFiles((prev) => prev.map((f) => f.id === tracked.id ? { ...f, status: "uploaded" as UploadStatus, documentId: result.documentId } : f));
+    } catch (err: any) {
+      setFiles((prev) => prev.map((f) => f.id === tracked.id ? { ...f, status: "failed" as UploadStatus, error: err?.message || "Feltöltés sikertelen" } : f));
+    }
+  }, [documentTypeMap, ensureDraftCase]);
+
+  // Add files and immediately start uploading
   const addFiles = useCallback((category: DocCategoryKey, fileList: FileList | null) => {
     if (!fileList) return;
     const newTracked: TrackedFile[] = Array.from(fileList).map((f) => ({
@@ -179,16 +269,24 @@ export default function NewCase() {
       file: f,
       category,
       status: "pending" as UploadStatus,
-      progress: 0,
     }));
     setFiles((prev) => [...prev, ...newTracked]);
-  }, []);
+
+    // Trigger immediate upload for each new file
+    for (const tracked of newTracked) {
+      uploadFileImmediately(tracked);
+    }
+  }, [uploadFileImmediately]);
+
+  const retryFile = useCallback((fileId: string) => {
+    const tracked = files.find((f) => f.id === fileId);
+    if (!tracked) return;
+    uploadFileImmediately(tracked);
+  }, [files, uploadFileImmediately]);
 
   const removeFile = useCallback((fileId: string) => {
     setFiles((prev) => prev.filter((f) => f.id !== fileId));
   }, []);
-
-  const filesForCategory = (cat: DocCategoryKey) => files.filter((f) => f.category === cat);
 
   const canProceed = () => {
     switch (step) {
@@ -199,222 +297,43 @@ export default function NewCase() {
       case 2:
         return decl1 && decl2 && decl3;
       case 3: {
-        const hasTimeshare = filesForCategory("timeshare_contract").length > 0;
-        const hasStandardInfo = filesForCategory("standard_information_form").length > 0;
-        const hasMaintenanceFee = filesForCategory("maintenance_fee_invoice").length > 0;
-        const hasShare = !isShareRelated || filesForCategory("share_statement").length > 0;
-
-        return hasTimeshare && hasStandardInfo && hasMaintenanceFee && hasShare;
+        // Only uploaded files count
+        const requiredCats = visibleCategories.filter((c) => c.required);
+        const anyUploading = files.some((f) => f.status === "uploading");
+        if (anyUploading) return false;
+        for (const cat of requiredCats) {
+          const hasUploaded = filesForCategory(cat.key).some((f) => f.status === "uploaded");
+          if (!hasUploaded) return false;
+        }
+        return true;
       }
       default:
         return false;
     }
   };
 
-  // Upload a single file through the real pipeline
-  const uploadSingleFile = async (
-    tracked: TrackedFile,
-    caseId: string,
-    docTypeId: string,
-  ): Promise<{ success: boolean; documentId?: string }> => {
-    // Mark uploading
-    setFiles((prev) =>
-      prev.map((f) => (f.id === tracked.id ? { ...f, status: "uploading" as UploadStatus, progress: 30 } : f)),
-    );
-
-    try {
-      const result = await uploadCaseDocument({
-        caseId,
-        documentTypeId: docTypeId,
-        file: tracked.file,
-      });
-
-      setFiles((prev) =>
-        prev.map((f) =>
-          f.id === tracked.id
-            ? { ...f, status: "uploaded" as UploadStatus, progress: 100, documentId: result.documentId }
-            : f,
-        ),
-      );
-      return { success: true, documentId: result.documentId };
-    } catch (err: any) {
-      setFiles((prev) =>
-        prev.map((f) =>
-          f.id === tracked.id
-            ? { ...f, status: "failed" as UploadStatus, progress: 0, error: err?.message || "Feltöltés sikertelen" }
-            : f,
-        ),
-      );
-      return { success: false };
-    }
-  };
-
   const handleSubmit = async () => {
-    // Prevent concurrent submits
-    if (submittingRef.current) return;
-    submittingRef.current = true;
+    if (isSubmitting) return;
     setIsSubmitting(true);
 
     try {
-      const {
-        data: { session },
-      } = await supabaseAny.auth.getSession();
-      if (!session) {
-        toast({ title: "Sikertelen mentés", description: "Nincs bejelentkezett felhasználó.", variant: "destructive" });
-        return;
-      }
-
-      // Validate required files exist
-      const requiredCategories = visibleCategories.filter((c) => c.required);
-      for (const cat of requiredCategories) {
-        if (filesForCategory(cat.key).length === 0) {
-          toast({
-            title: "Hiányzó dokumentum",
-            description: `Kérjük töltse fel: ${cat.label}`,
-            variant: "destructive",
-          });
-          return;
-        }
-      }
-      for (const cat of requiredCategories) {
-        const catDef = DOC_CATEGORIES[cat.key];
-        const docTypeId = documentTypeMap[catDef.backendCode];
-
-        if (!docTypeId) {
-          toast({
-            title: "Konfigurációs hiba",
-            description: `A kötelező dokumentumtípus nincs beállítva: ${cat.label}`,
-            variant: "destructive",
-          });
-          return;
-        }
-      }
-
-      let caseId = createdCaseRef.current;
-
-      // Only create case + profile + week_offer if not already created in this session
+      const caseId = createdCaseRef.current;
       if (!caseId) {
-        // 1. Upsert seller profile
-        const sellerProfileNotes = [
-          ownerEmail?.trim() ? `Kapcsolattartó email: ${ownerEmail.trim()}` : null,
-          ownerPhone?.trim() ? `Kapcsolattartó telefon: ${ownerPhone.trim()}` : null,
-        ]
-          .filter(Boolean)
-          .join("\n");
-
-        const { data: sellerProfile, error: sellerProfileError } = await supabaseAny
-          .from("seller_profiles")
-          .upsert(
-            {
-              user_id: session.user.id,
-              billing_name: ownerName.trim(),
-              billing_address: ownerAddress.trim(),
-              notes: sellerProfileNotes || null,
-            },
-            { onConflict: "user_id" },
-          )
-          .select("id")
-          .single();
-
-        if (sellerProfileError) throw sellerProfileError;
-
-        // 2. Create case in draft status
-        const now = new Date().toISOString();
-
-        let caseId = createdCaseRef.current;
-
-        if (!caseId) {
-          const generatedCaseNumber = `TS-${new Date().getFullYear()}-${Date.now().toString().slice(-6)}`;
-
-          const { data: caseData, error: caseError } = await supabaseAny
-            .from("cases")
-            .insert({
-              case_number: generatedCaseNumber,
-              seller_user_id: session.user.id,
-              seller_profile_id: sellerProfile?.id ?? null,
-              status: "draft",
-              status_group: "intake",
-              current_step: "seller_started",
-              priority: "normal",
-              source: "seller_portal",
-              created_at: now,
-              updated_at: now,
-            })
-            .select("id")
-            .single();
-
-          if (caseError) throw caseError;
-
-          caseId = caseData.id;
-          createdCaseRef.current = caseId;
-        }
-
-        // 3. Create week_offer
-        const { error: weekOfferError } = await supabaseAny.from("week_offers").insert({
-          case_id: caseId,
-          resort_name_raw: resort.trim(),
-          week_number: Number(weekNumber),
-          unit_type: apartmentType.trim(),
-          season_label: seasonName.trim(),
-          rights_start_year: Number(rightsStart),
-          rights_end_year: Number(rightsEnd),
-          share_related: isShareRelated,
-          share_count: isShareRelated && shareCount ? Number(shareCount) : null,
-          created_at: now,
-          updated_at: now,
-        });
-
-        if (weekOfferError) throw weekOfferError;
-      }
-
-      // 4. Upload only pending/failed files through the real pipeline
-      const pendingFiles = files.filter((f) => f.status !== "uploaded");
-      let allUploadsSucceeded = true;
-
-      for (const tracked of pendingFiles) {
-        const catDef = DOC_CATEGORIES[tracked.category];
-        const docTypeId = documentTypeMap[catDef.backendCode];
-        if (!docTypeId) {
-          setFiles((prev) =>
-            prev.map((f) =>
-              f.id === tracked.id
-                ? {
-                    ...f,
-                    status: "failed" as UploadStatus,
-                    progress: 0,
-                    error: `Nincs aktív document_type ehhez: ${catDef.backendCode}`,
-                  }
-                : f,
-            ),
-          );
-
-          toast({
-            title: "Konfigurációs hiba",
-            description: `A dokumentumtípus nincs összekötve a backenddel: ${catDef.label}`,
-            variant: "destructive",
-          });
-
-          allUploadsSucceeded = false;
-          continue;
-        }
-
-        const result = await uploadSingleFile(tracked, caseId!, docTypeId);
-        if (!result.success) {
-          allUploadsSucceeded = false;
-        }
-      }
-
-      if (!allUploadsSucceeded) {
-        toast({
-          title: "Dokumentum feltöltési hiba",
-          description:
-            "Egy vagy több dokumentum feltöltése sikertelen. Kérjük próbálja újra a sikertelen fájlokat, majd kattintson ismét a beküldésre.",
-          variant: "destructive",
-        });
+        toast({ title: "Hiba", description: "Nincs létrehozott piszkozat ügy.", variant: "destructive" });
         return;
       }
 
-      // 5. All uploads succeeded — finalize case status
+      // Validate all required categories have at least one uploaded file
+      const requiredCats = visibleCategories.filter((c) => c.required);
+      for (const cat of requiredCats) {
+        const hasUploaded = filesForCategory(cat.key).some((f) => f.status === "uploaded");
+        if (!hasUploaded) {
+          toast({ title: "Hiányzó dokumentum", description: `Kérjük töltse fel: ${cat.label}`, variant: "destructive" });
+          return;
+        }
+      }
+
+      // Finalize case status
       const { error: updateError } = await supabaseAny
         .from("cases")
         .update({
@@ -428,20 +347,12 @@ export default function NewCase() {
 
       if (updateError) throw updateError;
 
-      toast({
-        title: "Ügy beküldve",
-        description: "Az ügy sikeresen beküldve. Kövesse nyomon a feldolgozást az ügy oldalán.",
-      });
+      toast({ title: "Ügy beküldve", description: "Az ügy sikeresen beküldve. Kövesse nyomon a feldolgozást az ügy oldalán." });
       navigate(`/seller/cases/${caseId}`, { replace: true });
     } catch (err: any) {
       console.error("NewCase submit error:", err);
-      toast({
-        title: "Sikertelen mentés",
-        description: err?.message || "Az ügy létrehozása nem sikerült.",
-        variant: "destructive",
-      });
+      toast({ title: "Sikertelen beküldés", description: err?.message || "Az ügy beküldése nem sikerült.", variant: "destructive" });
     } finally {
-      submittingRef.current = false;
       setIsSubmitting(false);
     }
   };
@@ -449,18 +360,25 @@ export default function NewCase() {
   const renderFileStatus = (f: TrackedFile) => {
     switch (f.status) {
       case "uploading":
-        return <Progress value={f.progress} className="h-1 mt-1" />;
+        return (
+          <span className="text-[10px] text-muted-foreground flex items-center gap-1">
+            <Loader2 className="h-3 w-3 animate-spin" /> Feltöltés folyamatban...
+          </span>
+        );
       case "uploaded":
         return (
           <span className="text-[10px] text-green-600 flex items-center gap-1">
-            <CheckCircle2 className="h-3 w-3" /> Feltöltve
+            <CheckCircle2 className="h-3 w-3" /> Feltöltés sikeres
           </span>
         );
       case "failed":
         return (
-          <span className="text-[10px] text-destructive flex items-center gap-1">
-            <AlertCircle className="h-3 w-3" /> {f.error || "Sikertelen"}
-          </span>
+          <div>
+            <span className="text-[10px] text-destructive flex items-center gap-1">
+              <AlertCircle className="h-3 w-3" /> Feltöltés sikertelen
+            </span>
+            {f.error && <p className="text-[9px] text-destructive/80 mt-0.5">{f.error}</p>}
+          </div>
         );
       default:
         return <span className="text-[10px] text-muted-foreground">Várakozik</span>;
@@ -480,9 +398,7 @@ export default function NewCase() {
           {STEPS.map((label, i) => (
             <div key={label} className="flex-1 flex flex-col items-center gap-1.5">
               <div className="flex items-center w-full">
-                <div
-                  className={cn("h-2 flex-1 rounded-full transition-colors", i <= step ? "bg-primary" : "bg-muted")}
-                />
+                <div className={cn("h-2 flex-1 rounded-full transition-colors", i <= step ? "bg-primary" : "bg-muted")} />
               </div>
               <span className={cn("text-[11px] font-medium", i <= step ? "text-primary" : "text-muted-foreground")}>
                 {label}
@@ -507,42 +423,20 @@ export default function NewCase() {
               <div className="grid gap-4">
                 <div className="space-y-1.5">
                   <Label htmlFor="ownerName">Teljes név</Label>
-                  <Input
-                    id="ownerName"
-                    placeholder="Kovács János"
-                    value={ownerName}
-                    onChange={(e) => setOwnerName(e.target.value)}
-                  />
+                  <Input id="ownerName" placeholder="Kovács János" value={ownerName} onChange={(e) => setOwnerName(e.target.value)} />
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="ownerAddress">Lakcím</Label>
-                  <Input
-                    id="ownerAddress"
-                    placeholder="1011 Budapest, Fő utca 1."
-                    value={ownerAddress}
-                    onChange={(e) => setOwnerAddress(e.target.value)}
-                  />
+                  <Input id="ownerAddress" placeholder="1011 Budapest, Fő utca 1." value={ownerAddress} onChange={(e) => setOwnerAddress(e.target.value)} />
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-1.5">
                     <Label htmlFor="ownerEmail">E-mail cím</Label>
-                    <Input
-                      id="ownerEmail"
-                      type="email"
-                      placeholder="kovacs@example.com"
-                      value={ownerEmail}
-                      onChange={(e) => setOwnerEmail(e.target.value)}
-                    />
+                    <Input id="ownerEmail" type="email" placeholder="kovacs@example.com" value={ownerEmail} onChange={(e) => setOwnerEmail(e.target.value)} />
                   </div>
                   <div className="space-y-1.5">
                     <Label htmlFor="ownerPhone">Telefonszám</Label>
-                    <Input
-                      id="ownerPhone"
-                      type="tel"
-                      placeholder="+36 30 123 4567"
-                      value={ownerPhone}
-                      onChange={(e) => setOwnerPhone(e.target.value)}
-                    />
+                    <Input id="ownerPhone" type="tel" placeholder="+36 30 123 4567" value={ownerPhone} onChange={(e) => setOwnerPhone(e.target.value)} />
                   </div>
                 </div>
               </div>
@@ -553,82 +447,40 @@ export default function NewCase() {
                 <div className="space-y-1.5">
                   <Label>Üdülőhely neve</Label>
                   <Select value={resort} onValueChange={setResort}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Válasszon üdülőhelyet" />
-                    </SelectTrigger>
+                    <SelectTrigger><SelectValue placeholder="Válasszon üdülőhelyet" /></SelectTrigger>
                     <SelectContent>
-                      {RESORTS.map((r) => (
-                        <SelectItem key={r} value={r}>
-                          {r}
-                        </SelectItem>
-                      ))}
+                      {RESORTS.map((r) => (<SelectItem key={r} value={r}>{r}</SelectItem>))}
                     </SelectContent>
                   </Select>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-1.5">
                     <Label htmlFor="weekNumber">Hét száma (1–52)</Label>
-                    <Input
-                      id="weekNumber"
-                      type="number"
-                      min={1}
-                      max={52}
-                      placeholder="pl. 32"
-                      value={weekNumber}
-                      onChange={(e) => setWeekNumber(e.target.value)}
-                    />
+                    <Input id="weekNumber" type="number" min={1} max={52} placeholder="pl. 32" value={weekNumber} onChange={(e) => setWeekNumber(e.target.value)} />
                   </div>
                   <div className="space-y-1.5">
                     <Label htmlFor="apartmentType">Apartman típus</Label>
-                    <Input
-                      id="apartmentType"
-                      placeholder="pl. Studio, 1 hálós"
-                      value={apartmentType}
-                      onChange={(e) => setApartmentType(e.target.value)}
-                    />
+                    <Input id="apartmentType" placeholder="pl. Studio, 1 hálós" value={apartmentType} onChange={(e) => setApartmentType(e.target.value)} />
                   </div>
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="seasonName">Szezon megnevezése</Label>
-                  <Input
-                    id="seasonName"
-                    placeholder="pl. Főszezon, Utószezon"
-                    value={seasonName}
-                    onChange={(e) => setSeasonName(e.target.value)}
-                  />
+                  <Input id="seasonName" placeholder="pl. Főszezon, Utószezon" value={seasonName} onChange={(e) => setSeasonName(e.target.value)} />
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-1.5">
                     <Label htmlFor="rightsStart">Jogosultság kezdete (év)</Label>
-                    <Input
-                      id="rightsStart"
-                      type="number"
-                      min={1990}
-                      max={2050}
-                      placeholder="pl. 2005"
-                      value={rightsStart}
-                      onChange={(e) => setRightsStart(e.target.value)}
-                    />
+                    <Input id="rightsStart" type="number" min={1990} max={2050} placeholder="pl. 2005" value={rightsStart} onChange={(e) => setRightsStart(e.target.value)} />
                   </div>
                   <div className="space-y-1.5">
                     <Label htmlFor="rightsEnd">Jogosultság vége (év)</Label>
-                    <Input
-                      id="rightsEnd"
-                      type="number"
-                      min={1990}
-                      max={2099}
-                      placeholder="pl. 2035"
-                      value={rightsEnd}
-                      onChange={(e) => setRightsEnd(e.target.value)}
-                    />
+                    <Input id="rightsEnd" type="number" min={1990} max={2099} placeholder="pl. 2035" value={rightsEnd} onChange={(e) => setRightsEnd(e.target.value)} />
                   </div>
                 </div>
                 <div className="space-y-1.5">
                   <Label>Kapcsolódik részvény?</Label>
                   <Select value={hasShares} onValueChange={setHasShares}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Válasszon" />
-                    </SelectTrigger>
+                    <SelectTrigger><SelectValue placeholder="Válasszon" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="yes">Igen</SelectItem>
                       <SelectItem value="no">Nem</SelectItem>
@@ -638,14 +490,7 @@ export default function NewCase() {
                 {hasShares === "yes" && (
                   <div className="space-y-1.5">
                     <Label htmlFor="shareCount">Részvény darabszám</Label>
-                    <Input
-                      id="shareCount"
-                      type="number"
-                      min={1}
-                      placeholder="pl. 1"
-                      value={shareCount}
-                      onChange={(e) => setShareCount(e.target.value)}
-                    />
+                    <Input id="shareCount" type="number" min={1} placeholder="pl. 1" value={shareCount} onChange={(e) => setShareCount(e.target.value)} />
                   </div>
                 )}
               </div>
@@ -654,25 +499,11 @@ export default function NewCase() {
             {step === 2 && (
               <div className="space-y-5">
                 {[
-                  {
-                    id: "decl1",
-                    checked: decl1,
-                    set: setDecl1,
-                    text: "Kijelentem, hogy az üdülési jog jogos tulajdonosa vagyok.",
-                  },
+                  { id: "decl1", checked: decl1, set: setDecl1, text: "Kijelentem, hogy az üdülési jog jogos tulajdonosa vagyok." },
                   { id: "decl2", checked: decl2, set: setDecl2, text: "A megadott adatok a valóságnak megfelelnek." },
-                  {
-                    id: "decl3",
-                    checked: decl3,
-                    set: setDecl3,
-                    text: "Tudomásul veszem, hogy a rendszer automatikusan ellenőrzi a feltöltött dokumentumokat.",
-                  },
+                  { id: "decl3", checked: decl3, set: setDecl3, text: "Tudomásul veszem, hogy a rendszer automatikusan ellenőrzi a feltöltött dokumentumokat." },
                 ].map((d) => (
-                  <label
-                    key={d.id}
-                    htmlFor={d.id}
-                    className="flex items-start gap-3 p-4 rounded-xl border border-border hover:bg-muted/30 transition-colors cursor-pointer"
-                  >
+                  <label key={d.id} htmlFor={d.id} className="flex items-start gap-3 p-4 rounded-xl border border-border hover:bg-muted/30 transition-colors cursor-pointer">
                     <Checkbox id={d.id} checked={d.checked} onCheckedChange={(v) => d.set(!!v)} className="mt-0.5" />
                     <span className="text-sm text-foreground leading-relaxed">{d.text}</span>
                   </label>
@@ -687,26 +518,15 @@ export default function NewCase() {
                     <div className="flex items-center gap-2">
                       <Label className="text-sm">{doc.label}</Label>
                       {doc.required ? (
-                        <Badge variant="outline" className="text-[10px] border-destructive/40 text-destructive">
-                          Kötelező
-                        </Badge>
+                        <Badge variant="outline" className="text-[10px] border-destructive/40 text-destructive">Kötelező</Badge>
                       ) : (
-                        <Badge variant="outline" className="text-[10px]">
-                          Opcionális
-                        </Badge>
+                        <Badge variant="outline" className="text-[10px]">Opcionális</Badge>
                       )}
                     </div>
                     <div
-                      onDragOver={(e) => {
-                        e.preventDefault();
-                        setDragOver(doc.key);
-                      }}
+                      onDragOver={(e) => { e.preventDefault(); setDragOver(doc.key); }}
                       onDragLeave={() => setDragOver(null)}
-                      onDrop={(e) => {
-                        e.preventDefault();
-                        setDragOver(null);
-                        addFiles(doc.key, e.dataTransfer.files);
-                      }}
+                      onDrop={(e) => { e.preventDefault(); setDragOver(null); addFiles(doc.key, e.dataTransfer.files); }}
                       className={cn(
                         "border-2 border-dashed rounded-xl p-4 text-center transition-colors cursor-pointer",
                         dragOver === doc.key ? "border-primary bg-primary/5" : "border-border hover:border-primary/40",
@@ -724,26 +544,31 @@ export default function NewCase() {
                       <p className="text-xs text-muted-foreground">Húzza ide a fájlt vagy kattintson a feltöltéshez</p>
                     </div>
                     {filesForCategory(doc.key).map((f) => (
-                      <div
-                        key={f.id}
-                        className="flex items-center gap-3 p-2 rounded-lg bg-muted/30 border border-border"
-                      >
+                      <div key={f.id} className="flex items-center gap-3 p-2 rounded-lg bg-muted/30 border border-border">
                         <File className="h-4 w-4 text-muted-foreground shrink-0" />
                         <div className="flex-1 min-w-0">
                           <p className="text-xs font-medium text-foreground truncate">{f.file.name}</p>
                           {renderFileStatus(f)}
                         </div>
-                        {f.status !== "uploading" && (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              removeFile(f.id);
-                            }}
-                            className="text-muted-foreground hover:text-destructive transition-colors"
-                          >
-                            <X className="h-3.5 w-3.5" />
-                          </button>
-                        )}
+                        <div className="flex items-center gap-1">
+                          {f.status === "failed" && (
+                            <button
+                              onClick={(e) => { e.stopPropagation(); retryFile(f.id); }}
+                              className="text-muted-foreground hover:text-primary transition-colors"
+                              title="Újrapróbálás"
+                            >
+                              <RotateCcw className="h-3.5 w-3.5" />
+                            </button>
+                          )}
+                          {f.status !== "uploading" && (
+                            <button
+                              onClick={(e) => { e.stopPropagation(); removeFile(f.id); }}
+                              className="text-muted-foreground hover:text-destructive transition-colors"
+                            >
+                              <X className="h-3.5 w-3.5" />
+                            </button>
+                          )}
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -765,13 +590,9 @@ export default function NewCase() {
           ) : (
             <Button onClick={handleSubmit} disabled={!canProceed() || isSubmitting}>
               {isSubmitting ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-1 animate-spin" /> Feltöltés és beküldés...
-                </>
+                <><Loader2 className="h-4 w-4 mr-1 animate-spin" /> Beküldés...</>
               ) : (
-                <>
-                  Ügy beküldése <CheckCircle2 className="h-4 w-4 ml-1" />
-                </>
+                <>Ügy beküldése <CheckCircle2 className="h-4 w-4 ml-1" /></>
               )}
             </Button>
           )}
