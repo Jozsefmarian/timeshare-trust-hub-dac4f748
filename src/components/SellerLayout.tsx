@@ -73,9 +73,9 @@ export default function SellerLayout({ children }: { children: ReactNode }) {
           )}
         >
           {sidebarOpen ? (
-            <img src={tsrLogo} alt="TSR Megoldások" className="h-8" />
+            <img src={tsrLogo} alt="TSR Megoldások" className="h-6" />
           ) : (
-            <img src={tsrLogo} alt="TSR" className="h-8 w-8 object-contain" />
+            <img src={tsrLogo} alt="TSR" className="h-6 w-6 object-contain" />
           )}
         </div>
 
