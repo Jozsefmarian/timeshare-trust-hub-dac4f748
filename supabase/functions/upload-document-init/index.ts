@@ -37,23 +37,34 @@ Deno.serve(async (req) => {
       });
     }
 
-    const supabase = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_ANON_KEY")!,
-      { global: { headers: { Authorization: authHeader } } }
-    );
+    const authClient = createClient(
+  Deno.env.get("SUPABASE_URL")!,
+  Deno.env.get("SUPABASE_ANON_KEY")!,
+  {
+    global: { headers: { Authorization: authHeader } },
+  }
+);
+
+const serviceClient = createClient(
+  Deno.env.get("SUPABASE_URL")!,
+  Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+);
 
     const token = authHeader.replace("Bearer ", "");
-    const { data: claimsData, error: claimsError } =
-      await supabase.auth.getClaims(token);
-    if (claimsError || !claimsData?.claims) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
 
-    const userId = claimsData.claims.sub as string;
+const {
+  data: { user },
+  error: userError,
+} = await authClient.auth.getUser(token);
+
+if (userError || !user) {
+  return new Response(JSON.stringify({ error: "Unauthorized" }), {
+    status: 401,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+}
+
+const userId = user.id;
 
     // 2. Parse & validate input
     const body = await req.json();
@@ -73,7 +84,7 @@ Deno.serve(async (req) => {
     }
 
     // 3. Verify user owns the case (RLS will also enforce this, but explicit check gives better error)
-    const { data: caseRow, error: caseError } = await supabase
+    const { data: caseRow, error: caseError } = await authClient
       .from("cases")
       .select("id, seller_user_id")
       .eq("id", case_id)
@@ -100,7 +111,7 @@ Deno.serve(async (req) => {
     }
 
     // 4. Validate document type exists and is active
-    const { data: docType, error: docTypeError } = await supabase
+    const { data: docType, error: docTypeError } = await serviceClient
       .from("document_types")
       .select("id, code")
       .eq("id", document_type_id)
@@ -124,7 +135,7 @@ Deno.serve(async (req) => {
     const storageBucket = "case-documents";
 
     // 6. Insert documents row using new columns as source of truth
-    const { data: doc, error: insertError } = await supabase
+    const { data: doc, error: insertError } = await serviceClient
       .from("documents")
       .insert({
         case_id,
