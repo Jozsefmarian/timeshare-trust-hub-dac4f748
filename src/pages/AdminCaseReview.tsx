@@ -123,57 +123,85 @@ function formatDateTime(v?: string | null) {
 
 function reviewStatusLabel(s: string): string {
   switch (s) {
-    case "pending": return "Függőben";
-    case "approved": return "Jóváhagyva";
-    case "rejected": return "Elutasítva";
-    case "needs_reupload": return "Újrafeltöltés szükséges";
-    default: return s;
+    case "pending":
+      return "Függőben";
+    case "approved":
+      return "Jóváhagyva";
+    case "rejected":
+      return "Elutasítva";
+    case "needs_reupload":
+      return "Újrafeltöltés szükséges";
+    default:
+      return s;
   }
 }
 
 function reviewStatusClasses(s: string): string {
   switch (s) {
-    case "approved": return "bg-success/10 text-success";
-    case "rejected": return "bg-destructive/10 text-destructive";
-    case "needs_reupload": return "bg-warning/10 text-warning";
-    default: return "bg-muted text-muted-foreground";
+    case "approved":
+      return "bg-success/10 text-success";
+    case "rejected":
+      return "bg-destructive/10 text-destructive";
+    case "needs_reupload":
+      return "bg-warning/10 text-warning";
+    default:
+      return "bg-muted text-muted-foreground";
   }
 }
 
 function uploadStatusLabel(s: string): string {
   switch (s) {
-    case "uploaded": return "Feltöltve";
-    case "initiated": return "Folyamatban";
-    case "failed": return "Sikertelen";
-    default: return s;
+    case "completed":
+      return "Feltöltve";
+    case "uploaded":
+      return "Feltöltve";
+    case "initiated":
+      return "Folyamatban";
+    case "failed":
+      return "Sikertelen";
+    default:
+      return s;
   }
 }
 
 function aiStatusLabel(s: string): string {
   switch (s) {
-    case "pending": return "Függőben";
-    case "processing": return "Feldolgozás";
-    case "completed": return "Kész";
-    case "failed": return "Sikertelen";
-    default: return s;
+    case "pending":
+      return "Függőben";
+    case "processing":
+      return "Feldolgozás";
+    case "completed":
+      return "Kész";
+    case "failed":
+      return "Sikertelen";
+    default:
+      return s;
   }
 }
 
 function classificationLabel(c: string | null): string {
   switch (c) {
-    case "green": return "Zöld";
-    case "yellow": return "Sárga";
-    case "red": return "Piros";
-    default: return "Nincs";
+    case "green":
+      return "Zöld";
+    case "yellow":
+      return "Sárga";
+    case "red":
+      return "Piros";
+    default:
+      return "Nincs";
   }
 }
 
 function classificationClasses(c: string | null): string {
   switch (c) {
-    case "green": return "bg-success/10 text-success";
-    case "yellow": return "bg-warning/10 text-warning";
-    case "red": return "bg-destructive/10 text-destructive";
-    default: return "bg-muted text-muted-foreground";
+    case "green":
+      return "bg-success/10 text-success";
+    case "yellow":
+      return "bg-warning/10 text-warning";
+    case "red":
+      return "bg-destructive/10 text-destructive";
+    default:
+      return "bg-muted text-muted-foreground";
   }
 }
 
@@ -230,16 +258,32 @@ export default function AdminCaseReview() {
         .eq("id", caseId)
         .maybeSingle();
       if (ce) throw ce;
-      if (!cd) { setCaseData(null); return; }
+      if (!cd) {
+        setCaseData(null);
+        return;
+      }
       setCaseData(cd as CaseRow);
 
       // Parallel loads
       const [profileRes, offerRes, docsRes, dtRes, valRes] = await Promise.all([
         supabase.from("profiles").select("full_name, email, phone").eq("id", cd.seller_user_id).maybeSingle(),
-        supabase.from("week_offers").select("resort_name_raw, week_number, unit_type, season_label").eq("case_id", caseId).maybeSingle(),
-        supabase.from("documents").select("id, document_type, document_type_id, original_file_name, file_name, storage_bucket, storage_path, upload_status, review_status, ai_status, uploaded_at").eq("case_id", caseId).order("created_at", { ascending: false }),
+        supabase
+          .from("week_offers")
+          .select("resort_name_raw, week_number, unit_type, season_label")
+          .eq("case_id", caseId)
+          .maybeSingle(),
+        supabase
+          .from("documents")
+          .select(
+            "id, document_type, document_type_id, original_file_name, file_name, storage_bucket, storage_path, upload_status, review_status, ai_status, uploaded_at",
+          )
+          .eq("case_id", caseId)
+          .order("created_at", { ascending: false }),
         supabase.from("document_types").select("id, code, label").eq("is_active", true),
-        supabase.from("ai_validation_results" as any).select("id, document_id, validation_status, field_match_score, keyword_flags, notes").eq("case_id", caseId),
+        supabase
+          .from("ai_validation_results" as any)
+          .select("id, document_id, validation_status, field_match_score, keyword_flags, notes")
+          .eq("case_id", caseId),
       ]);
 
       setSeller(profileRes.data as SellerProfile | null);
@@ -254,7 +298,9 @@ export default function AdminCaseReview() {
     }
   }, [caseId]);
 
-  useEffect(() => { loadAll(); }, [loadAll]);
+  useEffect(() => {
+    loadAll();
+  }, [loadAll]);
 
   // ---------- Helpers ----------
 
@@ -266,7 +312,8 @@ export default function AdminCaseReview() {
     return doc.document_type || "Ismeretlen";
   };
 
-  const canApproveCase = documents.length > 0 && !documents.some((d) => d.review_status === "rejected" || d.review_status === "needs_reupload");
+  const canApproveCase =
+    documents.length > 0 && documents.every((d) => d.upload_status === "completed" && d.review_status === "approved");
 
   // ---------- Document Actions ----------
 
@@ -324,7 +371,9 @@ export default function AdminCaseReview() {
           change_source: "admin_review",
           note: note || null,
         });
-      } catch { /* non-critical */ }
+      } catch {
+        /* non-critical */
+      }
 
       toast.success(`Ügy státusza frissítve: ${statusLabel(newStatus)}`);
       await loadAll();
@@ -393,7 +442,9 @@ export default function AdminCaseReview() {
           <div className="flex-1">
             <div className="flex items-center gap-3 flex-wrap">
               <h1 className="text-2xl font-bold text-foreground">Ügy áttekintése</h1>
-              <Badge variant="outline" className="bg-muted text-muted-foreground">{caseData.case_number}</Badge>
+              <Badge variant="outline" className="bg-muted text-muted-foreground">
+                {caseData.case_number}
+              </Badge>
               <Badge variant="outline" className={classificationClasses(caseData.classification)}>
                 {classificationLabel(caseData.classification)}
               </Badge>
@@ -482,69 +533,91 @@ export default function AdminCaseReview() {
               </CardHeader>
               <CardContent className="p-0">
                 {documents.length === 0 ? (
-                  <p className="text-sm text-muted-foreground px-6 py-8 text-center">Még nincs feltöltött dokumentum ehhez az ügyhez.</p>
+                  <p className="text-sm text-muted-foreground px-6 py-8 text-center">
+                    Még nincs feltöltött dokumentum ehhez az ügyhez.
+                  </p>
                 ) : (
                   <div className="divide-y divide-border">
-                    {documents.map((doc) => (
-                      <div key={doc.id} className="px-6 py-4 space-y-3">
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0">
-                            <p className="text-sm font-medium text-foreground">{getDocTypeLabel(doc)}</p>
-                            <p className="text-xs text-muted-foreground truncate">{doc.original_file_name || doc.file_name}</p>
-                            <p className="text-xs text-muted-foreground">{formatDateTime(doc.uploaded_at)}</p>
+                    {documents.map((doc) => {
+                      const canReviewDocument = doc.upload_status === "completed";
+
+                      return (
+                        <div key={doc.id} className="px-6 py-4 space-y-3">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <p className="text-sm font-medium text-foreground">{getDocTypeLabel(doc)}</p>
+                              <p className="text-xs text-muted-foreground truncate">
+                                {doc.original_file_name || doc.file_name}
+                              </p>
+                              <p className="text-xs text-muted-foreground">{formatDateTime(doc.uploaded_at)}</p>
+                            </div>
+                            <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
+                              <Badge variant="outline" className="text-xs">
+                                {uploadStatusLabel(doc.upload_status)}
+                              </Badge>
+                              <Badge variant="outline" className={reviewStatusClasses(doc.review_status) + " text-xs"}>
+                                {reviewStatusLabel(doc.review_status)}
+                              </Badge>
+                              <Badge variant="outline" className="text-xs">
+                                {aiStatusLabel(doc.ai_status)}
+                              </Badge>
+                            </div>
                           </div>
-                          <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
-                            <Badge variant="outline" className="text-xs">{uploadStatusLabel(doc.upload_status)}</Badge>
-                            <Badge variant="outline" className={reviewStatusClasses(doc.review_status) + " text-xs"}>
-                              {reviewStatusLabel(doc.review_status)}
-                            </Badge>
-                            <Badge variant="outline" className="text-xs">{aiStatusLabel(doc.ai_status)}</Badge>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              disabled={previewLoadingId === doc.id || !doc.storage_path}
+                              onClick={() => handlePreview(doc)}
+                            >
+                              {previewLoadingId === doc.id ? (
+                                <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />
+                              ) : (
+                                <Eye className="h-3.5 w-3.5 mr-1" />
+                              )}
+                              Megtekintés
+                            </Button>
+                            <Separator orientation="vertical" className="h-6" />
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="text-success border-success/30 hover:bg-success/10"
+                              disabled={
+                                !canReviewDocument || updatingDocId === doc.id || doc.review_status === "approved"
+                              }
+                              onClick={() => handleDocReview(doc.id, "approved")}
+                            >
+                              <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
+                              Jóváhagy
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="text-warning border-warning/30 hover:bg-warning/10"
+                              disabled={
+                                !canReviewDocument || updatingDocId === doc.id || doc.review_status === "needs_reupload"
+                              }
+                              onClick={() => handleDocReview(doc.id, "needs_reupload")}
+                            >
+                              <RotateCcw className="h-3.5 w-3.5 mr-1" />
+                              Újrafeltöltés
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="text-destructive border-destructive/30 hover:bg-destructive/10"
+                              disabled={
+                                !canReviewDocument || updatingDocId === doc.id || doc.review_status === "rejected"
+                              }
+                              onClick={() => handleDocReview(doc.id, "rejected")}
+                            >
+                              <AlertTriangle className="h-3.5 w-3.5 mr-1" />
+                              Elutasít
+                            </Button>
                           </div>
                         </div>
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            disabled={previewLoadingId === doc.id || !doc.storage_path}
-                            onClick={() => handlePreview(doc)}
-                          >
-                            {previewLoadingId === doc.id ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : <Eye className="h-3.5 w-3.5 mr-1" />}
-                            Megtekintés
-                          </Button>
-                          <Separator orientation="vertical" className="h-6" />
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="text-success border-success/30 hover:bg-success/10"
-                            disabled={updatingDocId === doc.id || doc.review_status === "approved"}
-                            onClick={() => handleDocReview(doc.id, "approved")}
-                          >
-                            <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
-                            Jóváhagy
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="text-warning border-warning/30 hover:bg-warning/10"
-                            disabled={updatingDocId === doc.id || doc.review_status === "needs_reupload"}
-                            onClick={() => handleDocReview(doc.id, "needs_reupload")}
-                          >
-                            <RotateCcw className="h-3.5 w-3.5 mr-1" />
-                            Újrafeltöltés
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="text-destructive border-destructive/30 hover:bg-destructive/10"
-                            disabled={updatingDocId === doc.id || doc.review_status === "rejected"}
-                            onClick={() => handleDocReview(doc.id, "rejected")}
-                          >
-                            <AlertTriangle className="h-3.5 w-3.5 mr-1" />
-                            Elutasít
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </CardContent>
@@ -565,7 +638,7 @@ export default function AdminCaseReview() {
                   <div className="divide-y divide-border">
                     {validationResults.map((vr) => {
                       const doc = documents.find((d) => d.id === vr.document_id);
-                      const docName = doc ? (doc.original_file_name || doc.file_name) : "Ismeretlen dokumentum";
+                      const docName = doc ? doc.original_file_name || doc.file_name : "Ismeretlen dokumentum";
                       return (
                         <div key={vr.id} className="px-6 py-4 space-y-2">
                           <p className="text-sm font-medium text-foreground">{docName}</p>
@@ -623,9 +696,7 @@ export default function AdminCaseReview() {
                   {!canApproveCase && documents.length > 0 && (
                     <span className="text-xs ml-auto opacity-70">(Van elutasított / újrafeltöltendő dok.)</span>
                   )}
-                  {documents.length === 0 && (
-                    <span className="text-xs ml-auto opacity-70">(Nincs dokumentum)</span>
-                  )}
+                  {documents.length === 0 && <span className="text-xs ml-auto opacity-70">(Nincs dokumentum)</span>}
                 </Button>
                 <Button
                   variant="outline"
@@ -665,7 +736,9 @@ export default function AdminCaseReview() {
             rows={4}
           />
           <DialogFooter>
-            <Button variant="outline" onClick={() => setRequestFixOpen(false)}>Mégsem</Button>
+            <Button variant="outline" onClick={() => setRequestFixOpen(false)}>
+              Mégsem
+            </Button>
             <Button disabled={isCaseAction} onClick={handleRequestFix}>
               {isCaseAction ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
               Javítás kérése
