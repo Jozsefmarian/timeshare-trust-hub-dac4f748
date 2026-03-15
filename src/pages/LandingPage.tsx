@@ -40,7 +40,7 @@ export default function LandingPage() {
       <nav className="border-b border-border bg-card/80 backdrop-blur-sm sticky top-0 z-50">
         <div className="container mx-auto flex items-center justify-between h-16 px-4">
           <div className="flex items-center gap-2">
-            <img src={tsrLogo} alt="TSR Megoldások" className="h-8" />
+            <img src={tsrLogo} alt="TSR Megoldások" className="h-10" />
           </div>
           <div className="hidden md:flex items-center gap-8 text-sm font-medium text-muted-foreground">
             <a href="#how-it-works" className="hover:text-foreground transition-colors">
