@@ -59,11 +59,11 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
         "fixed inset-y-0 left-0 z-40 flex flex-col bg-sidebar text-sidebar-foreground transition-all duration-300",
         sidebarOpen ? "w-64" : "w-0 md:w-16"
       )}>
-        <div className={cn("flex items-center gap-2 px-4 h-16 border-b border-sidebar-border", !sidebarOpen && "md:justify-center")}>
+        <div className={cn("flex items-center gap-2 px-4 h-16 border-b border-sidebar-border", !sidebarOpen && "md:justify-center md:px-2")}>
           {sidebarOpen ? (
-            <img src={tsrLogo} alt="TSR Megoldások" className="h-6" />
+            <img src={tsrLogo} alt="TSR Megoldások" className="h-8" />
           ) : (
-            <img src={tsrLogo} alt="TSR" className="h-6 w-6 object-contain" />
+            <img src={tsrLogo} alt="TSR" className="h-10 object-contain" />
           )}
         </div>
 

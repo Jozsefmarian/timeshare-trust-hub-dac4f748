@@ -145,7 +145,7 @@ export default function LandingPage() {
           <div className="grid md:grid-cols-4 gap-8">
             <div>
               <div className="flex items-center gap-2 mb-4">
-                <img src={tsrLogo} alt="TSR Megoldások" className="h-8" />
+                <img src={tsrLogo} alt="TSR Megoldások" className="h-10" />
               </div>
               <p className="text-sm">Biztonságos üdülési jog átruházás jogi technológiával.</p>
             </div>
