@@ -72,8 +72,11 @@ export default function SellerLayout({ children }: { children: ReactNode }) {
             !sidebarOpen && "md:justify-center",
           )}
         >
-          <Shield className="h-6 w-6 text-sidebar-primary shrink-0" />
-          {sidebarOpen && <span className="font-bold text-sm">Eladói portál</span>}
+          {sidebarOpen ? (
+            <img src={tsrLogo} alt="TSR Megoldások" className="h-8" />
+          ) : (
+            <img src={tsrLogo} alt="TSR" className="h-8 w-8 object-contain" />
+          )}
         </div>
 
         <nav className="flex-1 py-4 space-y-1 px-2 overflow-hidden">

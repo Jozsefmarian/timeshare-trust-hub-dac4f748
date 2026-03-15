@@ -60,8 +60,11 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
         sidebarOpen ? "w-64" : "w-0 md:w-16"
       )}>
         <div className={cn("flex items-center gap-2 px-4 h-16 border-b border-sidebar-border", !sidebarOpen && "md:justify-center")}>
-          <Shield className="h-6 w-6 text-sidebar-primary shrink-0" />
-          {sidebarOpen && <span className="font-bold text-sm">Admin portál</span>}
+          {sidebarOpen ? (
+            <img src={tsrLogo} alt="TSR Megoldások" className="h-8" />
+          ) : (
+            <img src={tsrLogo} alt="TSR" className="h-8 w-8 object-contain" />
+          )}
         </div>
 
         <nav className="flex-1 py-4 space-y-1 px-2 overflow-hidden">
