@@ -367,7 +367,8 @@ export default function AdminCaseReview() {
   const [weekOffer, setWeekOffer] = useState<WeekOffer | null>(null);
   const [documents, setDocuments] = useState<CaseDocument[]>([]);
   const [documentTypes, setDocumentTypes] = useState<DocumentType[]>([]);
-  const [validationResults, setValidationResults] = useState<AiValidationResult[]>([]);
+  const [classificationRows, setClassificationRows] = useState([]);
+  const [checkResults, setCheckResults] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -403,7 +404,7 @@ export default function AdminCaseReview() {
       setCaseData(cd as CaseRow);
 
       // Parallel loads
-      const [profileRes, offerRes, docsRes, dtRes, valRes] = await Promise.all([
+      const [profileRes, offerRes, docsRes, dtRes, classRes, checksRes] = await Promise.all([
         supabase.from("profiles").select("full_name, email, phone").eq("id", cd.seller_user_id).maybeSingle(),
         supabase
           .from("week_offers")
@@ -419,16 +420,23 @@ export default function AdminCaseReview() {
           .order("created_at", { ascending: false }),
         supabase.from("document_types").select("id, code, label").eq("is_active", true),
         supabase
-          .from("ai_validation_results" as any)
-          .select("id, document_id, validation_status, field_match_score, keyword_flags, notes")
-          .eq("case_id", caseId),
+          .from("classifications" as any)
+          .select("id, classification, reason_summary, reason_codes, created_at")
+          .eq("case_id", caseId)
+          .order("created_at", { ascending: false }),
+        supabase
+          .from("check_results" as any)
+          .select("id, document_id, check_type, result, severity, message, details, created_at")
+          .eq("case_id", caseId)
+          .order("created_at", { ascending: false }),
       ]);
 
       setSeller(profileRes.data as SellerProfile | null);
       setWeekOffer(offerRes.data as WeekOffer | null);
       setDocuments((docsRes.data ?? []) as CaseDocument[]);
       setDocumentTypes((dtRes.data ?? []) as DocumentType[]);
-      setValidationResults((valRes.data ?? []) as any as AiValidationResult[]);
+      setClassificationRows((classRes.data ?? []) as any[]);
+      setCheckResults((checksRes.data ?? []) as any[]);
     } catch (err: any) {
       setError(err.message || "Betöltési hiba.");
     } finally {
@@ -450,12 +458,19 @@ export default function AdminCaseReview() {
     return doc.document_type || "Ismeretlen";
   };
 
-  const caseAiDecision = getCaseAiDecision(documents, validationResults);
+  const latestClassification = classificationRows[0] ?? null;
+
+  const caseAiDecision =
+    latestClassification?.classification === "green"
+      ? "green"
+      : latestClassification?.classification === "yellow"
+        ? "yellow"
+        : latestClassification?.classification === "red"
+          ? "red"
+          : "pending";
 
   const canApproveCase =
-    caseAiDecision !== "pending" &&
-    caseAiDecision !== "red" &&
-    caseAiDecision !== "support" &&
+    caseAiDecision === "green" &&
     documents.length > 0 &&
     documents.every((d) => d.upload_status === "completed" && d.review_status === "approved");
 
