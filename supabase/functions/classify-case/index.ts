@@ -181,12 +181,21 @@ Deno.serve(async (req) => {
     }
 
     const { error: caseUpdateError } = await serviceClient
-      .from("cases")
-      .update({
-        classification,
-        ai_pipeline_status: "completed",
-      })
-      .eq("id", caseId);
+      .const mappedCaseStatus =
+  classification === "green"
+    ? "green_approved"
+    : classification === "yellow"
+      ? "yellow_review"
+      : "red_rejected";
+
+const { error: caseUpdateError } = await serviceClient
+  .from("cases")
+  .update({
+    classification,
+    ai_pipeline_status: "completed",
+    status: mappedCaseStatus,
+  })
+  .eq("id", caseId);
 
     if (caseUpdateError) {
       return jsonResponse({ error: "Failed to update case classification", detail: caseUpdateError.message }, 500);
@@ -195,6 +204,7 @@ Deno.serve(async (req) => {
     return jsonResponse({
       success: true,
       case_id: caseId,
+      case_status: mappedCaseStatus,
       classification_id: insertedClassification.id,
       classification,
       reason_summary: reasonSummary,
