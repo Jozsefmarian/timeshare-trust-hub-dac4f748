@@ -180,22 +180,17 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: "Failed to insert classification", detail: insertError.message }, 500);
     }
 
-    const { error: caseUpdateError } = await serviceClient
-      .const mappedCaseStatus =
-  classification === "green"
-    ? "green_approved"
-    : classification === "yellow"
-      ? "yellow_review"
-      : "red_rejected";
+    const mappedCaseStatus =
+      classification === "green" ? "green_approved" : classification === "yellow" ? "yellow_review" : "red_rejected";
 
-const { error: caseUpdateError } = await serviceClient
-  .from("cases")
-  .update({
-    classification,
-    ai_pipeline_status: "completed",
-    status: mappedCaseStatus,
-  })
-  .eq("id", caseId);
+    const { error: caseUpdateError } = await serviceClient
+      .from("cases")
+      .update({
+        classification,
+        ai_pipeline_status: "completed",
+        status: mappedCaseStatus,
+      })
+      .eq("id", caseId);
 
     if (caseUpdateError) {
       return jsonResponse({ error: "Failed to update case classification", detail: caseUpdateError.message }, 500);
