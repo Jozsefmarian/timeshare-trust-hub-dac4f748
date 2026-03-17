@@ -82,15 +82,6 @@ type CaseDocument = {
   uploaded_at: string | null;
 };
 
-type AiValidationResult = {
-  id: string;
-  document_id: string;
-  validation_status: string;
-  field_match_score: number | null;
-  keyword_flags: Record<string, unknown> | null;
-  notes: string | null;
-};
-
 type DocumentType = {
   id: string;
   code: string;
@@ -202,8 +193,6 @@ function aiValidationBadgeLabel(s: string): string {
       return "Piros";
     case "manual_review":
       return "Manuális ellenőrzés";
-    case "support":
-      return "Support";
     case "pending":
       return "Függőben";
     case "processing":
@@ -225,28 +214,11 @@ function aiValidationBadgeClasses(s: string): string {
     case "manual_review":
       return "bg-warning/10 text-warning";
     case "red":
-    case "support":
     case "failed":
       return "bg-destructive/10 text-destructive";
     default:
       return "bg-muted text-muted-foreground";
   }
-}
-
-function normalizeKeywordFlags(flags: Record<string, unknown> | null): string[] {
-  if (!flags) return [];
-
-  if (Array.isArray(flags)) {
-    return flags.map(String).filter(Boolean);
-  }
-
-  return Object.entries(flags).flatMap(([key, value]) => {
-    if (value === true) return [key];
-    if (Array.isArray(value)) return value.map(String).filter(Boolean);
-    if (typeof value === "string" && value.trim()) return [`${key}: ${value}`];
-    if (typeof value === "number") return [`${key}: ${value}`];
-    return [];
-  });
 }
 
 function classificationClasses(c: string | null): string {
@@ -276,56 +248,7 @@ function statusLabel(s: string): string {
   return map[s] ?? s;
 }
 
-type EffectiveAiDecision = "pending" | "green" | "yellow" | "red" | "support";
-
-function normalizeValidationStatus(status: string): EffectiveAiDecision {
-  switch (status) {
-    case "green":
-      return "green";
-    case "yellow":
-    case "manual_review":
-      return "yellow";
-    case "red":
-      return "red";
-    case "support":
-      return "support";
-    case "pending":
-    case "processing":
-      return "pending";
-    case "completed":
-      // A mostani placeholder AI még nem valódi GREEN/YELLOW/RED döntés,
-      // ezért ezt biztonságból YELLOW-ként kezeljük.
-      return "yellow";
-    case "failed":
-      return "support";
-    default:
-      return "yellow";
-  }
-}
-
-function getCaseAiDecision(documents: CaseDocument[], validationResults: AiValidationResult[]): EffectiveAiDecision {
-  if (documents.length === 0) return "pending";
-
-  const completedDocs = documents.filter((d) => d.upload_status === "completed");
-  if (completedDocs.length === 0) return "pending";
-
-  const completedDocIds = new Set(completedDocs.map((d) => d.id));
-  const relatedResults = validationResults.filter((r) => completedDocIds.has(r.document_id));
-
-  if (relatedResults.length < completedDocs.length) {
-    return "pending";
-  }
-
-  const normalized = relatedResults.map((r) => normalizeValidationStatus(r.validation_status));
-
-  if (normalized.some((s) => s === "support")) return "support";
-  if (normalized.some((s) => s === "red")) return "red";
-  if (normalized.some((s) => s === "pending")) return "pending";
-  if (normalized.some((s) => s === "yellow")) return "yellow";
-  if (normalized.every((s) => s === "green")) return "green";
-
-  return "yellow";
-}
+type EffectiveAiDecision = "pending" | "green" | "yellow" | "red";
 
 function caseAiDecisionLabel(status: EffectiveAiDecision): string {
   switch (status) {
@@ -335,8 +258,6 @@ function caseAiDecisionLabel(status: EffectiveAiDecision): string {
       return "AI döntés: Sárga";
     case "red":
       return "AI döntés: Piros";
-    case "support":
-      return "AI döntés: Support";
     default:
       return "AI döntés: Függőben";
   }
@@ -349,7 +270,6 @@ function caseAiDecisionClasses(status: EffectiveAiDecision): string {
     case "yellow":
       return "bg-warning/10 text-warning";
     case "red":
-    case "support":
       return "bg-destructive/10 text-destructive";
     default:
       return "bg-muted text-muted-foreground";
@@ -460,7 +380,7 @@ export default function AdminCaseReview() {
 
   const latestClassification = classificationRows[0] ?? null;
 
-  const caseAiDecision =
+  const caseAiDecision: EffectiveAiDecision =
     latestClassification?.classification === "green"
       ? "green"
       : latestClassification?.classification === "yellow"
@@ -792,48 +712,83 @@ export default function AdminCaseReview() {
                   AI ellenőrzési eredmények
                 </CardTitle>
               </CardHeader>
-              <CardContent className="p-0">
-                {validationResults.length === 0 ? (
-                  <p className="text-sm text-muted-foreground px-6 py-6 text-center">Nincs AI ellenőrzési eredmény.</p>
+              <CardContent className="space-y-4">
+                {classificationRows.length === 0 && checkResults.length === 0 ? (
+                  <p className="text-sm text-muted-foreground text-center py-4">Nincs AI ellenőrzési eredmény.</p>
                 ) : (
-                  <div className="divide-y divide-border">
-                    {validationResults.map((vr) => {
-                      const doc = documents.find((d) => d.id === vr.document_id);
-                      const docName = doc ? doc.original_file_name || doc.file_name : "Ismeretlen dokumentum";
-                      const keywordItems = normalizeKeywordFlags(vr.keyword_flags as Record<string, unknown> | null);
-                      return (
-                        <div key={vr.id} className="px-6 py-4 space-y-2">
-                          <p className="text-sm font-medium text-foreground">{docName}</p>
-                          <div className="flex items-center gap-4 flex-wrap">
-                            <Badge className={aiValidationBadgeClasses(vr.validation_status)}>
-                              {aiValidationBadgeLabel(vr.validation_status)}
-                            </Badge>
+                  <>
+                    {latestClassification && (
+                      <div className="rounded-lg border p-4 space-y-2">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-sm font-medium">Legutóbbi besorolás:</span>
+                          <Badge
+                            variant="outline"
+                            className={classificationClasses(latestClassification.classification ?? null)}
+                          >
+                            {classificationLabel(latestClassification.classification ?? null)}
+                          </Badge>
+                        </div>
 
-                            {vr.field_match_score != null && (
-                              <span className="text-sm text-foreground">
-                                Egyezési pont: <strong>{vr.field_match_score}%</strong>
-                              </span>
-                            )}
-                          </div>
+                        {latestClassification.reason_summary && (
+                          <p className="text-sm text-muted-foreground">{latestClassification.reason_summary}</p>
+                        )}
 
-                          {keywordItems.length > 0 && (
-                            <div className="space-y-2">
-                              <p className="text-sm font-medium">Kulcsszó jelzések</p>
-                              <div className="flex flex-wrap gap-2">
-                                {keywordItems.map((item) => (
-                                  <Badge key={item} variant="outline">
-                                    {item}
-                                  </Badge>
-                                ))}
-                              </div>
+                        {Array.isArray(latestClassification.reason_codes) &&
+                          latestClassification.reason_codes.length > 0 && (
+                            <div className="flex flex-wrap gap-2">
+                              {latestClassification.reason_codes.map((code: string) => (
+                                <Badge key={code} variant="outline">
+                                  {code}
+                                </Badge>
+                              ))}
                             </div>
                           )}
+                      </div>
+                    )}
 
-                          {vr.notes && <p className="text-xs text-muted-foreground">{vr.notes}</p>}
+                    <div className="rounded-lg border">
+                      <div className="px-4 py-3 border-b">
+                        <p className="text-sm font-medium">Ellenőrzési tételek</p>
+                      </div>
+
+                      {checkResults.length === 0 ? (
+                        <p className="text-sm text-muted-foreground px-4 py-4">Nincs check_results rekord.</p>
+                      ) : (
+                        <div className="divide-y divide-border">
+                          {checkResults.map((check: any) => {
+                            const relatedDoc = documents.find((d) => d.id === check.document_id);
+
+                            const badgeClass =
+                              check.result === "pass"
+                                ? "bg-success/10 text-success"
+                                : check.result === "warning"
+                                  ? "bg-warning/10 text-warning"
+                                  : check.result === "fail"
+                                    ? "bg-destructive/10 text-destructive"
+                                    : "bg-muted text-muted-foreground";
+
+                            return (
+                              <div key={check.id} className="px-4 py-3 space-y-2">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <Badge className={badgeClass}>{String(check.result ?? "info")}</Badge>
+                                  <span className="text-sm font-medium">{check.check_type}</span>
+                                  {check.severity && <Badge variant="outline">{String(check.severity)}</Badge>}
+                                </div>
+
+                                {check.message && <p className="text-sm text-muted-foreground">{check.message}</p>}
+
+                                {relatedDoc && (
+                                  <p className="text-xs text-muted-foreground">
+                                    Dokumentum: {relatedDoc.original_file_name || relatedDoc.file_name}
+                                  </p>
+                                )}
+                              </div>
+                            );
+                          })}
                         </div>
-                      );
-                    })}
-                  </div>
+                      )}
+                    </div>
+                  </>
                 )}
               </CardContent>
             </Card>
@@ -866,12 +821,6 @@ export default function AdminCaseReview() {
                   {caseAiDecision === "red" && (
                     <p className="text-xs text-muted-foreground">
                       Az AI piros jelzést adott. Az ügyet nem szabad automatikusan továbbengedni.
-                    </p>
-                  )}
-
-                  {caseAiDecision === "support" && (
-                    <p className="text-xs text-muted-foreground">
-                      Az ügy support / speciális kezelés irányba esik. Külön ügyintézés szükséges.
                     </p>
                   )}
 
