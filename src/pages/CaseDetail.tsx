@@ -264,15 +264,16 @@ export default function CaseDetail() {
     const buildFriendlyMessage = (cr: CheckResult) => {
       const details = cr.details ?? {};
       const fieldName = details.field_name as string | undefined;
+
       const fieldLabel =
         details.field_label ||
         (fieldName === "resort_name_raw"
           ? "Üdülő neve"
           : fieldName === "week_number"
             ? "Hét sorszáma"
-            : fieldName === "unit_type"
+            : fieldName === "unit_type" || fieldName === "apartment_type"
               ? "Apartman típusa"
-              : fieldName === "season_label"
+              : fieldName === "season_label" || fieldName === "season"
                 ? "Szezon"
                 : fieldName === "rights_start_year"
                   ? "Jog kezdő éve"
@@ -286,7 +287,9 @@ export default function CaseDetail() {
                           ? "Év típusa"
                           : fieldName || "Adatmező");
 
-      const expectedValue = details.expected_value ?? details.document_value ?? null;
+      const expectedValue =
+        details.expected_value ?? details.document_value ?? details.extracted_value ?? details.matched_value ?? null;
+
       const currentValue = details.current_value ?? details.form_value ?? null;
 
       if (cr.check_type === "document_check") {
@@ -296,19 +299,19 @@ export default function CaseDetail() {
       if (fieldName === "usage_frequency") {
         return (
           cr.message ||
-          `A használat gyakorisága nem egyezik. Kérjük, ellenőrizze, hogy minden éves vagy minden másodéves jogról van-e szó.`
+          "A használat gyakorisága nem egyezik. Kérjük, ellenőrizze, hogy minden éves vagy minden másodéves jogról van-e szó."
         );
       }
 
       if (fieldName === "usage_parity") {
         return (
           cr.message ||
-          `Az év típusa nem egyezik. Kérjük, ellenőrizze, hogy páros vagy páratlan évekre vonatkozik-e a használat.`
+          "Az év típusa nem egyezik. Kérjük, ellenőrizze, hogy páros vagy páratlan évekre vonatkozik-e a használat."
         );
       }
 
       if (expectedValue || currentValue) {
-        return cr.message || `${fieldLabel} eltér a dokumentumban szereplő adattól. Kérjük, ellenőrizze és javítsa.`;
+        return cr.message || `${fieldLabel} eltér a dokumentumban szereplő adattól.`;
       }
 
       return cr.message || `${fieldLabel} javítása szükséges.`;
@@ -316,18 +319,27 @@ export default function CaseDetail() {
 
     return checkResults
       .filter((cr) => cr.result === "correction_required" || cr.severity === "correction")
-      .map((cr) => ({
-        type: (cr.check_type === "document_check" ? "document_replace" : "field_correction") as
-          | "document_replace"
-          | "field_correction",
-        message: buildFriendlyMessage(cr),
-        document_type_id: cr.details?.document_type_id,
-        document_type_label: cr.details?.document_type_label,
-        field_name: cr.details?.field_name,
-        field_label: cr.details?.field_label,
-        current_value: cr.details?.current_value ?? cr.details?.form_value ?? null,
-        expected_value: cr.details?.expected_value ?? cr.details?.document_value ?? null,
-      }));
+      .map((cr) => {
+        const details = cr.details ?? {};
+
+        return {
+          type: (cr.check_type === "document_check" ? "document_replace" : "field_correction") as
+            | "document_replace"
+            | "field_correction",
+          message: buildFriendlyMessage(cr),
+          document_type_id: details.document_type_id,
+          document_type_label: details.document_type_label,
+          field_name: details.field_name,
+          field_label: details.field_label,
+          current_value: details.current_value ?? details.form_value ?? null,
+          expected_value:
+            details.expected_value ??
+            details.document_value ??
+            details.extracted_value ??
+            details.matched_value ??
+            null,
+        };
+      });
   }, [checkResults]);
 
   const handleCaseStatusUpdate = (newStatus: string) => {
