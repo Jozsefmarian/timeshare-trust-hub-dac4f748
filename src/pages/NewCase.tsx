@@ -98,6 +98,8 @@ export default function NewCase() {
   const [rightsEnd, setRightsEnd] = useState("");
   const [hasShares, setHasShares] = useState<string>("");
   const [shareCount, setShareCount] = useState("");
+  const [usageFrequency, setUsageFrequency] = useState<"annual" | "biennial">("annual");
+  const [usageParity, setUsageParity] = useState<"even" | "odd" | null>(null);
 
   // Step 3
   const [decl1, setDecl1] = useState(false);
