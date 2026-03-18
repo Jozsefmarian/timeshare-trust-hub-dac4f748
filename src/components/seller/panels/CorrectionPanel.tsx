@@ -23,6 +23,7 @@ interface CorrectionPanelProps {
   caseId: string;
   corrections: CorrectionRequirement[];
   onCorrectionCompleted: () => void;
+  onRecheckRequested?: () => Promise<void> | void;
 }
 
 type MessageState = {
@@ -53,13 +54,19 @@ function getInitialFieldValue(correction: CorrectionRequirement) {
   return "";
 }
 
-export default function CorrectionPanel({ caseId, corrections, onCorrectionCompleted }: CorrectionPanelProps) {
+export default function CorrectionPanel({
+  caseId,
+  corrections,
+  onCorrectionCompleted,
+  onRecheckRequested,
+}: CorrectionPanelProps) {
   const [uploadingIdx, setUploadingIdx] = useState<number | null>(null);
   const [savingIdx, setSavingIdx] = useState<number | null>(null);
+  const [isRechecking, setIsRechecking] = useState(false);
+  const [panelMessage, setPanelMessage] = useState<MessageState | null>(null);
   const [messages, setMessages] = useState<Record<number, MessageState>>({});
   const [fieldValues, setFieldValues] = useState<Record<number, string>>({});
   const fileRefs = useRef<Record<number, HTMLInputElement | null>>({});
-
   useEffect(() => {
     const nextValues: Record<number, string> = {};
 
@@ -318,6 +325,29 @@ export default function CorrectionPanel({ caseId, corrections, onCorrectionCompl
     );
   };
 
+  const requestRecheck = async () => {
+    if (!onRecheckRequested) return;
+
+    try {
+      setIsRechecking(true);
+      setPanelMessage(null);
+
+      await onRecheckRequested();
+
+      setPanelMessage({
+        type: "success",
+        text: "Az újraellenőrzés elindult.",
+      });
+    } catch (err: any) {
+      setPanelMessage({
+        type: "error",
+        text: err?.message || "Az újraellenőrzés indítása sikertelen.",
+      });
+    } finally {
+      setIsRechecking(false);
+    }
+  };
+
   const isSupportedField = (fieldName?: string) => {
     const normalizedField = normalizeFieldName(fieldName);
 
@@ -428,6 +458,28 @@ export default function CorrectionPanel({ caseId, corrections, onCorrectionCompl
             )}
           </div>
         ))}
+        <div className="border-t pt-4 space-y-3">
+          <div className="text-sm text-muted-foreground">
+            Ha minden szükséges adatot javított és a dokumentumokat is frissítette, indítsa el újra az ellenőrzést.
+          </div>
+
+          <Button type="button" onClick={requestRecheck} disabled={isRechecking || !onRecheckRequested}>
+            {isRechecking ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Újraellenőrzés indul...
+              </>
+            ) : (
+              "Újraellenőrzés kérése"
+            )}
+          </Button>
+
+          {panelMessage && (
+            <div className={`text-sm ${panelMessage.type === "success" ? "text-green-600" : "text-destructive"}`}>
+              {panelMessage.text}
+            </div>
+          )}
+        </div>
       </CardContent>
     </Card>
   );
