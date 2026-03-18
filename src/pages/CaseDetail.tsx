@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemosupport, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import SellerLayout from "@/components/SellerLayout";
 import { Card, CardContent } from "@/components/ui/card";
@@ -276,15 +276,6 @@ export default function CaseDetail() {
       }));
   }, [checkResults]);
 
-  const isRejected = status === "red_rejected";
-  const isYellow = status === "yellow_review";
-  const hasCorrections = corrections.length > 0;
-
-  const isYellowFixRequired = isYellow && hasCorrections;
-  const isYellowManualReview = isYellow && !hasCorrections;
-
-  const shouldHideForwardFlow = isRejected || isYellowFixRequired || isYellowManualReview;
-
   const handleCaseStatusUpdate = (newStatus: string) => {
     setCaseData((prev) =>
       prev
@@ -335,6 +326,14 @@ export default function CaseDetail() {
   }
 
   const status = normalizeCaseStatus(caseData.status);
+  const isRejected = status === "red_rejected";
+  const isYellow = status === "yellow_review";
+  const hasCorrections = corrections.length > 0;
+
+  const isYellowFixRequired = isYellow && hasCorrections;
+  const isYellowManualReview = isYellow && !hasCorrections;
+
+  const shouldHideForwardFlow = isRejected || isYellowFixRequired || isYellowManualReview;
 
   return (
     <SellerLayout>
