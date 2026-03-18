@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemosupport, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import SellerLayout from "@/components/SellerLayout";
 import { Card, CardContent } from "@/components/ui/card";
@@ -276,6 +276,15 @@ export default function CaseDetail() {
       }));
   }, [checkResults]);
 
+  const isRejected = status === "red_rejected";
+  const isYellow = status === "yellow_review";
+  const hasCorrections = corrections.length > 0;
+
+  const isYellowFixRequired = isYellow && hasCorrections;
+  const isYellowManualReview = isYellow && !hasCorrections;
+
+  const shouldHideForwardFlow = isRejected || isYellowFixRequired || isYellowManualReview;
+
   const handleCaseStatusUpdate = (newStatus: string) => {
     setCaseData((prev) =>
       prev
@@ -360,53 +369,49 @@ export default function CaseDetail() {
               <AiProcessingPanel />
             )}
 
-            {/* Manual Review */}
-            {status === "yellow_review" && <ManualReviewPanel />}
-
-            {/* Rejected */}
-            {status === "red_rejected" && <RejectedPanel reasonSummary={classification?.reason_summary} />}
-
-            {/* Correction requests (policy-driven) */}
-            {corrections.length > 0 && (
+            {/* Yellow - fix required */}
+            {isYellowFixRequired && (
               <CorrectionPanel
                 caseId={caseId!}
                 corrections={corrections}
                 onCorrectionCompleted={() => {
                   loadUploadedDocuments();
                   loadCheckResults();
+                  loadClassification();
                 }}
               />
             )}
 
+            {/* Yellow - manual review */}
+            {isYellowManualReview && <ManualReviewPanel reasonSummary={classification?.reason_summary} />}
+
+            {/* Rejected */}
+            {isRejected && <RejectedPanel reasonSummary={classification?.reason_summary} />}
+
             {/* Contract panel */}
-            {contract &&
-              isAtOrPast(status, "green_approved") &&
-              status !== "red_rejected" &&
-              status !== "yellow_review" && (
-                <ContractPanel
-                  contract={contract}
-                  caseId={caseId!}
-                  caseStatus={status}
-                  onContractUpdated={loadContract}
-                  onCaseStatusUpdated={handleCaseStatusUpdate}
-                />
-              )}
+            {contract && isAtOrPast(status, "green_approved") && !shouldHideForwardFlow && (
+              <ContractPanel
+                contract={contract}
+                caseId={caseId!}
+                caseStatus={status}
+                onContractUpdated={loadContract}
+                onCaseStatusUpdated={handleCaseStatusUpdate}
+              />
+            )}
 
             {/* Service Agreement */}
-            {isAtOrPast(status, "signed_contract_uploaded") &&
-              status !== "red_rejected" &&
-              status !== "yellow_review" && (
-                <ServiceAgreementPanel
-                  caseId={caseId!}
-                  caseStatus={status}
-                  onAccepted={() => handleCaseStatusUpdate("service_agreement_accepted")}
-                />
-              )}
+            {isAtOrPast(status, "signed_contract_uploaded") && !shouldHideForwardFlow && (
+              <ServiceAgreementPanel
+                caseId={caseId!}
+                caseStatus={status}
+                onAccepted={() => handleCaseStatusUpdate("service_agreement_accepted")}
+              />
+            )}
 
             {/* Payment */}
-            {isAtOrPast(status, "service_agreement_accepted") &&
-              status !== "red_rejected" &&
-              status !== "yellow_review" && <PaymentPanel caseStatus={status} />}
+            {isAtOrPast(status, "service_agreement_accepted") && !shouldHideForwardFlow && (
+              <PaymentPanel caseStatus={status} />
+            )}
 
             {/* Submitted documents (read-only) */}
             <SubmittedDocumentsPanel documents={uploadedDocuments} documentTypes={documentTypes} />
