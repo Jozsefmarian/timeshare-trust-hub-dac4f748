@@ -418,14 +418,16 @@ export default function NewCase() {
       }
 
       // Finalize case status
+      const now = new Date().toISOString();
+
       const { error: updateError } = await supabaseAny
         .from("cases")
         .update({
           status: "submitted",
           status_group: "processing",
-          current_step: "ai_processing",
-          submitted_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
+          current_step: "submitted",
+          submitted_at: now,
+          updated_at: now,
         })
         .eq("id", caseId);
 
