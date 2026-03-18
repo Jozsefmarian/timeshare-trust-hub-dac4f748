@@ -13,7 +13,8 @@ interface CorrectionRequirement {
   document_type_label?: string;
   field_name?: string;
   field_label?: string;
-  current_value?: string;
+  current_value?: string | number | null;
+  expected_value?: string | number | null;
 }
 
 interface CorrectionPanelProps {
@@ -65,33 +66,56 @@ export default function CorrectionPanel({ caseId, corrections, onCorrectionCompl
 
             {c.type === "document_replace" && (
               <div className="space-y-2">
-                <Label className="text-sm">
-                  {c.document_type_label || "Dokumentum"} újrafeltöltése
-                </Label>
+                <Label className="text-sm">{c.document_type_label || "Dokumentum"} újrafeltöltése</Label>
                 <Input
                   type="file"
-                  ref={(el) => { fileRefs.current[idx] = el; }}
+                  ref={(el) => {
+                    fileRefs.current[idx] = el;
+                  }}
                   disabled={uploadingIdx === idx}
                 />
-                <Button
-                  size="sm"
-                  disabled={uploadingIdx === idx}
-                  onClick={() => handleDocUpload(idx, c)}
-                >
+                <Button size="sm" disabled={uploadingIdx === idx} onClick={() => handleDocUpload(idx, c)}>
                   {uploadingIdx === idx ? (
-                    <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Feltöltés...</>
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Feltöltés...
+                    </>
                   ) : (
-                    <><Upload className="h-4 w-4 mr-2" />Feltöltés</>
+                    <>
+                      <Upload className="h-4 w-4 mr-2" />
+                      Feltöltés
+                    </>
                   )}
                 </Button>
               </div>
             )}
 
             {c.type === "field_correction" && (
-              <div className="space-y-2">
-                <Label className="text-sm">{c.field_label || c.field_name}</Label>
-                <p className="text-xs text-muted-foreground">Jelenlegi érték: {c.current_value || "—"}</p>
-                {/* Field correction would be handled dynamically based on backend requirements */}
+              <div className="space-y-2 rounded-md border border-amber-200 bg-white/70 p-3">
+                <Label className="text-amber-900">{c.field_label || c.field_name}</Label>
+
+                <div className="space-y-1 text-sm">
+                  <p className="text-muted-foreground">
+                    Jelenlegi megadott érték:{" "}
+                    <span className="font-medium text-foreground">
+                      {c.current_value !== null && c.current_value !== undefined && c.current_value !== ""
+                        ? String(c.current_value)
+                        : "—"}
+                    </span>
+                  </p>
+
+                  {c.expected_value !== null && c.expected_value !== undefined && c.expected_value !== "" && (
+                    <p className="text-muted-foreground">
+                      Dokumentum alapján várt érték:{" "}
+                      <span className="font-medium text-foreground">{String(c.expected_value)}</span>
+                    </p>
+                  )}
+                </div>
+
+                <p className="text-xs text-amber-800">
+                  Kérjük, ellenőrizze az eredeti dokumentumot, majd szükség esetén javítsa az adatot vagy töltsön fel
+                  helyes dokumentumot.
+                </p>
               </div>
             )}
 
