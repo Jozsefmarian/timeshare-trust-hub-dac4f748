@@ -195,18 +195,20 @@ export default function NewCase() {
 
       // Create week_offer
       await supabaseAny.from("week_offers").insert({
-        case_id: caseId,
-        resort_name_raw: resort.trim(),
-        week_number: Number(weekNumber),
-        unit_type: apartmentType.trim(),
-        season_label: seasonName.trim(),
-        rights_start_year: Number(rightsStart),
-        rights_end_year: Number(rightsEnd),
-        share_related: isShareRelated,
-        share_count: isShareRelated && shareCount ? Number(shareCount) : null,
-        created_at: now,
-        updated_at: now,
-      });
+  case_id: caseId,
+  resort_name_raw: resort.trim(),
+  week_number: Number(weekNumber),
+  unit_type: apartmentType.trim(),
+  season_label: seasonName.trim(),
+  rights_start_year: Number(rightsStart),
+  rights_end_year: Number(rightsEnd),
+  usage_frequency: usageFrequency,
+  usage_parity: usageFrequency === "biennial" ? usageParity : null,
+  share_related: isShareRelated,
+  share_count: isShareRelated && shareCount ? Number(shareCount) : null,
+  created_at: now,
+  updated_at: now,
+});
 
       createdCaseRef.current = caseId;
       setDraftCaseId(caseId);
@@ -362,7 +364,16 @@ export default function NewCase() {
       case 0:
         return ownerName && ownerAddress && ownerEmail && ownerPhone;
       case 1:
-        return resort && weekNumber && apartmentType && seasonName && rightsStart && rightsEnd && hasShares !== "";
+  return (
+    resort &&
+    weekNumber &&
+    apartmentType &&
+    seasonName &&
+    rightsStart &&
+    rightsEnd &&
+    hasShares !== "" &&
+    (usageFrequency === "annual" || (usageFrequency === "biennial" && !!usageParity))
+  );
       case 2:
         return decl1 && decl2 && decl3;
       case 3: {
@@ -569,27 +580,45 @@ export default function NewCase() {
                   </Select>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="space-y-1.5">
-                    <Label htmlFor="weekNumber">Hét száma (1–52)</Label>
-                    <Input
-                      id="weekNumber"
-                      type="number"
-                      min={1}
-                      max={52}
-                      placeholder="pl. 32"
-                      value={weekNumber}
-                      onChange={(e) => setWeekNumber(e.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label htmlFor="apartmentType">Apartman típus</Label>
-                    <Input
-                      id="apartmentType"
-                      placeholder="pl. Studio, 1 hálós"
-                      value={apartmentType}
-                      onChange={(e) => setApartmentType(e.target.value)}
-                    />
-                  </div>
+  <div className="space-y-1.5">
+    <Label>Használat gyakorisága</Label>
+    <Select
+      value={usageFrequency}
+      onValueChange={(value: "annual" | "biennial") => {
+        setUsageFrequency(value);
+        if (value === "annual") {
+          setUsageParity(null);
+        }
+      }}
+    >
+      <SelectTrigger>
+        <SelectValue placeholder="Válasszon" />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value="annual">Minden évben</SelectItem>
+        <SelectItem value="biennial">Minden második évben</SelectItem>
+      </SelectContent>
+    </Select>
+  </div>
+
+  {usageFrequency === "biennial" && (
+    <div className="space-y-1.5">
+      <Label>Év típusa</Label>
+      <Select
+        value={usageParity ?? ""}
+        onValueChange={(value: "even" | "odd") => setUsageParity(value)}
+      >
+        <SelectTrigger>
+          <SelectValue placeholder="Válasszon" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="even">Páros évek</SelectItem>
+          <SelectItem value="odd">Páratlan évek</SelectItem>
+        </SelectContent>
+      </Select>
+    </div>
+  )}
+</div>
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="seasonName">Szezon megnevezése</Label>
