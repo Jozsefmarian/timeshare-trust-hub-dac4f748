@@ -17,3 +17,7 @@ verify_jwt = false
 
 [functions.accept-service-agreement]
 verify_jwt = false
+
+[functions.supabase-backend]
+verify_jwt = false
+
