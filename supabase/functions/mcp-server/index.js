@@ -109,3 +109,4 @@ serve(async (req) => {
 
   return new Response("Supabase MCP Bridge - Használd az /sse végpontot", { status: 404 })
 })
+
