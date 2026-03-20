@@ -43,7 +43,7 @@ function text(message: string, status = 200) {
 
 function createMcpServer() {
   const server = new McpServer({
-    name: "mcp",
+    name: "supabase-mcp-server",
     version: "1.0.0",
   });
 
@@ -195,7 +195,7 @@ serve(async (req) => {
     if (req.method === "GET" && (url.pathname.endsWith("/") || url.pathname.endsWith("/health"))) {
       return json({
         ok: true,
-        service: "mcp",
+        service: "supabase-mcp-server",
         transport: "streamable-http-json",
       });
     }
