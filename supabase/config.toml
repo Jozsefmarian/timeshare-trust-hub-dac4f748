@@ -18,6 +18,6 @@ verify_jwt = false
 [functions.accept-service-agreement]
 verify_jwt = false
 
-[functions.mcp]
+[functions.supabase-mcp-server]
 verify_jwt = false
 
