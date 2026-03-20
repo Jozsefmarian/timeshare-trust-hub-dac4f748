@@ -29,10 +29,11 @@ function buildContractHtml(
   const sellerBillingAddress = (sellerDetails?.billing_address as string) || "—";
   const today = formatDateHu(new Date().toISOString());
 
-  const weekRows = weekOffers.map((wo) => {
-    const resort = resorts.find((r) => (r as any).id === wo.resort_id);
-    const resortName = (resort?.name as string) || (wo.resort_name_raw as string) || "—";
-    return `
+  const weekRows = weekOffers
+    .map((wo) => {
+      const resort = resorts.find((r) => (r as any).id === wo.resort_id);
+      const resortName = (resort?.name as string) || (wo.resort_name_raw as string) || "—";
+      return `
       <tr>
         <td>${resortName}</td>
         <td>${wo.week_number ?? "—"}</td>
@@ -41,7 +42,8 @@ function buildContractHtml(
         <td>${wo.rights_start_year ?? "—"} – ${wo.rights_end_year ?? "—"}</td>
         <td>${wo.is_fixed_week ? "Fix" : "Lebegő"}</td>
       </tr>`;
-  }).join("\n");
+    })
+    .join("\n");
 
   return `<!DOCTYPE html>
 <html lang="hu">
@@ -89,7 +91,9 @@ function buildContractHtml(
   </dl>
 
   <h2>3. Üdülési jog adatai</h2>
-  ${weekOffers.length > 0 ? `
+  ${
+    weekOffers.length > 0
+      ? `
   <table>
     <thead>
       <tr>
@@ -104,7 +108,9 @@ function buildContractHtml(
     <tbody>
       ${weekRows}
     </tbody>
-  </table>` : "<p>Nincs rögzített üdülési jog adat.</p>"}
+  </table>`
+      : "<p>Nincs rögzített üdülési jog adat.</p>"
+  }
 
   <h2>4. Nyilatkozatok</h2>
   <p>Eladó kijelenti, hogy az üdülési jog az ő kizárólagos tulajdonát képezi, az per-, teher- és igénymentes, harmadik személynek azon joga nem áll fenn.</p>
@@ -157,17 +163,12 @@ Deno.serve(async (req) => {
     }
 
     // Service client for storage + writes
-    const serviceClient = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-    );
+    const serviceClient = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 
     // Auth client to verify user
-    const authClient = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_ANON_KEY")!,
-      { global: { headers: { Authorization: authHeader } } },
-    );
+    const authClient = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY")!, {
+      global: { headers: { Authorization: authHeader } },
+    });
 
     const token = authHeader.replace("Bearer ", "");
     const { data: claimsData, error: claimsError } = await authClient.auth.getUser(token);
@@ -181,11 +182,7 @@ Deno.serve(async (req) => {
     const userId = claimsData.user.id;
 
     // Check admin
-    const { data: profile } = await serviceClient
-      .from("profiles")
-      .select("role")
-      .eq("id", userId)
-      .single();
+    const { data: profile } = await serviceClient.from("profiles").select("role").eq("id", userId).single();
 
     if (!profile || profile.role !== "admin") {
       return new Response(JSON.stringify({ error: "Forbidden – admin only" }), {
@@ -205,11 +202,7 @@ Deno.serve(async (req) => {
     }
 
     // 1. Load case
-    const { data: caseData, error: caseErr } = await serviceClient
-      .from("cases")
-      .select("*")
-      .eq("id", case_id)
-      .single();
+    const { data: caseData, error: caseErr } = await serviceClient.from("cases").select("*").eq("id", case_id).single();
 
     if (caseErr || !caseData) {
       return new Response(JSON.stringify({ error: "Case not found" }), {
@@ -233,26 +226,20 @@ Deno.serve(async (req) => {
       .maybeSingle();
 
     // 4. Load week offers
-    const { data: weekOffers } = await serviceClient
-      .from("week_offers")
-      .select("*")
-      .eq("case_id", case_id);
+    const { data: weekOffers } = await serviceClient.from("week_offers").select("*").eq("case_id", case_id);
 
     // 5. Load resorts for name resolution
     const resortIds = (weekOffers || []).map((wo: any) => wo.resort_id).filter(Boolean);
     let resorts: any[] = [];
     if (resortIds.length > 0) {
-      const { data } = await serviceClient
-        .from("resorts")
-        .select("id, name")
-        .in("id", resortIds);
+      const { data } = await serviceClient.from("resorts").select("id, name").in("id", resortIds);
       resorts = data || [];
     }
 
     // 6. Build HTML
     const html = buildContractHtml(
       caseData as any,
-      sellerProfile as any || {},
+      (sellerProfile as any) || {},
       sellerDetails as any,
       (weekOffers || []) as any[],
       resorts,
@@ -264,12 +251,10 @@ Deno.serve(async (req) => {
     const bucket = "generated-contracts";
 
     const blob = new Blob([html], { type: "text/html; charset=utf-8" });
-    const { error: uploadErr } = await serviceClient.storage
-      .from(bucket)
-      .upload(storagePath, blob, {
-        contentType: "text/html; charset=utf-8",
-        upsert: true,
-      });
+    const { error: uploadErr } = await serviceClient.storage.from(bucket).upload(storagePath, blob, {
+      contentType: "text/html; charset=utf-8",
+      upsert: true,
+    });
 
     if (uploadErr) {
       console.error("Storage upload error:", uploadErr);
@@ -302,29 +287,24 @@ Deno.serve(async (req) => {
         })
         .eq("id", existing.id);
     } else {
-      await serviceClient
-        .from("contracts")
-        .insert({
-          case_id,
-          contract_type: "sale_contract",
-          status: "generated",
-          generated_storage_bucket: bucket,
-          generated_storage_path: storagePath,
-          generated_file_name: fileName,
-          generated_at: now,
-        });
+      await serviceClient.from("contracts").insert({
+        case_id,
+        contract_type: "sale_contract",
+        status: "generated",
+        generated_storage_bucket: bucket,
+        generated_storage_path: storagePath,
+        generated_file_name: fileName,
+        generated_at: now,
+      });
     }
 
     // 9. Update case status
-    await serviceClient
-      .from("cases")
-      .update({ status: "contract_preparing" })
-      .eq("id", case_id);
+    await serviceClient.from("cases").update({ status: "contract_preparing" }).eq("id", case_id);
 
-    return new Response(
-      JSON.stringify({ success: true, file_name: fileName, storage_path: storagePath }),
-      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-    );
+    return new Response(JSON.stringify({ success: true, file_name: fileName, storage_path: storagePath }), {
+      status: 200,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   } catch (err) {
     console.error("Unhandled error:", err);
     return new Response(JSON.stringify({ error: "Internal server error" }), {
