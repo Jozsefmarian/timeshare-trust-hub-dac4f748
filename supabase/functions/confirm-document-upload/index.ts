@@ -269,15 +269,16 @@ Deno.serve(async (req) => {
       console.error("Failed to set documents.last_ai_job_id:", docJobLinkError);
     }
 
-    // 11. Mark case as docs_uploaded + AI pipeline queued
+    // 11. Update case AI pipeline status.
+    // Only move business status to docs_uploaded from early intake states.
     const previousStatus = caseRow.status ?? null;
-    const nextStatus = previousStatus === "docs_uploaded" ? previousStatus : "docs_uploaded";
+    const canMoveToDocsUploaded = previousStatus === "draft" || previousStatus === "submitted";
 
     const caseUpdatePayload: Record<string, unknown> = {
       ai_pipeline_status: "queued",
     };
 
-    if (previousStatus !== "docs_uploaded") {
+    if (canMoveToDocsUploaded) {
       caseUpdatePayload.status = "docs_uploaded";
     }
 
@@ -288,21 +289,6 @@ Deno.serve(async (req) => {
 
     if (caseUpdateError) {
       console.error("Failed to update case status / ai_pipeline_status:", caseUpdateError);
-    }
-
-    if (previousStatus !== "docs_uploaded") {
-      const { error: historyInsertError } = await serviceClient.from("case_status_history").insert({
-        case_id: doc.case_id,
-        from_status: previousStatus,
-        to_status: nextStatus,
-        change_source: "system_document_upload_confirmed",
-        changed_by_user_id: null,
-        note: "Document upload confirmed, case moved to docs_uploaded.",
-      });
-
-      if (historyInsertError) {
-        console.error("Failed to insert case_status_history:", historyInsertError);
-      }
     }
 
     // 12. Fire-and-forget trigger of process-document
