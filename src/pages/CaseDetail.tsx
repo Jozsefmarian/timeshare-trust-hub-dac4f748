@@ -394,6 +394,18 @@ export default function CaseDetail() {
     );
   }, [caseId, loadCheckResults, loadClassification, loadUploadedDocuments]);
 
+  const handleCaseStatusUpdate = (newStatus: string) => {
+    setCaseData((prev) =>
+      prev
+        ? {
+            ...prev,
+            status: normalizeCaseStatus(newStatus),
+            updated_at: new Date().toISOString(),
+          }
+        : prev,
+    );
+  };
+
   // ---------- Render ----------
 
   if (isLoading) {
