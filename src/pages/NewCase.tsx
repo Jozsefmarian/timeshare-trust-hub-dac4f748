@@ -13,6 +13,7 @@ import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { uploadCaseDocument } from "@/lib/documentUpload";
+import { submitCase } from "@/integrations/supabase/api";
 
 const supabaseAny: any = supabase;
 
