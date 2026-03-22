@@ -90,8 +90,8 @@ Deno.serve(async (req) => {
       .eq("id", caseId)
       .maybeSingle();
 
-    if (caseError) {
-      return jsonResponse({ error: "Failed to load case", detail: caseError.message }, 500);
+    if (caseLoadError) {
+      return jsonResponse({ error: "Failed to load case", detail: caseLoadError.message }, 500);
     }
 
     if (!caseRow) {
