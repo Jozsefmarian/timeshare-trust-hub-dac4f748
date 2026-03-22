@@ -24,9 +24,20 @@ interface DocumentType {
 
 function reviewBadge(s: string) {
   switch (s) {
-    case "approved": return { label: "Jóváhagyva", className: "border-success/40 text-success" };
-    case "rejected": return { label: "Elutasítva", className: "border-destructive/40 text-destructive" };
-    default: return { label: "Függőben", className: "" };
+    case "approved":
+      return { label: "Jóváhagyva", className: "border-success/40 text-success" };
+    case "rejected":
+      return { label: "Elutasítva", className: "border-destructive/40 text-destructive" };
+      function reviewBadge(s: string) {
+        switch (s) {
+          case "approved":
+            return { label: "Jóváhagyva", className: "border-success/40 text-success" };
+          case "rejected":
+            return { label: "Elutasítva", className: "border-destructive/40 text-destructive" };
+          default:
+            return { label: "Ellenőrzés alatt", className: "border-muted-foreground/30 text-muted-foreground" };
+        }
+      }
   }
 }
 
@@ -34,7 +45,13 @@ function formatDateTime(value?: string | null) {
   if (!value) return "—";
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleString("hu-HU", { year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+  return d.toLocaleString("hu-HU", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 interface SubmittedDocumentsPanelProps {
