@@ -29,11 +29,9 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: "Unauthorized" }, 401);
     }
 
-    const supabase = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_ANON_KEY")!,
-      { global: { headers: { Authorization: authHeader } } },
-    );
+    const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY")!, {
+      global: { headers: { Authorization: authHeader } },
+    });
 
     const token = authHeader.replace("Bearer ", "");
     const { data: userData, error: userError } = await supabase.auth.getUser(token);
@@ -98,10 +96,7 @@ Deno.serve(async (req) => {
       .join("");
 
     // 6. Extract IP and User-Agent
-    const ipAddress =
-      req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
-      req.headers.get("x-real-ip") ||
-      null;
+    const ipAddress = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || req.headers.get("x-real-ip") || null;
     const userAgent = req.headers.get("user-agent") || null;
 
     // 7. Insert declaration_acceptances
@@ -127,13 +122,7 @@ Deno.serve(async (req) => {
     }
 
     // 8. Update case status (only if appropriate)
-    const allowedStatuses = [
-      "contract_preparing",
-      "contract_generated",
-      "signed_uploaded",
-      "verified",
-      "submitted",
-    ];
+    const allowedStatuses = ["contract_preparing", "contract_generated", "signed_uploaded", "verified", "submitted"];
 
     let newStatus = caseData.status;
     if (allowedStatuses.includes(caseData.status)) {
@@ -150,10 +139,7 @@ Deno.serve(async (req) => {
     }
 
     // 9. Audit log (use service client to bypass RLS)
-    const serviceClient = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-    );
+    const serviceClient = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 
     await serviceClient.from("audit_logs").insert({
       action: "service_agreement_accepted",
