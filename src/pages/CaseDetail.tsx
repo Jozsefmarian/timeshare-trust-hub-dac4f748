@@ -32,6 +32,7 @@ type CaseRow = {
   submitted_at: string | null;
   closed_at: string | null;
   classification: string | null;
+  ai_pipeline_status: string | null;
 };
 
 type WeekOffer = {
@@ -165,7 +166,7 @@ export default function CaseDetail() {
         const { data, error } = await supabaseAny
           .from("cases")
           .select(
-            "id, case_number, status, status_group, current_step, created_at, updated_at, submitted_at, closed_at, classification",
+            "id, case_number, status, status_group, current_step, created_at, updated_at, submitted_at, closed_at, classification, ai_pipeline_status",
           )
           .eq("id", caseId)
           .eq("seller_user_id", session.user.id)
@@ -442,14 +443,19 @@ export default function CaseDetail() {
     );
   }
 
-  const status = normalizeCaseStatus(caseData.status);
+  const rawStatus = normalizeCaseStatus(caseData.status);
+
+  const status =
+    rawStatus === "docs_uploaded" &&
+    (caseData.ai_pipeline_status === "queued" || caseData.ai_pipeline_status === "processing")
+      ? "ai_processing"
+      : rawStatus;
+
   const isRejected = status === "red_rejected";
   const isYellow = status === "yellow_review";
   const hasCorrections = corrections.length > 0;
-
   const isYellowFixRequired = isYellow && hasCorrections;
   const isYellowManualReview = isYellow && !hasCorrections;
-
   const shouldHideForwardFlow = isRejected || isYellowFixRequired || isYellowManualReview;
 
   return (

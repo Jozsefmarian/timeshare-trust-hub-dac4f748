@@ -419,24 +419,16 @@ export default function NewCase() {
       }
 
       // Finalize case status
-      const now = new Date().toISOString();
-
-      const { error: updateError } = await supabaseAny
-        .from("cases")
-        .update({
-          status: "submitted",
-          status_group: "processing",
-          current_step: "ai_processing",
-          submitted_at: now,
-          updated_at: now,
-        })
-        .eq("id", caseId);
-
-      if (updateError) throw updateError;
+      const result = await submitCase(caseId);
 
       toast({
         title: "Ügy beküldve",
-        description: "Az ügy sikeresen beküldve. Kövesse nyomon a feldolgozást az ügy oldalán.",
+        description:
+          result.new_status === "green_approved"
+            ? "Az ügy sikeresen beküldve és automatikusan jóváhagyva lett."
+            : result.new_status === "yellow_review"
+              ? "Az ügy sikeresen beküldve. További ellenőrzés szükséges."
+              : "Az ügy sikeresen beküldve, de az automatikus ellenőrzés elutasította.",
       });
       navigate(`/seller/cases/${caseId}`, { replace: true });
     } catch (err: any) {
