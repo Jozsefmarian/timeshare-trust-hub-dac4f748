@@ -21,7 +21,9 @@ export default function ManualReviewPanel({ reasonSummary }: ManualReviewPanelPr
         {reasonSummary && (
           <div className="rounded-md border border-amber-200 bg-white/70 p-3">
             <p className="font-medium">Ellenőrzési megjegyzés</p>
-            <p className="mt-1 text-amber-800">{reasonSummary}</p>
+            <p className="mt-1 text-amber-800">
+              {reasonSummary === "Manual review recommended." ? "Manuális ellenőrzés javasolt." : reasonSummary}
+            </p>
           </div>
         )}
 
