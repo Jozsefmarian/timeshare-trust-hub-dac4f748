@@ -25,19 +25,20 @@ interface DocumentType {
 function reviewBadge(s: string) {
   switch (s) {
     case "approved":
-      return { label: "Jóváhagyva", className: "border-success/40 text-success" };
+      return {
+        label: "Jóváhagyva",
+        className: "border-success/40 text-success",
+      };
     case "rejected":
-      return { label: "Elutasítva", className: "border-destructive/40 text-destructive" };
-      function reviewBadge(s: string) {
-        switch (s) {
-          case "approved":
-            return { label: "Jóváhagyva", className: "border-success/40 text-success" };
-          case "rejected":
-            return { label: "Elutasítva", className: "border-destructive/40 text-destructive" };
-          default:
-            return { label: "Ellenőrzés alatt", className: "border-muted-foreground/30 text-muted-foreground" };
-        }
-      }
+      return {
+        label: "Elutasítva",
+        className: "border-destructive/40 text-destructive",
+      };
+    default:
+      return {
+        label: "Ellenőrzés alatt",
+        className: "border-muted-foreground/30 text-muted-foreground",
+      };
   }
 }
 
