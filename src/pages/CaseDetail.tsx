@@ -346,6 +346,7 @@ export default function CaseDetail() {
   const handleRecheckRequested = useCallback(async () => {
     if (!caseId) throw new Error("Hiányzó ügyazonosító.");
 
+    // 1. státusz visszaállítása feldolgozásra
     const { error: caseUpdateError } = await supabaseAny
       .from("cases")
       .update({
@@ -356,29 +357,28 @@ export default function CaseDetail() {
 
     if (caseUpdateError) throw caseUpdateError;
 
-    const { data: docs, error: docsError } = await supabaseAny
-      .from("documents")
-      .select("id")
-      .eq("case_id", caseId)
-      .order("created_at", { ascending: false });
+    // 2. ÖSSZES dokumentum lekérése
+    const { data: docs, error: docsError } = await supabaseAny.from("documents").select("id").eq("case_id", caseId);
 
     if (docsError) throw docsError;
 
-    const latestDocId = docs?.[0]?.id;
-
-    if (!latestDocId) {
-      throw new Error("Nem található feltöltött dokumentum az újraellenőrzéshez.");
+    if (!docs || docs.length === 0) {
+      throw new Error("Nincs dokumentum az újraellenőrzéshez.");
     }
 
-    const { error: processError } = await supabase.functions.invoke("process-document", {
-      body: {
-        document_id: latestDocId,
-        trigger_source: "seller_recheck",
-      },
-    });
+    // 3. MINDEN dokumentum újrafeldolgozása
+    for (const doc of docs) {
+      const { error: processError } = await supabase.functions.invoke("process-document", {
+        body: {
+          document_id: doc.id,
+          trigger_source: "seller_recheck",
+        },
+      });
 
-    if (processError) throw processError;
+      if (processError) throw processError;
+    }
 
+    // 4. UI frissítés
     await loadCheckResults();
     await loadClassification();
     await loadUploadedDocuments();
@@ -393,18 +393,6 @@ export default function CaseDetail() {
         : prev,
     );
   }, [caseId, loadCheckResults, loadClassification, loadUploadedDocuments]);
-
-  const handleCaseStatusUpdate = (newStatus: string) => {
-    setCaseData((prev) =>
-      prev
-        ? {
-            ...prev,
-            status: normalizeCaseStatus(newStatus),
-            updated_at: new Date().toISOString(),
-          }
-        : prev,
-    );
-  };
 
   // ---------- Render ----------
 
