@@ -451,11 +451,16 @@ export default function CaseDetail() {
       ? "ai_processing"
       : rawStatus;
 
-  const isRejected = status === "red_rejected";
-  const isYellow = status === "yellow_review";
+  const isRejected = status === "red_rejected" || (rawStatus === "docs_uploaded" && caseData.classification === "red");
+
+  const isYellow =
+    status === "yellow_review" || (rawStatus === "docs_uploaded" && caseData.classification === "yellow");
+
   const hasCorrections = corrections.length > 0;
+
   const isYellowFixRequired = isYellow && hasCorrections;
   const isYellowManualReview = isYellow && !hasCorrections;
+
   const shouldHideForwardFlow = isRejected || isYellowFixRequired || isYellowManualReview;
 
   return (
