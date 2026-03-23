@@ -66,17 +66,215 @@ function normalizeText(value: string | null | undefined): string {
     .trim();
 }
 
+// ── OCR / szöveg kinyerése ────────────────────────────────────────────────
+
+/**
+ * Uint8Array → base64 string (Deno-kompatibilis, nagy fájlokra is biztonságos)
+ */
+function uint8ToBase64(bytes: Uint8Array): string {
+  let binary = "";
+  const chunkSize = 8192;
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    const chunk = bytes.subarray(i, Math.min(i + chunkSize, bytes.length));
+    binary += String.fromCharCode(...chunk);
+  }
+  return btoa(binary);
+}
+
+/**
+ * Kép küldése az OpenAI Vision API-nak szövegkinyerésre.
+ */
+async function callOpenAIVision(
+  base64: string,
+  mimeType: string,
+  openAiKey: string,
+): Promise<string> {
+  const response = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${openAiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: "gpt-5.4-nano",
+      messages: [
+        {
+          role: "user",
+          content: [
+            {
+              type: "image_url",
+              image_url: {
+                url: `data:${mimeType};base64,${base64}`,
+                detail: "high",
+              },
+            },
+            {
+              type: "text",
+              text: "Extract all text from this document image. Return only the extracted text content, preserving the original structure as much as possible. Do not add any commentary or explanation.",
+            },
+          ],
+        },
+      ],
+      max_tokens: 4000,
+    }),
+  });
+
+  if (!response.ok) {
+    const err = await response.text();
+    console.error("OpenAI Vision API error:", response.status, err);
+    return "";
+  }
+
+  const data = await response.json();
+  return (data.choices?.[0]?.message?.content ?? "") as string;
+}
+
+/**
+ * PDF küldése az OpenAI API-nak szövegkinyerésre (gpt-5.4-nano file input).
+ */
+async function callOpenAIPDF(
+  base64: string,
+  fileName: string,
+  openAiKey: string,
+): Promise<string> {
+  const response = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${openAiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: "gpt-5.4-nano",
+      messages: [
+        {
+          role: "user",
+          content: [
+            {
+              type: "file",
+              file: {
+                filename: fileName,
+                file_data: `data:application/pdf;base64,${base64}`,
+              },
+            },
+            {
+              type: "text",
+              text: "Extract all text from this PDF document. Return only the extracted text content, preserving the original structure as much as possible. Do not add any commentary or explanation.",
+            },
+          ],
+        },
+      ],
+      max_tokens: 4000,
+    }),
+  });
+
+  if (!response.ok) {
+    const err = await response.text();
+    console.error("OpenAI PDF API error:", response.status, err);
+    return "";
+  }
+
+  const data = await response.json();
+  return (data.choices?.[0]?.message?.content ?? "") as string;
+}
+
+/**
+ * Fő szövegkinyerő függvény — MIME type alapján ágazik szét.
+ *
+ * - text/*        → közvetlen szövegolvasás
+ * - image/*       → OpenAI Vision API
+ * - application/pdf → először próbál szöveget kiolvasni;
+ *                     ha kevés szöveget kap (szkennelt PDF), OpenAI PDF API-ra vált
+ * - egyéb         → fallback: fileData.text()
+ */
+async function extractTextFromFile(
+  fileData: Blob,
+  mimeType: string | null,
+  fileName: string | null,
+  openAiKey: string,
+): Promise<{ text: string; method: string }> {
+  const effectiveMime = (mimeType ?? "").toLowerCase();
+
+  // Sima szövegfájl
+  if (effectiveMime.startsWith("text/") || effectiveMime === "application/json") {
+    try {
+      const text = await fileData.text();
+      return { text, method: "direct_text" };
+    } catch {
+      return { text: "", method: "direct_text_failed" };
+    }
+  }
+
+  // Ha nincs API kulcs, fallback szövegolvasásra
+  if (!openAiKey) {
+    console.warn("OPENAI_API_KEY not set, falling back to fileData.text()");
+    try {
+      const text = await fileData.text();
+      return { text, method: "stub_no_key" };
+    } catch {
+      return { text: "", method: "stub_no_key_failed" };
+    }
+  }
+
+  // Base64 konverzió (kép és PDF mindkettőhöz kell)
+  const buffer = await fileData.arrayBuffer();
+  const base64 = uint8ToBase64(new Uint8Array(buffer));
+
+  // Kép → Vision API
+  if (effectiveMime.startsWith("image/")) {
+    const text = await callOpenAIVision(base64, effectiveMime, openAiKey);
+    return { text, method: "openai_vision" };
+  }
+
+  // PDF
+  if (effectiveMime === "application/pdf" || effectiveMime === "application/x-pdf") {
+    // Próbáljuk meg szövegként kiolvasni (digitálisan létrehozott PDF)
+    try {
+      const textAttempt = await fileData.text();
+      // Ha értelmes mennyiségű szöveget kaptunk (nem csak bináris szemét),
+      // akkor digitális PDF → nem kell OCR
+      const cleanText = textAttempt.replace(/[^\x20-\x7E\n\r\t\u00C0-\u024F]/g, "").trim();
+      if (cleanText.length > 100) {
+        return { text: cleanText, method: "pdf_text_extraction" };
+      }
+    } catch {
+      // fall through to OpenAI
+    }
+
+    // Szkennelt PDF → OpenAI PDF API
+    const text = await callOpenAIPDF(base64, fileName ?? "document.pdf", openAiKey);
+    return { text, method: "openai_pdf" };
+  }
+
+  // Minden más → fallback
+  try {
+    const text = await fileData.text();
+    return { text, method: "fallback_text" };
+  } catch {
+    return { text: "", method: "fallback_failed" };
+  }
+}
+
+// ── Dokumentumtípus felismerés ────────────────────────────────────────────
+
 function detectDocumentType(documentType: string | null, fileName: string | null): string {
   const source = normalizeText(`${documentType ?? ""} ${fileName ?? ""}`);
 
   if (source.includes("share") || source.includes("reszveny")) return "share_statement";
-  if (source.includes("szemelyi") || source.includes("id") || source.includes("passport")) return "id_document";
-  if (source.includes("fee") || source.includes("dij") || source.includes("szamla")) return "annual_fee_invoice";
-  if (source.includes("contract") || source.includes("szerzodes") || source.includes("timeshare"))
+  if (source.includes("szemelyi") || source.includes("id") || source.includes("passport"))
+    return "id_document";
+  if (source.includes("fee") || source.includes("dij") || source.includes("szamla"))
+    return "annual_fee_invoice";
+  if (
+    source.includes("contract") ||
+    source.includes("szerzodes") ||
+    source.includes("timeshare")
+  )
     return "timeshare_contract";
 
   return "other";
 }
+
+// ── Mező kinyerés a szövegből ────────────────────────────────────────────
 
 function extractFieldsFromText(text: string, detectedType: string) {
   const normalized = text.replace(/\r/g, "");
@@ -92,23 +290,35 @@ function extractFieldsFromText(text: string, detectedType: string) {
   );
   if (contractMatch) result.contract_number = contractMatch[1];
 
-  const endYearMatch = normalized.match(/(?:lej[aá]rat|end year|v[eé]g(?:e)?)\s*[:\-]?\s*(20\d{2})/i);
+  const endYearMatch = normalized.match(
+    /(?:lej[aá]rat|end year|v[eé]g(?:e)?)\s*[:\-]?\s*(20\d{2})/i,
+  );
   if (endYearMatch) result.end_year = Number(endYearMatch[1]);
 
-  const shareCountMatch = normalized.match(/(?:r[eé]szv[eé]ny(?:ek)?\s*sz[aá]ma|share count)\s*[:\-]?\s*(\d+)/i);
+  const shareCountMatch = normalized.match(
+    /(?:r[eé]szv[eé]ny(?:ek)?\s*sz[aá]ma|share count)\s*[:\-]?\s*(\d+)/i,
+  );
   if (shareCountMatch) result.share_count = Number(shareCountMatch[1]);
 
-  const annualFeeMatch = normalized.match(/(?:fenntart[aá]si d[ií]j|annual fee)\s*[:\-]?\s*([\d\s.,]+)\s*(?:ft|huf)?/i);
+  const annualFeeMatch = normalized.match(
+    /(?:fenntart[aá]si d[ií]j|annual fee)\s*[:\-]?\s*([\d\s.,]+)\s*(?:ft|huf)?/i,
+  );
   if (annualFeeMatch) result.annual_fee = annualFeeMatch[1].trim();
 
-  const ownerLineMatch = normalized.match(/(?:jogosult|tulajdonos|owner|n[eé]v)\s*[:\-]?\s*([^\n]+)/i);
+  const ownerLineMatch = normalized.match(
+    /(?:jogosult|tulajdonos|owner|n[eé]v)\s*[:\-]?\s*([^\n]+)/i,
+  );
   if (ownerLineMatch) result.owner_name = ownerLineMatch[1].trim();
 
-  const resortLineMatch = normalized.match(/(?:üdül[őo]ingatlan|resort|hotel|club)\s*[:\-]?\s*([^\n]+)/i);
+  const resortLineMatch = normalized.match(
+    /(?:üdül[őo]ingatlan|resort|hotel|club)\s*[:\-]?\s*([^\n]+)/i,
+  );
   if (resortLineMatch) result.resort_name = resortLineMatch[1].trim();
 
   return result;
 }
+
+// ── Tiltó klauzulák keresése ─────────────────────────────────────────────
 
 function buildRestrictionHits(text: string) {
   const hits: Array<{
@@ -149,15 +359,15 @@ function buildRestrictionHits(text: string) {
         matched_text: rule.pattern,
         severity: rule.severity,
         action: rule.action,
-        details: {
-          source: "mvp_keyword_scan",
-        },
+        details: { source: "keyword_scan" },
       });
     }
   }
 
   return hits;
 }
+
+// ── check_results mentése ────────────────────────────────────────────────
 
 async function saveCheckResults(
   serviceClient: ReturnType<typeof createClient>,
@@ -186,8 +396,14 @@ async function saveCheckResults(
       case_id: caseId,
       document_id: documentId,
       check_type: `field_presence:${fieldKey}`,
-      result: extractedValue !== undefined && extractedValue !== null && extractedValue !== "" ? "pass" : "warning",
-      severity: extractedValue !== undefined && extractedValue !== null && extractedValue !== "" ? "info" : "medium",
+      result:
+        extractedValue !== undefined && extractedValue !== null && extractedValue !== ""
+          ? "pass"
+          : "warning",
+      severity:
+        extractedValue !== undefined && extractedValue !== null && extractedValue !== ""
+          ? "info"
+          : "medium",
       message:
         extractedValue !== undefined && extractedValue !== null && extractedValue !== ""
           ? `Field extracted: ${fieldKey}`
@@ -195,7 +411,7 @@ async function saveCheckResults(
       details: {
         field_key: fieldKey,
         extracted_value: extractedValue ?? null,
-        source: "process_document_mvp",
+        source: "process_document",
       },
     });
   }
@@ -206,10 +422,10 @@ async function saveCheckResults(
     check_type: "policy_version_linked",
     result: policyVersionId ? "pass" : "warning",
     severity: policyVersionId ? "info" : "medium",
-    message: policyVersionId ? "Policy version linked to AI job." : "No policy version linked to AI job.",
-    details: {
-      policy_version_id: policyVersionId,
-    },
+    message: policyVersionId
+      ? "Policy version linked to AI job."
+      : "No policy version linked to AI job.",
+    details: { policy_version_id: policyVersionId },
   });
 
   rows.push({
@@ -219,10 +435,10 @@ async function saveCheckResults(
     result: restrictionHits.length > 0 ? "warning" : "pass",
     severity: restrictionHits.length > 0 ? "high" : "info",
     message:
-      restrictionHits.length > 0 ? `Restriction hits found: ${restrictionHits.length}` : "No restriction hits found.",
-    details: {
-      restriction_hits_count: restrictionHits.length,
-    },
+      restrictionHits.length > 0
+        ? `Restriction hits found: ${restrictionHits.length}`
+        : "No restriction hits found.",
+    details: { restriction_hits_count: restrictionHits.length },
   });
 
   const hasConfirmedRestriction = restrictionHits.some((hit) => hit.severity === "confirmed");
@@ -235,18 +451,15 @@ async function saveCheckResults(
       result: "fail",
       severity: "high",
       message: "Confirmed restriction found in document.",
-      details: {
-        source: "mvp_keyword_scan",
-      },
+      details: { source: "keyword_scan" },
     });
   }
 
   const { error } = await serviceClient.from("check_results").insert(rows);
-
-  if (error) {
-    throw error;
-  }
+  if (error) throw error;
 }
+
+// ── case_restriction_hits mentése ────────────────────────────────────────
 
 async function saveRestrictionHits(
   serviceClient: ReturnType<typeof createClient>,
@@ -271,11 +484,10 @@ async function saveRestrictionHits(
   }));
 
   const { error } = await serviceClient.from("case_restriction_hits").insert(rows);
-
-  if (error) {
-    throw error;
-  }
+  if (error) throw error;
 }
+
+// ── Fő handler ────────────────────────────────────────────────────────────
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -315,15 +527,18 @@ Deno.serve(async (req) => {
       .single<JobRow>();
 
     if (jobLoadError || !job) {
-      return jsonResponse({ error: "AI validation job not found", detail: jobLoadError?.message ?? null }, 404);
+      return jsonResponse(
+        { error: "AI validation job not found", detail: jobLoadError?.message ?? null },
+        404,
+      );
     }
 
     if (!job.document_id) {
       return jsonResponse({ error: "Job has no document_id" }, 400);
     }
 
-    // 2. Job processing
-    const { error: jobStartError } = await serviceClient
+    // 2. Job → processing
+    await serviceClient
       .from("ai_validation_jobs")
       .update({
         status: "processing",
@@ -332,26 +547,12 @@ Deno.serve(async (req) => {
       })
       .eq("id", job.id);
 
-    if (jobStartError) {
-      return jsonResponse({ error: "Failed to mark job as processing", detail: jobStartError.message }, 500);
-    }
-
     // 3. Dokumentum betöltése
     const { data: doc, error: docLoadError } = await serviceClient
       .from("documents")
       .select(
-        `
-        id,
-        case_id,
-        document_type,
-        storage_bucket,
-        storage_path,
-        original_file_name,
-        mime_type,
-        file_size_bytes,
-        ai_status,
-        upload_status
-      `,
+        `id, case_id, document_type, storage_bucket, storage_path,
+         original_file_name, mime_type, file_size_bytes, ai_status, upload_status`,
       )
       .eq("id", job.document_id)
       .single<DocumentRow>();
@@ -361,10 +562,12 @@ Deno.serve(async (req) => {
     }
 
     if (doc.upload_status !== "uploaded") {
-      throw new Error(`Document upload_status must be 'uploaded', got '${doc.upload_status}'`);
+      throw new Error(
+        `Document upload_status must be 'uploaded', got '${doc.upload_status}'`,
+      );
     }
 
-    // 4. Dokumentum státusz processing
+    // 4. Dokumentum → processing
     await serviceClient
       .from("documents")
       .update({
@@ -381,34 +584,59 @@ Deno.serve(async (req) => {
       .download(doc.storage_path);
 
     if (downloadError || !fileData) {
-      throw new Error(`Failed to download file from storage: ${downloadError?.message ?? "unknown error"}`);
+      throw new Error(
+        `Failed to download file from storage: ${downloadError?.message ?? "unknown error"}`,
+      );
     }
 
-    // 6. MVP text extraction
-    // Most OCR helyett nyers text olvasás / best effort.
+    // 6. OCR / szöveg kinyerése
+    const openAiKey = Deno.env.get("OPENAI_API_KEY") ?? "";
     let extractedTextRaw = "";
+    let ocrMethod = "unknown";
+
     try {
-      extractedTextRaw = await fileData.text();
-    } catch {
+      const { text, method } = await extractTextFromFile(
+        fileData,
+        doc.mime_type,
+        doc.original_file_name,
+        openAiKey,
+      );
+      extractedTextRaw = text;
+      ocrMethod = method;
+      console.log(`OCR completed: method=${method}, chars=${text.length}`);
+    } catch (ocrErr) {
+      console.error("Text extraction error:", ocrErr);
       extractedTextRaw = "";
+      ocrMethod = "error";
     }
 
-    // 7. document type detection
+    // 7. Dokumentumtípus felismerés
     const detectedType = detectDocumentType(doc.document_type, doc.original_file_name);
 
-    // 8. normalized field extraction
+    // 8. Mező kinyerés
     const extractedFields = extractFieldsFromText(extractedTextRaw, detectedType);
 
-    // 9. form data comparison helye
-    // Most MVP-ben még csak extraction resultokat mentünk.
-
-    // 10. restriction scan
+    // 9. Tiltó klauzula keresés
     const restrictionHits = buildRestrictionHits(extractedTextRaw);
-    await saveRestrictionHits(serviceClient, doc.case_id, doc.id, job.policy_version_id, restrictionHits);
+    await saveRestrictionHits(
+      serviceClient,
+      doc.case_id,
+      doc.id,
+      job.policy_version_id,
+      restrictionHits,
+    );
 
-    await saveCheckResults(serviceClient, doc.case_id, doc.id, extractedFields, restrictionHits, job.policy_version_id);
+    // 10. check_results mentése
+    await saveCheckResults(
+      serviceClient,
+      doc.case_id,
+      doc.id,
+      extractedFields,
+      restrictionHits,
+      job.policy_version_id,
+    );
 
-    // 11. Dokumentum összegzés
+    // 11. Dokumentum lezárása
     const hasConfirmedRestriction = restrictionHits.some((hit) => hit.severity === "confirmed");
     const validationStatus = hasConfirmedRestriction ? "restriction_confirmed" : "match_ok";
 
@@ -422,6 +650,8 @@ Deno.serve(async (req) => {
         extracted_text: {
           raw_text: extractedTextRaw,
           detected_document_type: detectedType,
+          ocr_method: ocrMethod,
+          chars_extracted: extractedTextRaw.length,
         },
         extracted_fields: extractedFields,
       })
@@ -437,11 +667,13 @@ Deno.serve(async (req) => {
           detected_document_type: detectedType,
           extracted_fields: extractedFields,
           restriction_hits_count: restrictionHits.length,
+          ocr_method: ocrMethod,
+          chars_extracted: extractedTextRaw.length,
         },
       })
       .eq("id", job.id);
 
-    // 13. classify-case trigger
+    // 13. classify-case meghívása
     try {
       const classifyResponse = await fetch(`${supabaseUrl}/functions/v1/classify-case`, {
         method: "POST",
@@ -471,6 +703,8 @@ Deno.serve(async (req) => {
       detected_document_type: detectedType,
       extracted_fields: extractedFields,
       restriction_hits_count: restrictionHits.length,
+      ocr_method: ocrMethod,
+      chars_extracted: extractedTextRaw.length,
     });
   } catch (err) {
     console.error("process-document unhandled error:", err);
@@ -506,9 +740,7 @@ Deno.serve(async (req) => {
           if (failedJob?.case_id) {
             await serviceClient
               .from("cases")
-              .update({
-                ai_pipeline_status: "failed",
-              })
+              .update({ ai_pipeline_status: "failed" })
               .eq("id", failedJob.case_id);
           }
         }
