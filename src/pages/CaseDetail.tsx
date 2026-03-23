@@ -346,48 +346,21 @@ export default function CaseDetail() {
   const handleRecheckRequested = useCallback(async () => {
     if (!caseId) throw new Error("Hiányzó ügyazonosító.");
 
-    // 1. státusz visszaállítása feldolgozásra
-    const { error: caseUpdateError } = await supabaseAny
-      .from("cases")
-      .update({
-        ai_pipeline_status: "queued",
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", caseId);
+    const { error } = await supabase.functions.invoke("recheck-case", {
+      body: { case_id: caseId },
+    });
 
-    if (caseUpdateError) throw caseUpdateError;
+    if (error) throw error;
 
-    // 2. ÖSSZES dokumentum lekérése
-    const { data: docs, error: docsError } = await supabaseAny.from("documents").select("id").eq("case_id", caseId);
-
-    if (docsError) throw docsError;
-
-    if (!docs || docs.length === 0) {
-      throw new Error("Nincs dokumentum az újraellenőrzéshez.");
-    }
-
-    // 3. MINDEN dokumentum újrafeldolgozása
-    for (const doc of docs) {
-      const { error: processError } = await supabase.functions.invoke("process-document", {
-        body: {
-          document_id: doc.id,
-          trigger_source: "seller_recheck",
-        },
-      });
-
-      if (processError) throw processError;
-    }
-
-    // 4. UI frissítés
-    await loadCheckResults();
-    await loadClassification();
-    await loadUploadedDocuments();
+    // UI frissítés
+    await Promise.all([loadCheckResults(), loadClassification(), loadUploadedDocuments()]);
 
     setCaseData((prev) =>
       prev
         ? {
             ...prev,
             ai_pipeline_status: "queued",
+            classification: null,
             updated_at: new Date().toISOString(),
           }
         : prev,
