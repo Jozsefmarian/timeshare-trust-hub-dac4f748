@@ -213,8 +213,11 @@ export default function NewCase() {
       const caseId = caseData.id;
 
       // Create week_offer
+      const selectedResort = resortOptions.find((r) => r.name === resort);
+
       await supabaseAny.from("week_offers").insert({
         case_id: caseId,
+        resort_id: selectedResort?.id ?? null,
         resort_name_raw: resort.trim(),
         week_number: Number(weekNumber),
         unit_type: apartmentType.trim(),
