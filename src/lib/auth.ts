@@ -10,8 +10,6 @@ export type AppProfile = {
   role: AppRole | null;
 };
 
-const sb = supabase as any;
-
 export async function getSessionAndProfile(): Promise<{
   session: Session | null;
   profile: AppProfile | null;
@@ -27,7 +25,7 @@ export async function getSessionAndProfile(): Promise<{
     return { session: null, profile: null };
   }
 
-  const { data: profile, error: profileError } = await sb
+  const { data: profile, error: profileError } = await (supabase as any)
     .from("profiles")
     .select("id, email, full_name, role")
     .eq("id", session.user.id)
