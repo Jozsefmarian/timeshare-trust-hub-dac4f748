@@ -32,6 +32,16 @@ verify_jwt = false
 [functions.classify-case]
 verify_jwt = false
 
+[functions.create-stripe-checkout]
+verify_jwt = true
+
+# Stripe közvetlenül hívja, JWT nem kell
+[functions.stripe-webhook]
+verify_jwt = false
+
+[functions.close-case-and-create-asset]
+verify_jwt = false
+
 
   
 ```
