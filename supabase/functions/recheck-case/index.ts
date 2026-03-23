@@ -1,21 +1,35 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
-};
+const ALLOWED_ORIGINS = [
+  "https://timeshareease.hu",
+  "https://www.timeshareease.hu",
+  "http://localhost:5173",
+  "http://localhost:3000",
+];
 
-function jsonResponse(body: Record<string, unknown>, status = 200) {
+function getCorsHeaders(req: Request): Record<string, string> {
+  const origin = req.headers.get("Origin") ?? "";
+  const allowedOrigin = ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0];
+  return {
+    "Access-Control-Allow-Origin": allowedOrigin,
+    "Access-Control-Allow-Headers":
+      "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
+  };
+}
+
+function jsonResponse(body: Record<string, unknown>, status = 200, req?: Request) {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
+    headers: {
+      ...(req ? getCorsHeaders(req) : { "Access-Control-Allow-Origin": ALLOWED_ORIGINS[0] }),
+      "Content-Type": "application/json",
+    },
   });
 }
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
+    return new Response(null, { headers: getCorsHeaders(req) });
   }
 
   if (req.method !== "POST") {
@@ -44,7 +58,10 @@ Deno.serve(async (req) => {
     const serviceClient = createClient(supabaseUrl, serviceRoleKey);
 
     const token = authHeader.replace("Bearer ", "");
-    const { data: { user }, error: userError } = await authClient.auth.getUser(token);
+    const {
+      data: { user },
+      error: userError,
+    } = await authClient.auth.getUser(token);
 
     if (userError || !user) {
       return jsonResponse({ error: "Unauthorized" }, 401);
@@ -80,19 +97,19 @@ Deno.serve(async (req) => {
     // Csak sárga státuszból indítható újraellenőrzés
     const allowedStatuses = ["yellow_review", "docs_uploaded", "submitted"];
     if (!allowedStatuses.includes(caseRow.status)) {
-      return jsonResponse({
-        error: "Recheck not allowed from current status",
-        detail: `Current status: ${caseRow.status}`,
-      }, 409);
+      return jsonResponse(
+        {
+          error: "Recheck not allowed from current status",
+          detail: `Current status: ${caseRow.status}`,
+        },
+        409,
+      );
     }
 
     // 4. Régi AI eredmények törlése (invalidálás)
 
     // check_results törlése
-    const { error: checkDeleteError } = await serviceClient
-      .from("check_results")
-      .delete()
-      .eq("case_id", case_id);
+    const { error: checkDeleteError } = await serviceClient.from("check_results").delete().eq("case_id", case_id);
 
     if (checkDeleteError) {
       console.error("Failed to delete check_results:", checkDeleteError);
@@ -114,10 +131,7 @@ Deno.serve(async (req) => {
     // Nem töröljük, mert audit trail szempontból fontos — de az újabb mindig a legfrissebb lesz
     // A classify-case mindig a legutóbbi classifications rekordot veszi figyelembe
     // Ezért töröljük és újat hozunk létre
-    const { error: classDeleteError } = await serviceClient
-      .from("classifications")
-      .delete()
-      .eq("case_id", case_id);
+    const { error: classDeleteError } = await serviceClient.from("classifications").delete().eq("case_id", case_id);
 
     if (classDeleteError) {
       console.error("Failed to delete classifications:", classDeleteError);
@@ -204,10 +218,7 @@ Deno.serve(async (req) => {
       }
 
       // last_ai_job_id frissítése a dokumentumon
-      await serviceClient
-        .from("documents")
-        .update({ last_ai_job_id: newJob.id })
-        .eq("id", doc.id);
+      await serviceClient.from("documents").update({ last_ai_job_id: newJob.id }).eq("id", doc.id);
 
       // process-document meghívása
       try {
@@ -252,12 +263,14 @@ Deno.serve(async (req) => {
       document_count: docs.length,
       jobs: jobResults,
     });
-
   } catch (err) {
     console.error("recheck-case unhandled error:", err);
-    return jsonResponse({
-      error: "Internal server error",
-      detail: err instanceof Error ? err.message : "Unknown error",
-    }, 500);
+    return jsonResponse(
+      {
+        error: "Internal server error",
+        detail: err instanceof Error ? err.message : "Unknown error",
+      },
+      500,
+    );
   }
 });
