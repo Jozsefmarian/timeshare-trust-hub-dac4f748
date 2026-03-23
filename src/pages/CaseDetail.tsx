@@ -223,7 +223,7 @@ export default function CaseDetail() {
         "id, status, generated_file_name, generated_storage_bucket, generated_storage_path, signed_file_name, signed_storage_bucket, signed_storage_path, generated_at, signed_uploaded_at",
       )
       .eq("case_id", caseId)
-      .eq("contract_type", "sale_purchase")
+      .eq("contract_type", "sale_contract")
       .maybeSingle();
     setContract(data as ContractRow | null);
   }, [caseId]);

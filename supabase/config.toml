@@ -21,3 +21,6 @@ verify_jwt = false
 [functions.submit-case]
 verify_jwt = false
 
+[functions.recheck-case]
+verify_jwt = false
+
