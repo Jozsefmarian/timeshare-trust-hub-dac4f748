@@ -89,6 +89,11 @@ export default function NewCase() {
   const [ownerAddress, setOwnerAddress] = useState("");
   const [ownerEmail, setOwnerEmail] = useState("");
   const [ownerPhone, setOwnerPhone] = useState("");
+  const [ownerBirthDate, setOwnerBirthDate] = useState("");
+  const [ownerBirthPlace, setOwnerBirthPlace] = useState("");
+  const [ownerMotherName, setOwnerMotherName] = useState("");
+  const [ownerIdNumber, setOwnerIdNumber] = useState("");
+  const [ownerTaxId, setOwnerTaxId] = useState("");
 
   // Step 2
   const [resort, setResort] = useState("");
@@ -164,6 +169,11 @@ export default function NewCase() {
             user_id: session.user.id,
             billing_name: ownerName.trim(),
             billing_address: ownerAddress.trim(),
+            id_number: ownerIdNumber.trim() || null,
+            tax_id: ownerTaxId.trim() || null,
+            birth_date: ownerBirthDate || null,
+            birth_place: ownerBirthPlace.trim() || null,
+            mother_name: ownerMotherName.trim() || null,
             notes: sellerProfileNotes || null,
           },
           { onConflict: "user_id" },
@@ -230,6 +240,11 @@ export default function NewCase() {
     ownerAddress,
     ownerEmail,
     ownerPhone,
+    ownerBirthDate,
+    ownerBirthPlace,
+    ownerMotherName,
+    ownerIdNumber,
+    ownerTaxId,
     resort,
     weekNumber,
     apartmentType,
@@ -363,7 +378,16 @@ export default function NewCase() {
   const canProceed = () => {
     switch (step) {
       case 0:
-        return ownerName && ownerAddress && ownerEmail && ownerPhone;
+        return !!(
+          ownerName &&
+          ownerAddress &&
+          ownerEmail &&
+          ownerPhone &&
+          ownerBirthDate &&
+          ownerBirthPlace &&
+          ownerMotherName &&
+          ownerIdNumber
+        );
       case 1:
         return (
           !!resort &&
@@ -515,7 +539,7 @@ export default function NewCase() {
             {step === 0 && (
               <div className="grid gap-4">
                 <div className="space-y-1.5">
-                  <Label htmlFor="ownerName">Teljes név</Label>
+                  <Label htmlFor="ownerName">Teljes név *</Label>
                   <Input
                     id="ownerName"
                     placeholder="Kovács János"
@@ -524,7 +548,7 @@ export default function NewCase() {
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label htmlFor="ownerAddress">Lakcím</Label>
+                  <Label htmlFor="ownerAddress">Lakcím *</Label>
                   <Input
                     id="ownerAddress"
                     placeholder="1011 Budapest, Fő utca 1."
@@ -534,7 +558,7 @@ export default function NewCase() {
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-1.5">
-                    <Label htmlFor="ownerEmail">E-mail cím</Label>
+                    <Label htmlFor="ownerEmail">E-mail cím *</Label>
                     <Input
                       id="ownerEmail"
                       type="email"
@@ -554,6 +578,56 @@ export default function NewCase() {
                     />
                   </div>
                 </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="ownerIdNumber">Személyi igazolvány száma *</Label>
+                    <Input
+                      id="ownerIdNumber"
+                      placeholder="123456AB"
+                      value={ownerIdNumber}
+                      onChange={(e) => setOwnerIdNumber(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="ownerTaxId">Adóazonosító jel</Label>
+                    <Input
+                      id="ownerTaxId"
+                      placeholder="8012345678"
+                      value={ownerTaxId}
+                      onChange={(e) => setOwnerTaxId(e.target.value)}
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="ownerBirthDate">Születési dátum *</Label>
+                    <Input
+                      id="ownerBirthDate"
+                      type="date"
+                      value={ownerBirthDate}
+                      onChange={(e) => setOwnerBirthDate(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="ownerBirthPlace">Születési hely *</Label>
+                    <Input
+                      id="ownerBirthPlace"
+                      placeholder="Budapest"
+                      value={ownerBirthPlace}
+                      onChange={(e) => setOwnerBirthPlace(e.target.value)}
+                    />
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="ownerMotherName">Anyja neve *</Label>
+                  <Input
+                    id="ownerMotherName"
+                    placeholder="Szabó Mária"
+                    value={ownerMotherName}
+                    onChange={(e) => setOwnerMotherName(e.target.value)}
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground">* Kötelező mező</p>
               </div>
             )}
 
