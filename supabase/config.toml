@@ -25,6 +25,11 @@ verify_jwt = false
 
 [functions.classify-case]
 verify_jwt = false
+
+[functions.admin-manual-classification]
+verify_jwt = false
+
+  
 ```
 
 ---
