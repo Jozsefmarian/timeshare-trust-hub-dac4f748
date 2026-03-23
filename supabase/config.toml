@@ -29,7 +29,7 @@ verify_jwt = false
 [functions.admin-manual-classification]
 verify_jwt = false
 
-  [functions.publish-policy]
+[functions.publish-policy]
 verify_jwt = false
   
   
