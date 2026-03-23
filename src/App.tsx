@@ -127,6 +127,22 @@ const App = () => (
             }
           />
           <Route
+            path="/admin/policies/:policyId"
+            element={
+              <ProtectedRoute allowedRoles={["admin"]}>
+                <AdminPolicyDetail />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/inventory/:assetId"
+            element={
+              <ProtectedRoute allowedRoles={["admin"]}>
+                <AdminInventoryDetail />
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="/admin/resorts"
             element={
               <ProtectedRoute allowedRoles={["admin"]}>
