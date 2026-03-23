@@ -19,15 +19,6 @@ const supabaseAny: any = supabase;
 
 const STEPS = ["Tulajdonos adatai", "Üdülési jog adatai", "Nyilatkozatok", "Dokumentum feltöltés"];
 
-const RESORTS = [
-  "Marriott Vacation Club",
-  "Hilton Grand Vacations",
-  "Wyndham Resorts",
-  "Club Dobogómajor",
-  "Danubius Health Spa Resort",
-  "Hunguest Hotels",
-];
-
 const DOC_CATEGORIES = {
   timeshare_contract: {
     label: "Üdülőhasználati szerződés",
@@ -95,6 +86,9 @@ export default function NewCase() {
   const [ownerIdNumber, setOwnerIdNumber] = useState("");
   const [ownerTaxId, setOwnerTaxId] = useState("");
 
+  // Resorts from DB
+  const [resortOptions, setResortOptions] = useState<{ id: string; name: string }[]>([]);
+
   // Step 2
   const [resort, setResort] = useState("");
   const [weekNumber, setWeekNumber] = useState("");
@@ -124,6 +118,20 @@ export default function NewCase() {
   const draftCreating = useRef(false);
 
   const isShareRelated = hasShares === "yes";
+
+  // Resorts betöltése DB-ből
+  useEffect(() => {
+    const loadResorts = async () => {
+      const { data } = await supabaseAny
+        .from("resorts")
+        .select("id, name")
+        .eq("is_active", true)
+        .eq("is_supported", true)
+        .order("name", { ascending: true });
+      if (data) setResortOptions(data as { id: string; name: string }[]);
+    };
+    loadResorts();
+  }, []);
 
   // Load document_types mapping
   const ensureDocTypesLoaded = useCallback(async () => {
@@ -640,9 +648,14 @@ export default function NewCase() {
                       <SelectValue placeholder="Válasszon üdülőhelyet" />
                     </SelectTrigger>
                     <SelectContent>
-                      {RESORTS.map((r) => (
-                        <SelectItem key={r} value={r}>
-                          {r}
+                      {resortOptions.length === 0 && (
+                        <SelectItem value="_loading" disabled>
+                          Betöltés...
+                        </SelectItem>
+                      )}
+                      {resortOptions.map((r) => (
+                        <SelectItem key={r.id} value={r.name}>
+                          {r.name}
                         </SelectItem>
                       ))}
                     </SelectContent>
