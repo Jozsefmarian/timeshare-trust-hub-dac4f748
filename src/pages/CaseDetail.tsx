@@ -221,11 +221,11 @@ export default function CaseDetail() {
     const { data } = await supabaseAny
       .from("contracts")
       .select(
-        "id, status, generated_file_name, generated_storage_bucket, generated_storage_path, signed_file_name, signed_storage_bucket, signed_storage_path, generated_at, signed_uploaded_at",
+        "id, contract_type, status, generated_file_name, generated_storage_bucket, generated_storage_path, signed_file_name, signed_storage_bucket, signed_storage_path, generated_at, signed_uploaded_at",
       )
       .eq("case_id", caseId)
-      .eq("contract_type", "sale_contract")
-      .maybeSingle();
+      .in("contract_type", ["timeshare_transfer", "power_of_attorney", "share_transfer", "securities_transfer"])
+      .order("created_at", { ascending: true });
     setContracts((data as ContractRow[]) ?? []);
   }, [caseId]);
 
