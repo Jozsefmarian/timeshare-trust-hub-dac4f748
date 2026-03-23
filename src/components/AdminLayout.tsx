@@ -26,21 +26,8 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
   const location = useLocation();
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [profile, setProfile] = useState<AppProfile | null>(null);
+  const { profile } = useAuth();
   const [isSigningOut, setIsSigningOut] = useState(false);
-
-  useEffect(() => {
-    const loadProfile = async () => {
-      try {
-        const { profile } = await getSessionAndProfile();
-        setProfile(profile);
-      } catch (error) {
-        console.error("AdminLayout profile load error:", error);
-      }
-    };
-
-    loadProfile();
-  }, []);
 
   const handleSignOut = async () => {
     try {
