@@ -1,26 +1,61 @@
 project_id = "nowfrwpknymkzujijgsz"
 
+# Felhasználói hívások — JWT kötelező
 [functions.upload-document-init]
-verify_jwt = false
+verify_jwt = true
 
 [functions.confirm-document-upload]
-verify_jwt = false
+verify_jwt = true
 
+[functions.submit-case]
+verify_jwt = true
+
+[functions.accept-service-agreement]
+verify_jwt = true
+
+[functions.generate-sale-contract]
+verify_jwt = true
+
+[functions.recheck-case]
+verify_jwt = true
+
+# Belső hívások — service role hívja, JWT nem kell
 [functions.process-document]
 verify_jwt = false
 
 [functions.classify-case]
 verify_jwt = false
+```
 
-[functions.generate-sale-contract]
-verify_jwt = false
+---
 
-[functions.accept-service-agreement]
-verify_jwt = false
+## 8B. `.gitignore` — `.env` hozzáadása
 
-[functions.submit-case]
-verify_jwt = false
+**Fájl:** `.gitignore`
 
-[functions.recheck-case]
-verify_jwt = false
+Nyisd meg a fájlt és keresd meg ezt a sort:
+```
+*.local
+```
 
+Ez után közvetlenül add hozzá ezeket az új sorokat:
+```
+.env
+.env.production
+.env.local
+```
+
+---
+
+## 8C. `.env.example` létrehozása
+
+A repo gyökerében hozz létre egy új fájlt `.env.example` névvel. Ez dokumentálja milyen változók kellenek, de nem tartalmaz éles értékeket.
+
+**Fájl:** `.env.example`
+
+**Teljes tartalom:**
+```
+# Supabase
+VITE_SUPABASE_URL=https://your-project.supabase.co
+VITE_SUPABASE_PUBLISHABLE_KEY=your-anon-key
+VITE_SUPABASE_PROJECT_ID=your-project-id
