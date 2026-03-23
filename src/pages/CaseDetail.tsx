@@ -61,6 +61,7 @@ type DocumentType = {
 
 type ContractRow = {
   id: string;
+  contract_type: string;
   status: string;
   generated_file_name: string | null;
   generated_storage_bucket: string | null;
@@ -225,7 +226,7 @@ export default function CaseDetail() {
       .eq("case_id", caseId)
       .eq("contract_type", "sale_contract")
       .maybeSingle();
-    setContract(data as ContractRow | null);
+    setContracts((data as ContractRow[]) ?? []);
   }, [caseId]);
 
   const loadClassification = useCallback(async () => {
