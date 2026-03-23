@@ -490,12 +490,12 @@ export default function CaseDetail() {
             {isRejected && <RejectedPanel reasonSummary={classification?.reason_summary} />}
 
             {/* Contract panel */}
-            {contract && isAtOrPast(status, "green_approved") && !shouldHideForwardFlow && (
+            {isAtOrPast(status, "green_approved") && !shouldHideForwardFlow && (
               <ContractPanel
-                contract={contract}
+                contracts={contracts}
                 caseId={caseId!}
                 caseStatus={status}
-                onContractUpdated={loadContract}
+                onContractsUpdated={loadContract}
                 onCaseStatusUpdated={handleCaseStatusUpdate}
               />
             )}
