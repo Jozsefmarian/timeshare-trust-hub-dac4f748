@@ -463,7 +463,27 @@ export default function AdminCaseReview() {
     }
   };
 
-  const handleApproveCase = () => updateCaseStatus("contract_pending", adminNote || undefined);
+  const handleManualClassification = async (classification: "green" | "yellow" | "red", reason: string) => {
+    try {
+      setIsCaseAction(true);
+      const { error } = await supabase.functions.invoke("admin-manual-classification", {
+        body: {
+          case_id: caseId,
+          classification,
+          reason,
+        },
+      });
+      if (error) throw error;
+      toast.success(`Besorolás frissítve: ${classificationLabel(classification)}`);
+      await loadAll();
+    } catch (err: any) {
+      toast.error(err?.message || "A besorolás frissítése nem sikerült.");
+    } finally {
+      setIsCaseAction(false);
+    }
+  };
+
+  const handleApproveCase = () => handleManualClassification("green", adminNote || "Admin jóváhagyás");
 
   const handleRequestFix = async () => {
     await updateCaseStatus("under_review", requestFixNote);
