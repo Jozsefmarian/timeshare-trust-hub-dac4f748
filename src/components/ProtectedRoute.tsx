@@ -1,6 +1,7 @@
-import { ReactNode, useEffect, useState } from "react";
+import { ReactNode } from "react";
 import { Navigate, useLocation } from "react-router-dom";
-import { getDefaultRouteForRole, getSessionAndProfile, type AppRole } from "@/lib/auth";
+import { getDefaultRouteForRole, type AppRole } from "@/lib/auth";
+import { useAuth } from "@/context/AuthContext";
 
 type ProtectedRouteProps = {
   allowedRoles: AppRole[];
@@ -9,48 +10,7 @@ type ProtectedRouteProps = {
 
 export default function ProtectedRoute({ allowedRoles, children }: ProtectedRouteProps) {
   const location = useLocation();
-  const [isLoading, setIsLoading] = useState(true);
-  const [redirectTo, setRedirectTo] = useState<string | null>(null);
-
-  useEffect(() => {
-    let mounted = true;
-
-    const run = async () => {
-      try {
-        const { session, profile } = await getSessionAndProfile();
-
-        if (!mounted) return;
-
-        if (!session) {
-          setRedirectTo("/auth");
-          return;
-        }
-
-        if (!profile?.role) {
-          setRedirectTo("/auth");
-          return;
-        }
-
-        if (!allowedRoles.includes(profile.role)) {
-          setRedirectTo(getDefaultRouteForRole(profile.role));
-          return;
-        }
-
-        setRedirectTo(null);
-      } catch (error) {
-        console.error("ProtectedRoute error:", error);
-        if (mounted) setRedirectTo("/auth");
-      } finally {
-        if (mounted) setIsLoading(false);
-      }
-    };
-
-    run();
-
-    return () => {
-      mounted = false;
-    };
-  }, [allowedRoles]);
+  const { profile, isLoading } = useAuth();
 
   if (isLoading) {
     return (
@@ -60,8 +20,12 @@ export default function ProtectedRoute({ allowedRoles, children }: ProtectedRout
     );
   }
 
-  if (redirectTo) {
-    return <Navigate to={redirectTo} replace state={{ from: location }} />;
+  if (!profile) {
+    return <Navigate to="/auth" replace state={{ from: location }} />;
+  }
+
+  if (!allowedRoles.includes(profile.role as AppRole)) {
+    return <Navigate to={getDefaultRouteForRole(profile.role)} replace state={{ from: location }} />;
   }
 
   return <>{children}</>;
