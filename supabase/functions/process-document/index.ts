@@ -84,11 +84,7 @@ function uint8ToBase64(bytes: Uint8Array): string {
 /**
  * Kép küldése az OpenAI Vision API-nak szövegkinyerésre.
  */
-async function callOpenAIVision(
-  base64: string,
-  mimeType: string,
-  openAiKey: string,
-): Promise<string> {
+async function callOpenAIVision(base64: string, mimeType: string, openAiKey: string): Promise<string> {
   const response = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
     headers: {
@@ -132,11 +128,7 @@ async function callOpenAIVision(
 /**
  * PDF küldése az OpenAI API-nak szövegkinyerésre (gpt-5.4-nano file input).
  */
-async function callOpenAIPDF(
-  base64: string,
-  fileName: string,
-  openAiKey: string,
-): Promise<string> {
+async function callOpenAIPDF(base64: string, fileName: string, openAiKey: string): Promise<string> {
   const response = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
     headers: {
@@ -260,15 +252,9 @@ function detectDocumentType(documentType: string | null, fileName: string | null
   const source = normalizeText(`${documentType ?? ""} ${fileName ?? ""}`);
 
   if (source.includes("share") || source.includes("reszveny")) return "share_statement";
-  if (source.includes("szemelyi") || source.includes("id") || source.includes("passport"))
-    return "id_document";
-  if (source.includes("fee") || source.includes("dij") || source.includes("szamla"))
-    return "annual_fee_invoice";
-  if (
-    source.includes("contract") ||
-    source.includes("szerzodes") ||
-    source.includes("timeshare")
-  )
+  if (source.includes("szemelyi") || source.includes("id") || source.includes("passport")) return "id_document";
+  if (source.includes("fee") || source.includes("dij") || source.includes("szamla")) return "annual_fee_invoice";
+  if (source.includes("contract") || source.includes("szerzodes") || source.includes("timeshare"))
     return "timeshare_contract";
 
   return "other";
@@ -290,29 +276,19 @@ function extractFieldsFromText(text: string, detectedType: string) {
   );
   if (contractMatch) result.contract_number = contractMatch[1];
 
-  const endYearMatch = normalized.match(
-    /(?:lej[aá]rat|end year|v[eé]g(?:e)?)\s*[:\-]?\s*(20\d{2})/i,
-  );
+  const endYearMatch = normalized.match(/(?:lej[aá]rat|end year|v[eé]g(?:e)?)\s*[:\-]?\s*(20\d{2})/i);
   if (endYearMatch) result.end_year = Number(endYearMatch[1]);
 
-  const shareCountMatch = normalized.match(
-    /(?:r[eé]szv[eé]ny(?:ek)?\s*sz[aá]ma|share count)\s*[:\-]?\s*(\d+)/i,
-  );
+  const shareCountMatch = normalized.match(/(?:r[eé]szv[eé]ny(?:ek)?\s*sz[aá]ma|share count)\s*[:\-]?\s*(\d+)/i);
   if (shareCountMatch) result.share_count = Number(shareCountMatch[1]);
 
-  const annualFeeMatch = normalized.match(
-    /(?:fenntart[aá]si d[ií]j|annual fee)\s*[:\-]?\s*([\d\s.,]+)\s*(?:ft|huf)?/i,
-  );
+  const annualFeeMatch = normalized.match(/(?:fenntart[aá]si d[ií]j|annual fee)\s*[:\-]?\s*([\d\s.,]+)\s*(?:ft|huf)?/i);
   if (annualFeeMatch) result.annual_fee = annualFeeMatch[1].trim();
 
-  const ownerLineMatch = normalized.match(
-    /(?:jogosult|tulajdonos|owner|n[eé]v)\s*[:\-]?\s*([^\n]+)/i,
-  );
+  const ownerLineMatch = normalized.match(/(?:jogosult|tulajdonos|owner|n[eé]v)\s*[:\-]?\s*([^\n]+)/i);
   if (ownerLineMatch) result.owner_name = ownerLineMatch[1].trim();
 
-  const resortLineMatch = normalized.match(
-    /(?:üdül[őo]ingatlan|resort|hotel|club)\s*[:\-]?\s*([^\n]+)/i,
-  );
+  const resortLineMatch = normalized.match(/(?:üdül[őo]ingatlan|resort|hotel|club)\s*[:\-]?\s*([^\n]+)/i);
   if (resortLineMatch) result.resort_name = resortLineMatch[1].trim();
 
   return result;
@@ -367,6 +343,105 @@ function buildRestrictionHits(text: string) {
   return hits;
 }
 
+// ── Form vs. dokumentum összehasonlítás (mismatch motor) ─────────────────
+
+type WeekOfferRow = {
+  resort_name_raw: string | null;
+  week_number: number | null;
+  unit_type: string | null;
+  season_label: string | null;
+  rights_end_year: number | null;
+};
+
+type MismatchResult = {
+  field_name: string;
+  field_label: string;
+  form_value: string | number | null;
+  doc_value: string | number | null;
+  is_mismatch: boolean;
+};
+
+/**
+ * Szöveg hasonlóság: normalizált szövegek részleges egyezésvizsgálata.
+ * Visszaad true-t ha elég hasonlóak (nem kell tökéletes egyezés).
+ */
+function textSimilar(a: string, b: string): boolean {
+  const na = normalizeText(a);
+  const nb = normalizeText(b);
+  if (na === nb) return true;
+  // Részleges egyezés: az egyik tartalmazza a másikat
+  if (na.length > 3 && nb.includes(na)) return true;
+  if (nb.length > 3 && na.includes(nb)) return true;
+  // Első szó egyezés (resort nevek csonkolva is elfogadhatók)
+  const aFirst = na.split(" ")[0];
+  const bFirst = nb.split(" ")[0];
+  if (aFirst.length > 4 && aFirst === bFirst) return true;
+  return false;
+}
+
+/**
+ * Összehasonlítja a kinyert dokumentummezőket a seller form adataival.
+ * Csak akkor jelez eltérést, ha MINDKÉT oldalon van adat.
+ */
+function compareWithWeekOffer(extractedFields: Record<string, unknown>, weekOffer: WeekOfferRow): MismatchResult[] {
+  const results: MismatchResult[] = [];
+
+  // 1. Resort neve
+  const docResort = extractedFields.resort_name as string | null | undefined;
+  const formResort = weekOffer.resort_name_raw;
+  if (docResort && formResort) {
+    const match = textSimilar(docResort, formResort);
+    results.push({
+      field_name: "resort_name_raw",
+      field_label: "Üdülőhely neve",
+      form_value: formResort,
+      doc_value: docResort,
+      is_mismatch: !match,
+    });
+  }
+
+  // 2. Hét száma
+  const docWeek = extractedFields.week_number as number | null | undefined;
+  const formWeek = weekOffer.week_number;
+  if (docWeek != null && formWeek != null) {
+    results.push({
+      field_name: "week_number",
+      field_label: "Hét száma",
+      form_value: formWeek,
+      doc_value: docWeek,
+      is_mismatch: Number(docWeek) !== Number(formWeek),
+    });
+  }
+
+  // 3. Apartman típus
+  const docUnit = extractedFields.unit_type as string | null | undefined;
+  const formUnit = weekOffer.unit_type;
+  if (docUnit && formUnit) {
+    results.push({
+      field_name: "unit_type",
+      field_label: "Apartman típus",
+      form_value: formUnit,
+      doc_value: docUnit,
+      is_mismatch: !textSimilar(docUnit, formUnit),
+    });
+  }
+
+  // 4. Jogosultság vége (end_year)
+  const docEndYear = extractedFields.end_year as number | null | undefined;
+  const formEndYear = weekOffer.rights_end_year;
+  if (docEndYear != null && formEndYear != null) {
+    results.push({
+      field_name: "rights_end_year",
+      field_label: "Jogosultság vége (év)",
+      form_value: formEndYear,
+      doc_value: docEndYear,
+      is_mismatch: Number(docEndYear) !== Number(formEndYear),
+    });
+  }
+
+  return results;
+}
+
 // ── check_results mentése ────────────────────────────────────────────────
 
 async function saveCheckResults(
@@ -376,6 +451,7 @@ async function saveCheckResults(
   extractedFields: Record<string, unknown>,
   restrictionHits: ReturnType<typeof buildRestrictionHits>,
   policyVersionId: string | null,
+  mismatchResults: MismatchResult[] = [],
 ) {
   const rows: Array<Record<string, unknown>> = [];
 
@@ -396,14 +472,8 @@ async function saveCheckResults(
       case_id: caseId,
       document_id: documentId,
       check_type: `field_presence:${fieldKey}`,
-      result:
-        extractedValue !== undefined && extractedValue !== null && extractedValue !== ""
-          ? "pass"
-          : "warning",
-      severity:
-        extractedValue !== undefined && extractedValue !== null && extractedValue !== ""
-          ? "info"
-          : "medium",
+      result: extractedValue !== undefined && extractedValue !== null && extractedValue !== "" ? "pass" : "warning",
+      severity: extractedValue !== undefined && extractedValue !== null && extractedValue !== "" ? "info" : "medium",
       message:
         extractedValue !== undefined && extractedValue !== null && extractedValue !== ""
           ? `Field extracted: ${fieldKey}`
@@ -422,9 +492,7 @@ async function saveCheckResults(
     check_type: "policy_version_linked",
     result: policyVersionId ? "pass" : "warning",
     severity: policyVersionId ? "info" : "medium",
-    message: policyVersionId
-      ? "Policy version linked to AI job."
-      : "No policy version linked to AI job.",
+    message: policyVersionId ? "Policy version linked to AI job." : "No policy version linked to AI job.",
     details: { policy_version_id: policyVersionId },
   });
 
@@ -435,9 +503,7 @@ async function saveCheckResults(
     result: restrictionHits.length > 0 ? "warning" : "pass",
     severity: restrictionHits.length > 0 ? "high" : "info",
     message:
-      restrictionHits.length > 0
-        ? `Restriction hits found: ${restrictionHits.length}`
-        : "No restriction hits found.",
+      restrictionHits.length > 0 ? `Restriction hits found: ${restrictionHits.length}` : "No restriction hits found.",
     details: { restriction_hits_count: restrictionHits.length },
   });
 
@@ -453,6 +519,42 @@ async function saveCheckResults(
       message: "Confirmed restriction found in document.",
       details: { source: "keyword_scan" },
     });
+  }
+
+  // Mismatch sorok hozzáadása
+  for (const m of mismatchResults) {
+    if (m.is_mismatch) {
+      rows.push({
+        case_id: caseId,
+        document_id: documentId,
+        check_type: "field_match",
+        result: "correction_required",
+        severity: "correction",
+        message: `${m.field_label}: az űrlap adata eltér a dokumentumban szereplőtől.`,
+        details: {
+          field_name: m.field_name,
+          field_label: m.field_label,
+          current_value: m.form_value,
+          expected_value: m.doc_value,
+          source: "form_vs_document_comparison",
+        },
+      });
+    } else {
+      rows.push({
+        case_id: caseId,
+        document_id: documentId,
+        check_type: "field_match",
+        result: "pass",
+        severity: "info",
+        message: `${m.field_label}: egyezik.`,
+        details: {
+          field_name: m.field_name,
+          form_value: m.form_value,
+          doc_value: m.doc_value,
+          source: "form_vs_document_comparison",
+        },
+      });
+    }
   }
 
   const { error } = await serviceClient.from("check_results").insert(rows);
@@ -527,10 +629,7 @@ Deno.serve(async (req) => {
       .single<JobRow>();
 
     if (jobLoadError || !job) {
-      return jsonResponse(
-        { error: "AI validation job not found", detail: jobLoadError?.message ?? null },
-        404,
-      );
+      return jsonResponse({ error: "AI validation job not found", detail: jobLoadError?.message ?? null }, 404);
     }
 
     if (!job.document_id) {
@@ -562,9 +661,7 @@ Deno.serve(async (req) => {
     }
 
     if (doc.upload_status !== "uploaded") {
-      throw new Error(
-        `Document upload_status must be 'uploaded', got '${doc.upload_status}'`,
-      );
+      throw new Error(`Document upload_status must be 'uploaded', got '${doc.upload_status}'`);
     }
 
     // 4. Dokumentum → processing
@@ -584,9 +681,7 @@ Deno.serve(async (req) => {
       .download(doc.storage_path);
 
     if (downloadError || !fileData) {
-      throw new Error(
-        `Failed to download file from storage: ${downloadError?.message ?? "unknown error"}`,
-      );
+      throw new Error(`Failed to download file from storage: ${downloadError?.message ?? "unknown error"}`);
     }
 
     // 6. OCR / szöveg kinyerése
@@ -595,12 +690,7 @@ Deno.serve(async (req) => {
     let ocrMethod = "unknown";
 
     try {
-      const { text, method } = await extractTextFromFile(
-        fileData,
-        doc.mime_type,
-        doc.original_file_name,
-        openAiKey,
-      );
+      const { text, method } = await extractTextFromFile(fileData, doc.mime_type, doc.original_file_name, openAiKey);
       extractedTextRaw = text;
       ocrMethod = method;
       console.log(`OCR completed: method=${method}, chars=${text.length}`);
@@ -616,17 +706,29 @@ Deno.serve(async (req) => {
     // 8. Mező kinyerés
     const extractedFields = extractFieldsFromText(extractedTextRaw, detectedType);
 
-    // 9. Tiltó klauzula keresés
-    const restrictionHits = buildRestrictionHits(extractedTextRaw);
-    await saveRestrictionHits(
-      serviceClient,
-      doc.case_id,
-      doc.id,
-      job.policy_version_id,
-      restrictionHits,
-    );
+    // 9. Form vs. dokumentum összehasonlítás (mismatch motor)
+    let mismatchResults: MismatchResult[] = [];
+    try {
+      const { data: weekOffer } = await serviceClient
+        .from("week_offers")
+        .select("resort_name_raw, week_number, unit_type, season_label, rights_end_year")
+        .eq("case_id", doc.case_id)
+        .maybeSingle();
 
-    // 10. check_results mentése
+      if (weekOffer) {
+        mismatchResults = compareWithWeekOffer(extractedFields, weekOffer as WeekOfferRow);
+        const mismatchCount = mismatchResults.filter((m) => m.is_mismatch).length;
+        console.log(`Mismatch check: ${mismatchCount} eltérés találva`);
+      }
+    } catch (mismatchErr) {
+      console.error("Mismatch comparison error (non-blocking):", mismatchErr);
+    }
+
+    // 10. Tiltó klauzula keresés
+    const restrictionHits = buildRestrictionHits(extractedTextRaw);
+    await saveRestrictionHits(serviceClient, doc.case_id, doc.id, job.policy_version_id, restrictionHits);
+
+    // 11. check_results mentése (mező jelenlét + mismatch + restriction összefoglaló)
     await saveCheckResults(
       serviceClient,
       doc.case_id,
@@ -634,6 +736,7 @@ Deno.serve(async (req) => {
       extractedFields,
       restrictionHits,
       job.policy_version_id,
+      mismatchResults,
     );
 
     // 11. Dokumentum lezárása
@@ -703,6 +806,8 @@ Deno.serve(async (req) => {
       detected_document_type: detectedType,
       extracted_fields: extractedFields,
       restriction_hits_count: restrictionHits.length,
+      mismatch_count: mismatchResults.filter((m) => m.is_mismatch).length,
+      mismatch_fields: mismatchResults.filter((m) => m.is_mismatch).map((m) => m.field_name),
       ocr_method: ocrMethod,
       chars_extracted: extractedTextRaw.length,
     });
@@ -738,10 +843,7 @@ Deno.serve(async (req) => {
             .maybeSingle();
 
           if (failedJob?.case_id) {
-            await serviceClient
-              .from("cases")
-              .update({ ai_pipeline_status: "failed" })
-              .eq("id", failedJob.case_id);
+            await serviceClient.from("cases").update({ ai_pipeline_status: "failed" }).eq("id", failedJob.case_id);
           }
         }
       }
