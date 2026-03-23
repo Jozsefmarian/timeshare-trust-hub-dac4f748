@@ -55,6 +55,10 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: "typed_confirmation must not be empty" }, 400);
     }
 
+    if (typed_confirmation.trim().toUpperCase() !== "ELFOGADOM") {
+      return jsonResponse({ error: "typed_confirmation must be ELFOGADOM" }, 400);
+    }
+
     // 3. Verify case exists and belongs to seller (RLS enforces ownership)
     const { data: caseData, error: caseError } = await supabase
       .from("cases")
@@ -112,6 +116,7 @@ Deno.serve(async (req) => {
         typed_confirmation: typed_confirmation.trim(),
         checkbox_checked: true,
         acceptance_hash: acceptanceHash,
+        hash_algorithm: "sha256",
       })
       .select("id")
       .single();
