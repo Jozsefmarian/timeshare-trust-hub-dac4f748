@@ -140,7 +140,7 @@ export default function CaseDetail() {
 
   const [documentTypes, setDocumentTypes] = useState<DocumentType[]>([]);
   const [uploadedDocuments, setUploadedDocuments] = useState<UploadedDocument[]>([]);
-  const [contract, setContract] = useState<ContractRow | null>(null);
+  const [contracts, setContracts] = useState<ContractRow[]>([]);
   const [classification, setClassification] = useState<ClassificationRow | null>(null);
   const [checkResults, setCheckResults] = useState<CheckResult[]>([]);
 
