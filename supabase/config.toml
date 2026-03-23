@@ -43,38 +43,4 @@ verify_jwt = false
 verify_jwt = false
 
 
-  
-```
 
----
-
-## 8B. `.gitignore` — `.env` hozzáadása
-
-**Fájl:** `.gitignore`
-
-Nyisd meg a fájlt és keresd meg ezt a sort:
-```
-*.local
-```
-
-Ez után közvetlenül add hozzá ezeket az új sorokat:
-```
-.env
-.env.production
-.env.local
-```
-
----
-
-## 8C. `.env.example` létrehozása
-
-A repo gyökerében hozz létre egy új fájlt `.env.example` névvel. Ez dokumentálja milyen változók kellenek, de nem tartalmaz éles értékeket.
-
-**Fájl:** `.env.example`
-
-**Teljes tartalom:**
-```
-# Supabase
-VITE_SUPABASE_URL=https://your-project.supabase.co
-VITE_SUPABASE_PUBLISHABLE_KEY=your-anon-key
-VITE_SUPABASE_PROJECT_ID=your-project-id
