@@ -8,7 +8,7 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.submit-case]
-verify_jwt = true
+verify_jwt = false
 
 [functions.accept-service-agreement]
 verify_jwt = true
