@@ -1,6 +1,7 @@
 project_id = "nowfrwpknymkzujijgsz"
 
-# Felhasználói hívások — JWT kötelező
+# Felhasználói hívások — Lovable preview miatt verify_jwt = false
+# (A JWT ellenőrzés a function body-ban történik belülről)
 [functions.upload-document-init]
 verify_jwt = false
 
@@ -11,35 +12,38 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.accept-service-agreement]
-verify_jwt = true
-
-[functions.generate-sale-contract]
-verify_jwt = true
+verify_jwt = false
 
 [functions.recheck-case]
-verify_jwt = true
+verify_jwt = false
+
+[functions.generate-sale-contract]
+verify_jwt = false
 
 [functions.admin-manual-classification]
-verify_jwt = true
+verify_jwt = false
 
 [functions.publish-policy]
-verify_jwt = true
+verify_jwt = false
 
-# Belső hívások — service role hívja, JWT nem kell
+[functions.create-stripe-checkout]
+verify_jwt = false
+
+# Belső hívások — service role hívja
 [functions.process-document]
 verify_jwt = false
 
 [functions.classify-case]
 verify_jwt = false
 
-[functions.create-stripe-checkout]
-verify_jwt = true
-
-# Stripe közvetlenül hívja, JWT nem kell
+# Stripe közvetlenül hívja
 [functions.stripe-webhook]
 verify_jwt = false
 
 [functions.close-case-and-create-asset]
+verify_jwt = false
+
+[functions.generate-yearly-inventory]
 verify_jwt = false
 
 
