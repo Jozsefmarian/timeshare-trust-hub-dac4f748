@@ -111,7 +111,7 @@ async function callOpenAIVision(base64: string, mimeType: string, openAiKey: str
           ],
         },
       ],
-      max_tokens: 4000,
+      max_completion_tokens: 4000,
     }),
   });
 
@@ -155,7 +155,7 @@ async function callOpenAIPDF(base64: string, fileName: string, openAiKey: string
           ],
         },
       ],
-      max_tokens: 4000,
+      max_completion_tokens: 4000,
     }),
   });
 
