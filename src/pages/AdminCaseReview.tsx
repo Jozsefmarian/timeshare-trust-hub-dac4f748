@@ -7,24 +7,6 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-  DialogDescription,
-} from "@/components/ui/dialog";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import {
   ArrowLeft,
   Eye,
   FileText,
@@ -297,11 +279,7 @@ export default function AdminCaseReview() {
   const [previewLoadingId, setPreviewLoadingId] = useState<string | null>(null);
   const [isCaseAction, setIsCaseAction] = useState(false);
 
-  // Modals
-  const [requestFixOpen, setRequestFixOpen] = useState(false);
   const [adminNote, setAdminNote] = useState("");
-  const [requestFixNote, setRequestFixNote] = useState("");
-  const [rejectConfirmOpen, setRejectConfirmOpen] = useState(false);
 
   // ---------- Data Loading ----------
 
@@ -389,10 +367,6 @@ export default function AdminCaseReview() {
           ? "red"
           : "pending";
 
-  const canApproveCase =
-    caseAiDecision === "green" &&
-    documents.length > 0 &&
-    documents.every((d) => d.upload_status === "completed" && d.review_status === "approved");
 
   // ---------- Document Actions ----------
 
@@ -483,18 +457,6 @@ export default function AdminCaseReview() {
     }
   };
 
-  const handleApproveCase = () => handleManualClassification("green", adminNote || "Admin jóváhagyás");
-
-  const handleRequestFix = async () => {
-    await updateCaseStatus("under_review", requestFixNote);
-    setRequestFixOpen(false);
-    setRequestFixNote("");
-  };
-
-  const handleRejectCase = async () => {
-    await updateCaseStatus("closed", adminNote?.trim() ? `Admin által lezárva. ${adminNote}` : "Admin által lezárva");
-    setRejectConfirmOpen(false);
-  };
 
   // ---------- Render ----------
 
@@ -861,88 +823,33 @@ export default function AdminCaseReview() {
                 </div>
                 <Button
                   className="w-full justify-start gap-2"
-                  disabled={isCaseAction || !canApproveCase}
-                  onClick={handleApproveCase}
-                >
-                  <CheckCircle2 className="h-4 w-4" />
-                  Ügy jóváhagyása
-                  {!canApproveCase && documents.length > 0 && (
-                    <span className="text-xs ml-auto opacity-70">
-                      (Az AI döntés vagy a dokumentumreview még nem engedi a jóváhagyást.)
-                    </span>
-                  )}
-                  {documents.length === 0 && <span className="text-xs ml-auto opacity-70">(Nincs dokumentum)</span>}
-                </Button>
-                <Button
-                  variant="outline"
-                  className="w-full justify-start gap-2 text-warning border-warning/30 hover:bg-warning/10"
                   disabled={isCaseAction}
-                  onClick={() => setRequestFixOpen(true)}
+                  onClick={() => handleManualClassification("green", adminNote || "Admin manuális jóváhagyás")}
                 >
-                  <RotateCcw className="h-4 w-4" />
-                  Javítás kérése
+                  {isCaseAction ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+                  Zöldre állítás
                 </Button>
+                <p className="text-xs text-muted-foreground pl-1">
+                  Az ügyet zöld besorolásra állítja admin felülbírálással.
+                </p>
                 <Button
                   variant="outline"
                   className="w-full justify-start gap-2 text-destructive border-destructive/30 hover:bg-destructive/10"
                   disabled={isCaseAction}
-                  onClick={() => setRejectConfirmOpen(true)}
+                  onClick={() => handleManualClassification("red", adminNote || "Admin elutasítás")}
                 >
-                  <XCircle className="h-4 w-4" />
-                  Elutasítás / Lezárás
+                  {isCaseAction ? <Loader2 className="h-4 w-4 animate-spin" /> : <XCircle className="h-4 w-4" />}
+                  Pirosra állítás
                 </Button>
+                <p className="text-xs text-muted-foreground pl-1">
+                  Az ügyet piros besorolásra állítja és elutasítja.
+                </p>
               </CardContent>
             </Card>
           </div>
         </div>
       </div>
 
-      {/* Request Fix Modal */}
-      <Dialog open={requestFixOpen} onOpenChange={setRequestFixOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Javítás kérése</DialogTitle>
-            <DialogDescription>Adjon meg egy megjegyzést az eladónak a szükséges javításokról.</DialogDescription>
-          </DialogHeader>
-          <Textarea
-            placeholder="Mi a javítandó..."
-            value={requestFixNote}
-            onChange={(e) => setRequestFixNote(e.target.value)}
-            rows={4}
-          />
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setRequestFixOpen(false)}>
-              Mégsem
-            </Button>
-            <Button disabled={isCaseAction} onClick={handleRequestFix}>
-              {isCaseAction ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-              Javítás kérése
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Reject Confirmation */}
-      <AlertDialog open={rejectConfirmOpen} onOpenChange={setRejectConfirmOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Ügy elutasítása / lezárása</AlertDialogTitle>
-            <AlertDialogDescription>
-              Biztosan el szeretné utasítani és lezárni ezt az ügyet? Ez a művelet a státuszt „Lezárva" értékre állítja.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Mégsem</AlertDialogCancel>
-            <AlertDialogAction
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              disabled={isCaseAction}
-              onClick={handleRejectCase}
-            >
-              Elutasítás és lezárás
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </AdminLayout>
   );
 }
