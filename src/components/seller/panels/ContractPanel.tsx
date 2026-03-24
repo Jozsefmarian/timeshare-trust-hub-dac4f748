@@ -260,10 +260,13 @@ export default function ContractPanel({
       generatedContracts.every((c: any) => c.status === "signed_uploaded" || c.status === "verified");
 
     if (allNowSigned) {
-      // Case státusz frissítése
-      await supabaseAny.from("cases").update({ status: "signed_contract_uploaded" }).eq("id", caseId);
-
-      onCaseStatusUpdated("signed_contract_uploaded");
+      // ÚJ (biztonságos - az EF service_role-lal fut):
+      const { error: recheckErr } = await supabase.functions.invoke("confirm-document-upload", {
+        body: { document_id: contractId, is_signed_contract: true, case_id: caseId },
+      });
+      if (!recheckErr) {
+        onCaseStatusUpdated("signed_contract_uploaded");
+      }
     }
   };
 
