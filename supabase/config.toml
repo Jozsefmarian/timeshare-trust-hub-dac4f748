@@ -2,7 +2,7 @@ project_id = "nowfrwpknymkzujijgsz"
 
 # Felhasználói hívások — JWT kötelező
 [functions.upload-document-init]
-verify_jwt = true
+verify_jwt = false
 
 [functions.confirm-document-upload]
 verify_jwt = true
