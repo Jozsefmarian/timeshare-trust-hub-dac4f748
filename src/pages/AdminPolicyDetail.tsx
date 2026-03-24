@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import AdminLayout from "@/components/AdminLayout";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
 import { ArrowLeft, Save, Globe, Archive, Plus, Trash2, ShieldCheck, AlertTriangle, Tag } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -28,56 +29,8 @@ interface ClassificationRule {
   name: string;
   condition: string;
   result: string;
+  message: string;
 }
-
-const mockRestrictions: RestrictionRule[] = [
-  {
-    id: "r1",
-    name: "Csőd kulcsszó",
-    type: "Kulcsszó tiltás",
-    field: "megjegyzés",
-    operator: "tartalmazza",
-    value: "csőd, felszámolás",
-    severity: "Magas",
-    message: "Csődeljáráshoz kapcsolódó ügy nem fogadható el.",
-  },
-  {
-    id: "r2",
-    name: "Tiltott üdülőhely",
-    type: "Üdülőhely tiltás",
-    field: "üdülőhely",
-    operator: "egyenlő",
-    value: "Teszt Resort",
-    severity: "Magas",
-    message: "Ez az üdülőhely nem elfogadható.",
-  },
-  {
-    id: "r3",
-    name: "Lejárt jog",
-    type: "Lejárati év korlátozás",
-    field: "jogosultság_vége",
-    operator: "kisebb mint",
-    value: "2025",
-    severity: "Közepes",
-    message: "Lejárt jogosultság esetén egyedi elbírálás szükséges.",
-  },
-];
-
-const mockClassifications: ClassificationRule[] = [
-  {
-    id: "c1",
-    name: "Tiszta ügy",
-    condition: "Nincs korlátozó szabály találat és minden dokumentum elfogadva",
-    result: "Zöld",
-  },
-  {
-    id: "c2",
-    name: "Részleges probléma",
-    condition: "Közepes súlyosságú szabály találat vagy hiányzó dokumentum",
-    result: "Sárga",
-  },
-  { id: "c3", name: "Elutasítandó", condition: "Magas súlyosságú szabály találat", result: "Piros" },
-];
 
 const ruleTypes = ["Kulcsszó tiltás", "Üdülőhely tiltás", "Hét tiltás", "Lejárati év korlátozás"];
 const operators = ["tartalmazza", "nem tartalmazza", "egyenlő", "nem egyenlő", "kisebb mint", "nagyobb mint"];
@@ -96,59 +49,250 @@ const severityColors: Record<string, string> = {
   Magas: "bg-red-500/15 text-red-600 border-red-500/50",
 };
 
+// DB <-> UI mapping helpers
+const ruleTypeToDb: Record<string, string> = {
+  "Kulcsszó tiltás": "keyword_ban",
+  "Üdülőhely tiltás": "resort_ban",
+  "Hét tiltás": "week_ban",
+  "Lejárati év korlátozás": "expiry_year",
+};
+const ruleTypeFromDb: Record<string, string> = Object.fromEntries(
+  Object.entries(ruleTypeToDb).map(([k, v]) => [v, k])
+);
+
+const operatorToDb: Record<string, string> = {
+  tartalmazza: "contains",
+  "nem tartalmazza": "not_contains",
+  egyenlő: "equals",
+  "nem egyenlő": "not_equals",
+  "kisebb mint": "less_than",
+  "nagyobb mint": "greater_than",
+};
+const operatorFromDb: Record<string, string> = Object.fromEntries(
+  Object.entries(operatorToDb).map(([k, v]) => [v, k])
+);
+
+const severityToDb: Record<string, string> = {
+  Alacsony: "low",
+  Közepes: "medium",
+  Magas: "high",
+};
+const severityFromDb: Record<string, string> = Object.fromEntries(
+  Object.entries(severityToDb).map(([k, v]) => [v, k])
+);
+
+const classificationToDb: Record<string, string> = {
+  Zöld: "green",
+  Sárga: "yellow",
+  Piros: "red",
+};
+const classificationFromDb: Record<string, string> = Object.fromEntries(
+  Object.entries(classificationToDb).map(([k, v]) => [v, k])
+);
+
+const statusFromDb: Record<string, string> = {
+  draft: "Piszkozat",
+  published: "Publikált",
+  archived: "Archivált",
+};
+
 export default function AdminPolicyDetail() {
   const { policyId } = useParams();
   const navigate = useNavigate();
   const isNew = policyId === "new";
 
-  const [name, setName] = useState(isNew ? "" : "Alapértelmezett szabályrendszer");
-  const [version, setVersion] = useState(isNew ? "1.0" : "3.2");
-  const [status] = useState(isNew ? "Piszkozat" : "Publikált");
-  const [description, setDescription] = useState(
-    isNew ? "" : "Az alapértelmezett szabályrendszer, amely az összes beérkező ügyre vonatkozik.",
-  );
-  const [restrictions, setRestrictions] = useState<RestrictionRule[]>(isNew ? [] : mockRestrictions);
-  const [classRules, setClassRules] = useState<ClassificationRule[]>(isNew ? [] : mockClassifications);
+  const [isLoading, setIsLoading] = useState(!isNew);
+  const [isSaving, setIsSaving] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
 
+  const [name, setName] = useState("");
+  const [version, setVersion] = useState("1.0");
+  const [status, setStatus] = useState("Piszkozat");
+  const [restrictions, setRestrictions] = useState<RestrictionRule[]>([]);
+  const [classRules, setClassRules] = useState<ClassificationRule[]>([]);
+
+  const isDraft = status === "Piszkozat";
+
+  const loadData = useCallback(async () => {
+    if (isNew || !policyId) return;
+    setIsLoading(true);
+    try {
+      const [pvRes, rrRes, crRes] = await Promise.all([
+        supabase.from("policy_versions").select("id, name, version, status").eq("id", policyId).single(),
+        supabase
+          .from("restriction_rules")
+          .select("id, rule_type, field_name, match_value, operator, severity, message_template, is_active, sort_order")
+          .eq("policy_version_id", policyId)
+          .order("sort_order"),
+        supabase
+          .from("classification_rules")
+          .select("id, rule_name, conditions, result_classification, message_template, is_active, sort_order")
+          .eq("policy_version_id", policyId)
+          .order("sort_order"),
+      ]);
+
+      if (pvRes.error) throw pvRes.error;
+      const pv = pvRes.data;
+      setName(pv.name);
+      setVersion(pv.version);
+      setStatus(statusFromDb[pv.status] || pv.status);
+
+      if (rrRes.data) {
+        setRestrictions(
+          rrRes.data.map((r: any) => ({
+            id: r.id,
+            name: r.rule_type ? (ruleTypeFromDb[r.rule_type] || r.rule_type) : "",
+            type: ruleTypeFromDb[r.rule_type] || r.rule_type || ruleTypes[0],
+            field: r.field_name || "",
+            operator: operatorFromDb[r.operator] || r.operator || operators[0],
+            value: r.match_value || "",
+            severity: severityFromDb[r.severity] || r.severity || severities[0],
+            message: r.message_template || "",
+          }))
+        );
+      }
+
+      if (crRes.data) {
+        setClassRules(
+          crRes.data.map((r: any) => ({
+            id: r.id,
+            name: r.rule_name || "",
+            condition:
+              r.conditions && typeof r.conditions === "object"
+                ? r.conditions.description || JSON.stringify(r.conditions)
+                : "",
+            result: classificationFromDb[r.result_classification] || r.result_classification || classifications[0],
+            message: r.message_template || "",
+          }))
+        );
+      }
+    } catch (err: any) {
+      toast.error(err?.message || "Adatok betöltése sikertelen.");
+    } finally {
+      setIsLoading(false);
+    }
+  }, [policyId, isNew]);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
+
+  // --- CRUD helpers ---
   const addRestriction = () => {
-    setRestrictions([
-      ...restrictions,
-      {
-        id: `r${Date.now()}`,
-        name: "",
-        type: ruleTypes[0],
-        field: "",
-        operator: operators[0],
-        value: "",
-        severity: severities[0],
-        message: "",
-      },
+    setRestrictions((prev) => [
+      ...prev,
+      { id: `new-${Date.now()}`, name: "", type: ruleTypes[0], field: "", operator: operators[0], value: "", severity: severities[0], message: "" },
     ]);
   };
-
-  const removeRestriction = (id: string) => setRestrictions(restrictions.filter((r) => r.id !== id));
-
+  const removeRestriction = (id: string) => setRestrictions((prev) => prev.filter((r) => r.id !== id));
   const updateRestriction = (id: string, field: keyof RestrictionRule, value: string) => {
-    setRestrictions(restrictions.map((r) => (r.id === id ? { ...r, [field]: value } : r)));
+    setRestrictions((prev) => prev.map((r) => (r.id === id ? { ...r, [field]: value } : r)));
   };
 
   const addClassification = () => {
-    setClassRules([...classRules, { id: `c${Date.now()}`, name: "", condition: "", result: classifications[0] }]);
+    setClassRules((prev) => [
+      ...prev,
+      { id: `new-${Date.now()}`, name: "", condition: "", result: classifications[0], message: "" },
+    ]);
   };
-
-  const removeClassification = (id: string) => setClassRules(classRules.filter((r) => r.id !== id));
-
+  const removeClassification = (id: string) => setClassRules((prev) => prev.filter((r) => r.id !== id));
   const updateClassification = (id: string, field: keyof ClassificationRule, value: string) => {
-    setClassRules(classRules.map((r) => (r.id === id ? { ...r, [field]: value } : r)));
+    setClassRules((prev) => prev.map((r) => (r.id === id ? { ...r, [field]: value } : r)));
   };
 
+  // --- Save ---
+  const handleSave = async () => {
+    if (!policyId || isNew) return;
+    setIsSaving(true);
+    try {
+      // 1. Update policy_versions
+      const { error: pvErr } = await supabase
+        .from("policy_versions")
+        .update({ name, version, updated_at: new Date().toISOString() })
+        .eq("id", policyId);
+      if (pvErr) throw pvErr;
+
+      // 2. Restriction rules: delete + insert
+      const { error: delRr } = await supabase.from("restriction_rules").delete().eq("policy_version_id", policyId);
+      if (delRr) throw delRr;
+
+      if (restrictions.length > 0) {
+        const rrRows = restrictions.map((r, i) => ({
+          policy_version_id: policyId,
+          rule_type: ruleTypeToDb[r.type] || r.type,
+          field_name: r.field || null,
+          match_value: r.value || null,
+          operator: operatorToDb[r.operator] || r.operator || null,
+          severity: severityToDb[r.severity] || r.severity || null,
+          message_template: r.message || null,
+          is_active: true,
+          sort_order: i,
+        }));
+        const { error: insRr } = await supabase.from("restriction_rules").insert(rrRows);
+        if (insRr) throw insRr;
+      }
+
+      // 3. Classification rules: delete + insert
+      const { error: delCr } = await supabase.from("classification_rules").delete().eq("policy_version_id", policyId);
+      if (delCr) throw delCr;
+
+      if (classRules.length > 0) {
+        const crRows = classRules.map((r, i) => {
+          let conditionsJson: any;
+          try {
+            conditionsJson = JSON.parse(r.condition);
+          } catch {
+            conditionsJson = { description: r.condition };
+          }
+          return {
+            policy_version_id: policyId,
+            rule_name: r.name,
+            conditions: conditionsJson,
+            result_classification: classificationToDb[r.result] || r.result,
+            message_template: r.message || null,
+            is_active: true,
+            sort_order: i,
+          };
+        });
+        const { error: insCr } = await supabase.from("classification_rules").insert(crRows);
+        if (insCr) throw insCr;
+      }
+
+      toast.success("Szabályrendszer mentve.");
+    } catch (err: any) {
+      toast.error(err?.message || "Mentés sikertelen.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // --- Status badge ---
   const statusBadge =
     status === "Publikált"
       ? "bg-emerald-500/15 text-emerald-600 border-emerald-500/50"
       : status === "Archivált"
         ? "bg-muted text-muted-foreground"
         : "border-amber-500/50 text-amber-600 bg-amber-500/10";
+
+  if (isLoading) {
+    return (
+      <AdminLayout>
+        <div className="space-y-6">
+          <div className="flex items-center gap-3">
+            <Skeleton className="h-10 w-10 rounded" />
+            <Skeleton className="h-8 w-64" />
+          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="lg:col-span-2 space-y-6">
+              <Skeleton className="h-48 w-full rounded-xl" />
+              <Skeleton className="h-64 w-full rounded-xl" />
+            </div>
+            <Skeleton className="h-72 w-full rounded-xl" />
+          </div>
+        </div>
+      </AdminLayout>
+    );
+  }
 
   return (
     <AdminLayout>
@@ -170,7 +314,7 @@ export default function AdminPolicyDetail() {
             </div>
           </div>
           <div className="flex gap-2">
-            <Button variant="outline">
+            <Button variant="outline" disabled={!isDraft}>
               <Archive className="h-4 w-4 mr-2" />
               Archiválás
             </Button>
@@ -186,6 +330,7 @@ export default function AdminPolicyDetail() {
                   });
                   if (error) throw error;
                   toast.success("Szabályrendszer sikeresen publikálva.");
+                  loadData();
                 } catch (err: any) {
                   toast.error(err?.message || "A publikálás nem sikerült.");
                 } finally {
@@ -205,9 +350,9 @@ export default function AdminPolicyDetail() {
                 </>
               )}
             </Button>
-            <Button>
+            <Button onClick={handleSave} disabled={isSaving || !isDraft}>
               <Save className="h-4 w-4 mr-2" />
-              Mentés
+              {isSaving ? "Mentés..." : "Mentés"}
             </Button>
           </div>
         </div>
@@ -224,25 +369,12 @@ export default function AdminPolicyDetail() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label>Szabályrendszer neve</Label>
-                    <Input
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
-                      placeholder="pl. Alapértelmezett szabályrendszer"
-                    />
+                    <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="pl. Alapértelmezett szabályrendszer" disabled={!isDraft} />
                   </div>
                   <div className="space-y-2">
                     <Label>Verzió</Label>
-                    <Input value={version} onChange={(e) => setVersion(e.target.value)} placeholder="pl. 1.0" />
+                    <Input value={version} onChange={(e) => setVersion(e.target.value)} placeholder="pl. 1.0" disabled={!isDraft} />
                   </div>
-                </div>
-                <div className="space-y-2">
-                  <Label>Leírás</Label>
-                  <Textarea
-                    value={description}
-                    onChange={(e) => setDescription(e.target.value)}
-                    placeholder="Szabályrendszer rövid leírása..."
-                    rows={3}
-                  />
                 </div>
               </CardContent>
             </Card>
@@ -258,7 +390,7 @@ export default function AdminPolicyDetail() {
                     </CardTitle>
                     <CardDescription>Szabályok, amelyek korlátozzák az ügy elfogadását</CardDescription>
                   </div>
-                  <Button variant="outline" size="sm" onClick={addRestriction}>
+                  <Button variant="outline" size="sm" onClick={addRestriction} disabled={!isDraft}>
                     <Plus className="h-4 w-4 mr-1" />
                     Új szabály
                   </Button>
@@ -277,102 +409,54 @@ export default function AdminPolicyDetail() {
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 flex-1">
                           <div className="space-y-1.5">
                             <Label className="text-xs">Szabály neve</Label>
-                            <Input
-                              value={rule.name}
-                              onChange={(e) => updateRestriction(rule.id, "name", e.target.value)}
-                              placeholder="Szabály neve"
-                            />
+                            <Input value={rule.name} onChange={(e) => updateRestriction(rule.id, "name", e.target.value)} placeholder="Szabály neve" disabled={!isDraft} />
                           </div>
                           <div className="space-y-1.5">
                             <Label className="text-xs">Szabály típusa</Label>
-                            <Select value={rule.type} onValueChange={(v) => updateRestriction(rule.id, "type", v)}>
-                              <SelectTrigger>
-                                <SelectValue />
-                              </SelectTrigger>
+                            <Select value={rule.type} onValueChange={(v) => updateRestriction(rule.id, "type", v)} disabled={!isDraft}>
+                              <SelectTrigger><SelectValue /></SelectTrigger>
                               <SelectContent>
-                                {ruleTypes.map((t) => (
-                                  <SelectItem key={t} value={t}>
-                                    {t}
-                                  </SelectItem>
-                                ))}
+                                {ruleTypes.map((t) => (<SelectItem key={t} value={t}>{t}</SelectItem>))}
                               </SelectContent>
                             </Select>
                           </div>
                           <div className="space-y-1.5">
                             <Label className="text-xs">Mező neve</Label>
-                            <Input
-                              value={rule.field}
-                              onChange={(e) => updateRestriction(rule.id, "field", e.target.value)}
-                              placeholder="pl. megjegyzés"
-                            />
+                            <Input value={rule.field} onChange={(e) => updateRestriction(rule.id, "field", e.target.value)} placeholder="pl. megjegyzés" disabled={!isDraft} />
                           </div>
                           <div className="space-y-1.5">
                             <Label className="text-xs">Operátor</Label>
-                            <Select
-                              value={rule.operator}
-                              onValueChange={(v) => updateRestriction(rule.id, "operator", v)}
-                            >
-                              <SelectTrigger>
-                                <SelectValue />
-                              </SelectTrigger>
+                            <Select value={rule.operator} onValueChange={(v) => updateRestriction(rule.id, "operator", v)} disabled={!isDraft}>
+                              <SelectTrigger><SelectValue /></SelectTrigger>
                               <SelectContent>
-                                {operators.map((o) => (
-                                  <SelectItem key={o} value={o}>
-                                    {o}
-                                  </SelectItem>
-                                ))}
+                                {operators.map((o) => (<SelectItem key={o} value={o}>{o}</SelectItem>))}
                               </SelectContent>
                             </Select>
                           </div>
                           <div className="space-y-1.5">
                             <Label className="text-xs">Érték</Label>
-                            <Input
-                              value={rule.value}
-                              onChange={(e) => updateRestriction(rule.id, "value", e.target.value)}
-                              placeholder="Érték"
-                            />
+                            <Input value={rule.value} onChange={(e) => updateRestriction(rule.id, "value", e.target.value)} placeholder="Érték" disabled={!isDraft} />
                           </div>
                           <div className="space-y-1.5">
                             <Label className="text-xs">Súlyosság</Label>
-                            <Select
-                              value={rule.severity}
-                              onValueChange={(v) => updateRestriction(rule.id, "severity", v)}
-                            >
-                              <SelectTrigger>
-                                <SelectValue />
-                              </SelectTrigger>
+                            <Select value={rule.severity} onValueChange={(v) => updateRestriction(rule.id, "severity", v)} disabled={!isDraft}>
+                              <SelectTrigger><SelectValue /></SelectTrigger>
                               <SelectContent>
-                                {severities.map((s) => (
-                                  <SelectItem key={s} value={s}>
-                                    {s}
-                                  </SelectItem>
-                                ))}
+                                {severities.map((s) => (<SelectItem key={s} value={s}>{s}</SelectItem>))}
                               </SelectContent>
                             </Select>
                           </div>
                         </div>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="text-muted-foreground hover:text-destructive shrink-0 mt-5"
-                          onClick={() => removeRestriction(rule.id)}
-                        >
+                        <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-destructive shrink-0 mt-5" onClick={() => removeRestriction(rule.id)} disabled={!isDraft}>
                           <Trash2 className="h-4 w-4" />
                         </Button>
                       </div>
                       <div className="flex items-center gap-2">
-                        <Badge variant="outline" className={severityColors[rule.severity] || ""}>
-                          {rule.severity}
-                        </Badge>
+                        <Badge variant="outline" className={severityColors[rule.severity] || ""}>{rule.severity}</Badge>
                       </div>
                       <div className="space-y-1.5">
                         <Label className="text-xs">Üzenet</Label>
-                        <Textarea
-                          value={rule.message}
-                          onChange={(e) => updateRestriction(rule.id, "message", e.target.value)}
-                          placeholder="Hibaüzenet szövege..."
-                          rows={2}
-                        />
+                        <Textarea value={rule.message} onChange={(e) => updateRestriction(rule.id, "message", e.target.value)} placeholder="Hibaüzenet szövege..." rows={2} disabled={!isDraft} />
                       </div>
                     </CardContent>
                   </Card>
@@ -391,7 +475,7 @@ export default function AdminPolicyDetail() {
                     </CardTitle>
                     <CardDescription>Szabályok az ügy automatikus minősítéséhez</CardDescription>
                   </div>
-                  <Button variant="outline" size="sm" onClick={addClassification}>
+                  <Button variant="outline" size="sm" onClick={addClassification} disabled={!isDraft}>
                     <Plus className="h-4 w-4 mr-1" />
                     Új minősítési szabály
                   </Button>
@@ -408,53 +492,28 @@ export default function AdminPolicyDetail() {
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 flex-1">
                           <div className="space-y-1.5">
                             <Label className="text-xs">Szabály neve</Label>
-                            <Input
-                              value={rule.name}
-                              onChange={(e) => updateClassification(rule.id, "name", e.target.value)}
-                              placeholder="Szabály neve"
-                            />
+                            <Input value={rule.name} onChange={(e) => updateClassification(rule.id, "name", e.target.value)} placeholder="Szabály neve" disabled={!isDraft} />
                           </div>
                           <div className="space-y-1.5">
                             <Label className="text-xs">Eredmény minősítés</Label>
-                            <Select
-                              value={rule.result}
-                              onValueChange={(v) => updateClassification(rule.id, "result", v)}
-                            >
-                              <SelectTrigger>
-                                <SelectValue />
-                              </SelectTrigger>
+                            <Select value={rule.result} onValueChange={(v) => updateClassification(rule.id, "result", v)} disabled={!isDraft}>
+                              <SelectTrigger><SelectValue /></SelectTrigger>
                               <SelectContent>
-                                {classifications.map((c) => (
-                                  <SelectItem key={c} value={c}>
-                                    {c}
-                                  </SelectItem>
-                                ))}
+                                {classifications.map((c) => (<SelectItem key={c} value={c}>{c}</SelectItem>))}
                               </SelectContent>
                             </Select>
                           </div>
                         </div>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="text-muted-foreground hover:text-destructive shrink-0 mt-5"
-                          onClick={() => removeClassification(rule.id)}
-                        >
+                        <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-destructive shrink-0 mt-5" onClick={() => removeClassification(rule.id)} disabled={!isDraft}>
                           <Trash2 className="h-4 w-4" />
                         </Button>
                       </div>
                       <div className="flex items-center gap-2">
-                        <Badge variant="outline" className={classificationColors[rule.result] || ""}>
-                          {rule.result}
-                        </Badge>
+                        <Badge variant="outline" className={classificationColors[rule.result] || ""}>{rule.result}</Badge>
                       </div>
                       <div className="space-y-1.5">
                         <Label className="text-xs">Feltétel leírása</Label>
-                        <Textarea
-                          value={rule.condition}
-                          onChange={(e) => updateClassification(rule.id, "condition", e.target.value)}
-                          placeholder="Milyen feltétel esetén érvényes ez a minősítés..."
-                          rows={2}
-                        />
+                        <Textarea value={rule.condition} onChange={(e) => updateClassification(rule.id, "condition", e.target.value)} placeholder="Milyen feltétel esetén érvényes ez a minősítés..." rows={2} disabled={!isDraft} />
                       </div>
                     </CardContent>
                   </Card>
@@ -473,9 +532,7 @@ export default function AdminPolicyDetail() {
               <CardContent className="space-y-4">
                 <div className="flex items-center justify-between py-2 border-b border-border/50">
                   <span className="text-sm text-muted-foreground">Állapot</span>
-                  <Badge variant="outline" className={statusBadge}>
-                    {status}
-                  </Badge>
+                  <Badge variant="outline" className={statusBadge}>{status}</Badge>
                 </div>
                 <div className="flex items-center justify-between py-2 border-b border-border/50">
                   <span className="text-sm text-muted-foreground">Korlátozó szabályok</span>
@@ -486,16 +543,12 @@ export default function AdminPolicyDetail() {
                   <span className="font-semibold">{classRules.length}</span>
                 </div>
                 <div className="pt-2 space-y-2">
-                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                    Súlyosság eloszlás
-                  </p>
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Súlyosság eloszlás</p>
                   {severities.map((s) => {
                     const count = restrictions.filter((r) => r.severity === s).length;
                     return (
                       <div key={s} className="flex items-center justify-between text-sm">
-                        <Badge variant="outline" className={severityColors[s]}>
-                          {s}
-                        </Badge>
+                        <Badge variant="outline" className={severityColors[s]}>{s}</Badge>
                         <span className="text-muted-foreground">{count} szabály</span>
                       </div>
                     );
@@ -507,9 +560,7 @@ export default function AdminPolicyDetail() {
                     const count = classRules.filter((r) => r.result === c).length;
                     return (
                       <div key={c} className="flex items-center justify-between text-sm">
-                        <Badge variant="outline" className={classificationColors[c]}>
-                          {c}
-                        </Badge>
+                        <Badge variant="outline" className={classificationColors[c]}>{c}</Badge>
                         <span className="text-muted-foreground">{count} szabály</span>
                       </div>
                     );
