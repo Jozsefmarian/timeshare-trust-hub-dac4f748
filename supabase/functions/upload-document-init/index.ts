@@ -34,7 +34,7 @@ Deno.serve(async (req) => {
   if (req.method !== "POST") {
     return new Response(JSON.stringify({ error: "Method not allowed" }), {
       status: 405,
-      headers: { ...getCorsHeaders(req),, "Content-Type": "application/json" },
+      headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
     });
   }
 
@@ -44,43 +44,35 @@ Deno.serve(async (req) => {
     if (!authHeader?.startsWith("Bearer ")) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
         status: 401,
-        headers: { ...getCorsHeaders(req),, "Content-Type": "application/json" },
+        headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
       });
     }
 
-    const authClient = createClient(
-  Deno.env.get("SUPABASE_URL")!,
-  Deno.env.get("SUPABASE_ANON_KEY")!,
-  {
-    global: { headers: { Authorization: authHeader } },
-  }
-);
+    const authClient = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY")!, {
+      global: { headers: { Authorization: authHeader } },
+    });
 
-const serviceClient = createClient(
-  Deno.env.get("SUPABASE_URL")!,
-  Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
-);
+    const serviceClient = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 
     const token = authHeader.replace("Bearer ", "");
 
-const {
-  data: { user },
-  error: userError,
-} = await authClient.auth.getUser(token);
+    const {
+      data: { user },
+      error: userError,
+    } = await authClient.auth.getUser(token);
 
-if (userError || !user) {
-  return new Response(JSON.stringify({ error: "Unauthorized" }), {
-    status: 401,
-    headers: { ...getCorsHeaders(req),, "Content-Type": "application/json" },
-  });
-}
+    if (userError || !user) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+        headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
+      });
+    }
 
-const userId = user.id;
+    const userId = user.id;
 
     // 2. Parse & validate input
     const body = await req.json();
-    const { case_id, document_type_id, file_name, mime_type, file_size_bytes } =
-      body;
+    const { case_id, document_type_id, file_name, mime_type, file_size_bytes } = body;
 
     if (!case_id || !document_type_id || !file_name) {
       return new Response(
@@ -89,8 +81,8 @@ const userId = user.id;
         }),
         {
           status: 400,
-          headers: { ...getCorsHeaders(req),, "Content-Type": "application/json" },
-        }
+          headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
+        },
       );
     }
 
@@ -102,23 +94,17 @@ const userId = user.id;
       .maybeSingle();
 
     if (caseError) {
-      return new Response(
-        JSON.stringify({ error: "Failed to verify case ownership" }),
-        {
-          status: 500,
-          headers: { ...getCorsHeaders(req),, "Content-Type": "application/json" },
-        }
-      );
+      return new Response(JSON.stringify({ error: "Failed to verify case ownership" }), {
+        status: 500,
+        headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
+      });
     }
 
     if (!caseRow) {
-      return new Response(
-        JSON.stringify({ error: "Case not found or access denied" }),
-        {
-          status: 404,
-          headers: { ...getCorsHeaders(req),, "Content-Type": "application/json" },
-        }
-      );
+      return new Response(JSON.stringify({ error: "Case not found or access denied" }), {
+        status: 404,
+        headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
+      });
     }
 
     // 4. Validate document type exists and is active
@@ -130,13 +116,10 @@ const userId = user.id;
       .maybeSingle();
 
     if (docTypeError || !docType) {
-      return new Response(
-        JSON.stringify({ error: "Invalid or inactive document type" }),
-        {
-          status: 400,
-          headers: { ...getCorsHeaders(req),, "Content-Type": "application/json" },
-        }
-      );
+      return new Response(JSON.stringify({ error: "Invalid or inactive document type" }), {
+        status: 400,
+        headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
+      });
     }
 
     // 5. Generate safe storage path
@@ -168,9 +151,7 @@ const userId = user.id;
         ai_status: "pending",
         uploaded_by_user_id: userId,
       })
-      .select(
-        "id, storage_bucket, storage_path, original_file_name, upload_status"
-      )
+      .select("id, storage_bucket, storage_path, original_file_name, upload_status")
       .single();
 
     if (insertError) {
@@ -182,8 +163,8 @@ const userId = user.id;
         }),
         {
           status: 500,
-          headers: { ...getCorsHeaders(req),, "Content-Type": "application/json" },
-        }
+          headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
+        },
       );
     }
 
@@ -198,17 +179,14 @@ const userId = user.id;
       }),
       {
         status: 201,
-        headers: { ...getCorsHeaders(req),, "Content-Type": "application/json" },
-      }
+        headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
+      },
     );
   } catch (err) {
     console.error("Unhandled error:", err);
-    return new Response(
-      JSON.stringify({ error: "Internal server error" }),
-      {
-        status: 500,
-        headers: { ...getCorsHeaders(req),, "Content-Type": "application/json" },
-      }
-    );
+    return new Response(JSON.stringify({ error: "Internal server error" }), {
+      status: 500,
+      headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
+    });
   }
 });
