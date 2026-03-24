@@ -822,36 +822,27 @@ export default function AdminCaseReview() {
                 </div>
                 <Button
                   className="w-full justify-start gap-2"
-                  disabled={isCaseAction || !canApproveCase}
-                  onClick={handleApproveCase}
-                >
-                  <CheckCircle2 className="h-4 w-4" />
-                  Ügy jóváhagyása
-                  {!canApproveCase && documents.length > 0 && (
-                    <span className="text-xs ml-auto opacity-70">
-                      (Az AI döntés vagy a dokumentumreview még nem engedi a jóváhagyást.)
-                    </span>
-                  )}
-                  {documents.length === 0 && <span className="text-xs ml-auto opacity-70">(Nincs dokumentum)</span>}
-                </Button>
-                <Button
-                  variant="outline"
-                  className="w-full justify-start gap-2 text-warning border-warning/30 hover:bg-warning/10"
                   disabled={isCaseAction}
-                  onClick={() => setRequestFixOpen(true)}
+                  onClick={() => handleManualClassification("green", adminNote || "Admin manuális jóváhagyás")}
                 >
-                  <RotateCcw className="h-4 w-4" />
-                  Javítás kérése
+                  {isCaseAction ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+                  Zöldre állítás
                 </Button>
+                <p className="text-xs text-muted-foreground pl-1">
+                  Az ügyet zöld besorolásra állítja admin felülbírálással.
+                </p>
                 <Button
                   variant="outline"
                   className="w-full justify-start gap-2 text-destructive border-destructive/30 hover:bg-destructive/10"
                   disabled={isCaseAction}
-                  onClick={() => setRejectConfirmOpen(true)}
+                  onClick={() => handleManualClassification("red", adminNote || "Admin elutasítás")}
                 >
-                  <XCircle className="h-4 w-4" />
-                  Elutasítás / Lezárás
+                  {isCaseAction ? <Loader2 className="h-4 w-4 animate-spin" /> : <XCircle className="h-4 w-4" />}
+                  Pirosra állítás
                 </Button>
+                <p className="text-xs text-muted-foreground pl-1">
+                  Az ügyet piros besorolásra állítja és elutasítja.
+                </p>
               </CardContent>
             </Card>
           </div>
