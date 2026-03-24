@@ -5,6 +5,7 @@ const ALLOWED_ORIGINS = [
   "https://www.timeshareease.hu",
   "http://localhost:5173",
   "http://localhost:3000",
+  "https://timeshare-trust-hub.lovable.app",
 ];
 
 function getCorsHeaders(req: Request): Record<string, string> {
@@ -53,18 +54,17 @@ Deno.serve(async (req) => {
     const serviceClient = createClient(supabaseUrl, serviceRoleKey);
 
     const token = authHeader.replace("Bearer ", "");
-    const { data: { user }, error: userError } = await authClient.auth.getUser(token);
+    const {
+      data: { user },
+      error: userError,
+    } = await authClient.auth.getUser(token);
 
     if (userError || !user) {
       return jsonResponse({ error: "Unauthorized" }, 401, req);
     }
 
     // 2. Admin ellenőrzés
-    const { data: profile } = await serviceClient
-      .from("profiles")
-      .select("role")
-      .eq("id", user.id)
-      .single();
+    const { data: profile } = await serviceClient.from("profiles").select("role").eq("id", user.id).single();
 
     if (!profile || profile.role !== "admin") {
       return jsonResponse({ error: "Forbidden – admin only" }, 403, req);
@@ -79,15 +79,23 @@ Deno.serve(async (req) => {
     }
 
     if (!["green", "yellow", "red"].includes(classification)) {
-      return jsonResponse({
-        error: "Invalid classification. Must be: green | yellow | red",
-      }, 400, req);
+      return jsonResponse(
+        {
+          error: "Invalid classification. Must be: green | yellow | red",
+        },
+        400,
+        req,
+      );
     }
 
     if (!reason || typeof reason !== "string" || !reason.trim()) {
-      return jsonResponse({
-        error: "Missing required field: reason (indoklás kötelező)",
-      }, 400, req);
+      return jsonResponse(
+        {
+          error: "Missing required field: reason (indoklás kötelező)",
+        },
+        400,
+        req,
+      );
     }
 
     // 4. Case betöltése
@@ -129,10 +137,14 @@ Deno.serve(async (req) => {
       .single();
 
     if (classInsertError) {
-      return jsonResponse({
-        error: "Failed to insert classification",
-        detail: classInsertError.message,
-      }, 500, req);
+      return jsonResponse(
+        {
+          error: "Failed to insert classification",
+          detail: classInsertError.message,
+        },
+        500,
+        req,
+      );
     }
 
     // 7. Case státusz és classification frissítése
@@ -154,10 +166,14 @@ Deno.serve(async (req) => {
       .eq("id", case_id);
 
     if (caseUpdateError) {
-      return jsonResponse({
-        error: "Failed to update case",
-        detail: caseUpdateError.message,
-      }, 500, req);
+      return jsonResponse(
+        {
+          error: "Failed to update case",
+          detail: caseUpdateError.message,
+        },
+        500,
+        req,
+      );
     }
 
     // 8. Audit log — kötelező admin override esetén
@@ -179,22 +195,29 @@ Deno.serve(async (req) => {
       },
     });
 
-    return jsonResponse({
-      success: true,
-      case_id,
-      case_number: caseRow.case_number,
-      previous_classification: caseRow.classification,
-      new_classification: classification,
-      previous_status: caseRow.status,
-      new_status: newStatus,
-      classification_id: newClassification.id,
-    }, 200, req);
-
+    return jsonResponse(
+      {
+        success: true,
+        case_id,
+        case_number: caseRow.case_number,
+        previous_classification: caseRow.classification,
+        new_classification: classification,
+        previous_status: caseRow.status,
+        new_status: newStatus,
+        classification_id: newClassification.id,
+      },
+      200,
+      req,
+    );
   } catch (err) {
     console.error("admin-manual-classification unhandled error:", err);
-    return jsonResponse({
-      error: "Internal server error",
-      detail: err instanceof Error ? err.message : "Unknown error",
-    }, 500, req);
+    return jsonResponse(
+      {
+        error: "Internal server error",
+        detail: err instanceof Error ? err.message : "Unknown error",
+      },
+      500,
+      req,
+    );
   }
 });
