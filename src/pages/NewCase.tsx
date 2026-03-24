@@ -232,6 +232,16 @@ export default function NewCase() {
         updated_at: now,
       });
 
+      // Abbázia részvény adatok mentése külön táblába
+      if (isShareRelated && shareCount) {
+        await supabaseAny.from("abbazia_shares").insert({
+          case_id: caseId,
+          share_count: Number(shareCount),
+          transfer_status: "pending",
+          created_at: now,
+        });
+      }
+
       createdCaseRef.current = caseId;
       setDraftCaseId(caseId);
       return caseId;
