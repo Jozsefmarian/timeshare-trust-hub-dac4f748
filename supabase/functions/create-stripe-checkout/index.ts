@@ -6,6 +6,7 @@ const ALLOWED_ORIGINS = [
   "https://www.timeshareease.hu",
   "http://localhost:5173",
   "http://localhost:3000",
+  "https://timeshare-trust-hub.lovable.app",
 ];
 
 function getCorsHeaders(req: Request): Record<string, string> {
@@ -59,7 +60,10 @@ Deno.serve(async (req) => {
     const serviceClient = createClient(supabaseUrl, serviceRoleKey);
 
     const token = authHeader.replace("Bearer ", "");
-    const { data: { user }, error: userError } = await authClient.auth.getUser(token);
+    const {
+      data: { user },
+      error: userError,
+    } = await authClient.auth.getUser(token);
 
     if (userError || !user) {
       return jsonResponse({ error: "Unauthorized" }, 401, req);
@@ -89,10 +93,14 @@ Deno.serve(async (req) => {
     }
 
     if (caseRow.status !== "service_agreement_accepted") {
-      return jsonResponse({
-        error: "Payment can only be initiated after service agreement acceptance",
-        detail: `Current status: ${caseRow.status}`,
-      }, 409, req);
+      return jsonResponse(
+        {
+          error: "Payment can only be initiated after service agreement acceptance",
+          detail: `Current status: ${caseRow.status}`,
+        },
+        409,
+        req,
+      );
     }
 
     // 4. Seller adatok betöltése
@@ -138,26 +146,21 @@ Deno.serve(async (req) => {
     });
 
     // 6. Payments rekord létrehozása
-    const { error: paymentInsertError } = await serviceClient
-      .from("payments")
-      .insert({
-        case_id,
-        payment_type: "service_fee",
-        stripe_checkout_session_id: session.id,
-        amount: 99000,
-        currency: "HUF",
-        status: "pending",
-      });
+    const { error: paymentInsertError } = await serviceClient.from("payments").insert({
+      case_id,
+      payment_type: "service_fee",
+      stripe_checkout_session_id: session.id,
+      amount: 99000,
+      currency: "HUF",
+      status: "pending",
+    });
 
     if (paymentInsertError) {
       console.error("Failed to insert payment record:", paymentInsertError);
     }
 
     // 7. Case státusz frissítése
-    await serviceClient
-      .from("cases")
-      .update({ status: "payment_pending" })
-      .eq("id", case_id);
+    await serviceClient.from("cases").update({ status: "payment_pending" }).eq("id", case_id);
 
     // 8. Audit log
     await serviceClient.from("audit_logs").insert({
@@ -173,17 +176,24 @@ Deno.serve(async (req) => {
       },
     });
 
-    return jsonResponse({
-      success: true,
-      checkout_url: session.url,
-      session_id: session.id,
-    }, 200, req);
-
+    return jsonResponse(
+      {
+        success: true,
+        checkout_url: session.url,
+        session_id: session.id,
+      },
+      200,
+      req,
+    );
   } catch (err) {
     console.error("create-stripe-checkout unhandled error:", err);
-    return jsonResponse({
-      error: "Internal server error",
-      detail: err instanceof Error ? err.message : "Unknown error",
-    }, 500, req);
+    return jsonResponse(
+      {
+        error: "Internal server error",
+        detail: err instanceof Error ? err.message : "Unknown error",
+      },
+      500,
+      req,
+    );
   }
 });
