@@ -5,6 +5,7 @@ const ALLOWED_ORIGINS = [
   "https://www.timeshareease.hu",
   "http://localhost:5173",
   "http://localhost:3000",
+  "https://timeshare-trust-hub.lovable.app",
 ];
 
 function getCorsHeaders(req: Request): Record<string, string> {
@@ -53,18 +54,17 @@ Deno.serve(async (req) => {
     const serviceClient = createClient(supabaseUrl, serviceRoleKey);
 
     const token = authHeader.replace("Bearer ", "");
-    const { data: { user }, error: userError } = await authClient.auth.getUser(token);
+    const {
+      data: { user },
+      error: userError,
+    } = await authClient.auth.getUser(token);
 
     if (userError || !user) {
       return jsonResponse({ error: "Unauthorized" }, 401, req);
     }
 
     // 2. Admin ellenőrzés
-    const { data: profile } = await serviceClient
-      .from("profiles")
-      .select("role")
-      .eq("id", user.id)
-      .single();
+    const { data: profile } = await serviceClient.from("profiles").select("role").eq("id", user.id).single();
 
     if (!profile || profile.role !== "admin") {
       return jsonResponse({ error: "Forbidden – admin only" }, 403, req);
@@ -94,10 +94,14 @@ Deno.serve(async (req) => {
     }
 
     if (targetPolicy.status !== "draft") {
-      return jsonResponse({
-        error: "Only draft policies can be published",
-        detail: `Current status: ${targetPolicy.status}`,
-      }, 409, req);
+      return jsonResponse(
+        {
+          error: "Only draft policies can be published",
+          detail: `Current status: ${targetPolicy.status}`,
+        },
+        409,
+        req,
+      );
     }
 
     const publishedAt = new Date().toISOString();
@@ -119,10 +123,14 @@ Deno.serve(async (req) => {
         .eq("id", currentPublished.id);
 
       if (archiveError) {
-        return jsonResponse({
-          error: "Failed to archive current policy",
-          detail: archiveError.message,
-        }, 500, req);
+        return jsonResponse(
+          {
+            error: "Failed to archive current policy",
+            detail: archiveError.message,
+          },
+          500,
+          req,
+        );
       }
 
       // Audit log az archiváláshoz
@@ -148,10 +156,14 @@ Deno.serve(async (req) => {
       .eq("id", policy_version_id);
 
     if (publishError) {
-      return jsonResponse({
-        error: "Failed to publish policy",
-        detail: publishError.message,
-      }, 500, req);
+      return jsonResponse(
+        {
+          error: "Failed to publish policy",
+          detail: publishError.message,
+        },
+        500,
+        req,
+      );
     }
 
     // 7. Audit log a publikáláshoz
@@ -168,24 +180,31 @@ Deno.serve(async (req) => {
       },
     });
 
-    return jsonResponse({
-      success: true,
-      published_policy: {
-        id: policy_version_id,
-        name: targetPolicy.name,
-        version: targetPolicy.version,
-        published_at: publishedAt,
+    return jsonResponse(
+      {
+        success: true,
+        published_policy: {
+          id: policy_version_id,
+          name: targetPolicy.name,
+          version: targetPolicy.version,
+          published_at: publishedAt,
+        },
+        archived_policy: currentPublished
+          ? { id: currentPublished.id, name: currentPublished.name, version: currentPublished.version }
+          : null,
       },
-      archived_policy: currentPublished
-        ? { id: currentPublished.id, name: currentPublished.name, version: currentPublished.version }
-        : null,
-    }, 200, req);
-
+      200,
+      req,
+    );
   } catch (err) {
     console.error("publish-policy unhandled error:", err);
-    return jsonResponse({
-      error: "Internal server error",
-      detail: err instanceof Error ? err.message : "Unknown error",
-    }, 500, req);
+    return jsonResponse(
+      {
+        error: "Internal server error",
+        detail: err instanceof Error ? err.message : "Unknown error",
+      },
+      500,
+      req,
+    );
   }
 });
