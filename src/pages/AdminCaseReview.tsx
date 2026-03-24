@@ -456,18 +456,6 @@ export default function AdminCaseReview() {
     }
   };
 
-  const handleApproveCase = () => handleManualClassification("green", adminNote || "Admin jóváhagyás");
-
-  const handleRequestFix = async () => {
-    await updateCaseStatus("under_review", requestFixNote);
-    setRequestFixOpen(false);
-    setRequestFixNote("");
-  };
-
-  const handleRejectCase = async () => {
-    await updateCaseStatus("closed", adminNote?.trim() ? `Admin által lezárva. ${adminNote}` : "Admin által lezárva");
-    setRejectConfirmOpen(false);
-  };
 
   // ---------- Render ----------
 
