@@ -849,52 +849,6 @@ export default function AdminCaseReview() {
         </div>
       </div>
 
-      {/* Request Fix Modal */}
-      <Dialog open={requestFixOpen} onOpenChange={setRequestFixOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Javítás kérése</DialogTitle>
-            <DialogDescription>Adjon meg egy megjegyzést az eladónak a szükséges javításokról.</DialogDescription>
-          </DialogHeader>
-          <Textarea
-            placeholder="Mi a javítandó..."
-            value={requestFixNote}
-            onChange={(e) => setRequestFixNote(e.target.value)}
-            rows={4}
-          />
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setRequestFixOpen(false)}>
-              Mégsem
-            </Button>
-            <Button disabled={isCaseAction} onClick={handleRequestFix}>
-              {isCaseAction ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-              Javítás kérése
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Reject Confirmation */}
-      <AlertDialog open={rejectConfirmOpen} onOpenChange={setRejectConfirmOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Ügy elutasítása / lezárása</AlertDialogTitle>
-            <AlertDialogDescription>
-              Biztosan el szeretné utasítani és lezárni ezt az ügyet? Ez a művelet a státuszt „Lezárva" értékre állítja.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Mégsem</AlertDialogCancel>
-            <AlertDialogAction
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              disabled={isCaseAction}
-              onClick={handleRejectCase}
-            >
-              Elutasítás és lezárás
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </AdminLayout>
   );
 }
