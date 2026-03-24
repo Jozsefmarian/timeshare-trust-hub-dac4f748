@@ -5,7 +5,7 @@ project_id = "nowfrwpknymkzujijgsz"
 verify_jwt = false
 
 [functions.confirm-document-upload]
-verify_jwt = true
+verify_jwt = false
 
 [functions.submit-case]
 verify_jwt = true
