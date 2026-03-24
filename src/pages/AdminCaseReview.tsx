@@ -278,11 +278,7 @@ export default function AdminCaseReview() {
   const [previewLoadingId, setPreviewLoadingId] = useState<string | null>(null);
   const [isCaseAction, setIsCaseAction] = useState(false);
 
-  // Modals
-  const [requestFixOpen, setRequestFixOpen] = useState(false);
   const [adminNote, setAdminNote] = useState("");
-  const [requestFixNote, setRequestFixNote] = useState("");
-  const [rejectConfirmOpen, setRejectConfirmOpen] = useState(false);
 
   // ---------- Data Loading ----------
 
