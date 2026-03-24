@@ -97,9 +97,25 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: "Forbidden" }, 403);
     }
 
-    // Csak sárga státuszból indítható újraellenőrzés
-    const allowedStatuses = ["yellow_review", "docs_uploaded", "submitted"];
-    if (!allowedStatuses.includes(caseRow.status)) {
+    // Csak fix_required sárga státuszból indítható újraellenőrzés
+    // (manual_review-ból nem, mert ott nincs mit javítani)
+    const allowedStatuses = ["docs_uploaded", "submitted"];
+    // yellow_review csak akkor engedett, ha még van recheck quota
+    const currentRecheckCount = (caseRow as any).recheck_count ?? 0;
+    const MAX_RECHECK = 3;
+
+    if (caseRow.status === "yellow_review") {
+      // Ha már yellow_review-ban van és elfogytak a próbák → nem engedélyezett
+      if (currentRecheckCount >= MAX_RECHECK) {
+        return jsonResponse(
+          {
+            error: "Maximum recheck attempts reached",
+            detail: `Recheck count: ${currentRecheckCount}/${MAX_RECHECK}`,
+          },
+          409,
+        );
+      }
+    } else if (!allowedStatuses.includes(caseRow.status)) {
       return jsonResponse(
         {
           error: "Recheck not allowed from current status",
@@ -108,6 +124,8 @@ Deno.serve(async (req) => {
         409,
       );
     }
+
+    // 4. Régi AI eredmények törlése (invalidálás)
 
     // 4. Régi AI eredmények törlése (invalidálás)
 
@@ -142,11 +160,15 @@ Deno.serve(async (req) => {
     }
 
     // 5. Case AI státusz visszaállítása
+    const newRecheckCount = currentRecheckCount + 1;
+    const reachedLimit = newRecheckCount >= MAX_RECHECK;
+
     const { error: caseResetError } = await serviceClient
       .from("cases")
       .update({
         ai_pipeline_status: "queued",
         classification: null,
+        recheck_count: newRecheckCount,
         updated_at: new Date().toISOString(),
       })
       .eq("id", case_id);
@@ -259,6 +281,25 @@ Deno.serve(async (req) => {
         job_results: jobResults,
       },
     });
+
+    // Ha elérte a limitet → yellow_review státusz (manuális review)
+    if (reachedLimit) {
+      await serviceClient.from("cases").update({ status: "yellow_review" }).eq("id", case_id);
+
+      // Audit log a limit eléréséről
+      await serviceClient.from("audit_logs").insert({
+        entity_type: "cases",
+        entity_id: case_id,
+        action: "recheck_limit_reached",
+        performed_by_user_id: user.id,
+        source: "edge_function",
+        new_data: {
+          recheck_count: newRecheckCount,
+          max_recheck: MAX_RECHECK,
+          auto_escalated_to: "yellow_review",
+        },
+      });
+    }
 
     return jsonResponse({
       success: true,
