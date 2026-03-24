@@ -311,7 +311,19 @@ export default function NewCase() {
       }
 
       const catDef = DOC_CATEGORIES[tracked.category];
-      const docTypeId = documentTypeMap[catDef.backendCode];
+      let docTypeId = documentTypeMap[catDef.backendCode];
+
+      // Ha a map még nem töltődött be, betöltjük most
+      if (!docTypeId) {
+        const { data } = await supabaseAny.from("document_types").select("id, code").eq("is_active", true);
+        if (data) {
+          const freshMap: Record<string, string> = {};
+          for (const dt of data) freshMap[dt.code] = dt.id;
+          setDocumentTypeMap(freshMap);
+          docTypeId = freshMap[catDef.backendCode];
+        }
+      }
+
       if (!docTypeId) {
         setFiles((prev) =>
           prev.map((f) =>
@@ -319,7 +331,7 @@ export default function NewCase() {
               ? {
                   ...f,
                   status: "failed" as UploadStatus,
-                  error: `Hiányzó dokumentumtípus konfiguráció: ${catDef.backendCode}`,
+                  error: `Dokumentumtípus nem található: ${catDef.backendCode}`,
                 }
               : f,
           ),
