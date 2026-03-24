@@ -434,6 +434,7 @@ export type Database = {
           internal_note: string | null
           policy_version_id_applied: string | null
           priority: string | null
+          recheck_count: number
           restriction_check_status: Database["public"]["Enums"]["ai_result_status_enum"]
           seller_profile_id: string | null
           seller_user_id: string
@@ -456,6 +457,7 @@ export type Database = {
           internal_note?: string | null
           policy_version_id_applied?: string | null
           priority?: string | null
+          recheck_count?: number
           restriction_check_status?: Database["public"]["Enums"]["ai_result_status_enum"]
           seller_profile_id?: string | null
           seller_user_id: string
@@ -478,6 +480,7 @@ export type Database = {
           internal_note?: string | null
           policy_version_id_applied?: string | null
           priority?: string | null
+          recheck_count?: number
           restriction_check_status?: Database["public"]["Enums"]["ai_result_status_enum"]
           seller_profile_id?: string | null
           seller_user_id?: string
