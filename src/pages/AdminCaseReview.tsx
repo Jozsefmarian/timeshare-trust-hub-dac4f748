@@ -366,10 +366,6 @@ export default function AdminCaseReview() {
           ? "red"
           : "pending";
 
-  const canApproveCase =
-    caseAiDecision === "green" &&
-    documents.length > 0 &&
-    documents.every((d) => d.upload_status === "completed" && d.review_status === "approved");
 
   // ---------- Document Actions ----------
 
