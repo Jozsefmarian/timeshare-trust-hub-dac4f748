@@ -5,6 +5,7 @@ const ALLOWED_ORIGINS = [
   "https://www.timeshareease.hu",
   "http://localhost:5173",
   "http://localhost:3000",
+  "https://preview--timeshare-trust-hub.lovable.app",
 ];
 
 function getCorsHeaders(req: Request): Record<string, string> {
