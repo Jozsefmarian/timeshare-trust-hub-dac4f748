@@ -142,14 +142,6 @@ async function recalculateCaseStatus(caseId: string) {
   await supabase.from("cases").update({ status: "documents_uploaded" }).eq("id", caseId);
 }
 
-async function updateCaseClassification(caseId: string, classification: string) {
-  const { error } = await supabase
-    .from("cases")
-    .update({ classification } as any)
-    .eq("id", caseId);
-  if (error) throw error;
-}
-
 async function updateCaseInternalNote(caseId: string, note: string) {
   const { error } = await supabase
     .from("cases")
@@ -420,7 +412,14 @@ export default function AdminCaseDetail() {
     if (!caseId) return;
     try {
       setUpdatingClassification(true);
-      await updateCaseClassification(caseId, classification);
+      const { error } = await supabase.functions.invoke("admin-manual-classification", {
+        body: {
+          case_id: caseId,
+          classification,
+          reason: "Admin besorolás az ügy detail oldalról",
+        },
+      });
+      if (error) throw error;
       toast.success(`Ügy besorolása: ${classificationLabel(classification)}`);
       await loadCase();
     } catch {
