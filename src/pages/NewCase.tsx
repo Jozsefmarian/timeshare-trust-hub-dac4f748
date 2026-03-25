@@ -99,8 +99,19 @@ export default function NewCase() {
   const [rightsEnd, setRightsEnd] = useState("");
   const [hasShares, setHasShares] = useState<string>("");
   const [shareCount, setShareCount] = useState("");
+  const [unitNumber, setUnitNumber] = useState("");
+  const [originalContractNumber, setOriginalContractNumber] = useState("");
   const [usageFrequency, setUsageFrequency] = useState<"annual" | "biennial">("annual");
   const [usageParity, setUsageParity] = useState<"even" | "odd" | null>(null);
+
+  // Abbázia share fields
+  const [issuerName, setIssuerName] = useState("");
+  const [clientNumber, setClientNumber] = useState("");
+  const [shareSeries, setShareSeries] = useState("");
+  const [nominalValue, setNominalValue] = useState("");
+  const [isin, setIsin] = useState("");
+  const [securitiesAccountProvider, setSecuritiesAccountProvider] = useState("");
+  const [securitiesAccountId, setSecuritiesAccountId] = useState("");
 
   // Step 3
   const [decl1, setDecl1] = useState(false);
