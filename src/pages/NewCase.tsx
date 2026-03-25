@@ -193,6 +193,7 @@ export default function NewCase() {
             tax_id: ownerTaxId.trim() || null,
             birth_date: ownerBirthDate || null,
             birth_place: ownerBirthPlace.trim() || null,
+            birth_name: ownerBirthName.trim() || null,
             mother_name: ownerMotherName.trim() || null,
             notes: sellerProfileNotes || null,
           },
