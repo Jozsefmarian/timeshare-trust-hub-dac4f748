@@ -832,6 +832,18 @@ export default function NewCase() {
                   />
                 </div>
 
+                <div className="space-y-1.5">
+                  <Label htmlFor="annualFee">Tárgyévi fenntartási díj (HUF) *</Label>
+                  <Input
+                    id="annualFee"
+                    type="number"
+                    min={0}
+                    placeholder="pl. 150000"
+                    value={annualFee}
+                    onChange={(e) => setAnnualFee(e.target.value)}
+                  />
+                </div>
+
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-1.5">
                     <Label htmlFor="rightsStart">Jogosultság kezdete (év)</Label>
