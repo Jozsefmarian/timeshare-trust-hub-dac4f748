@@ -511,11 +511,13 @@ Deno.serve(async (req) => {
     // ── Case státusz frissítése ───────────────────────────────────────────
     // contract_generated → seller letölthet és aláírhat
 
-    await serviceClient.from("cases").update({ status: "contract_generated" }).eq("id", case_id);
-    .update({ 
-  status: "contract_generated",
-  updated_at: new Date().toISOString()
-})
+    await serviceClient
+      .from("cases")
+      .update({
+        status: "contract_generated",
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", case_id);
 
     // ── Audit log ─────────────────────────────────────────────────────────
 
