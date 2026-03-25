@@ -112,6 +112,7 @@ export default function NewCase() {
   const [isin, setIsin] = useState("");
   const [securitiesAccountProvider, setSecuritiesAccountProvider] = useState("");
   const [securitiesAccountId, setSecuritiesAccountId] = useState("");
+  const [annualFee, setAnnualFee] = useState("");
 
   // Step 3
   const [decl1, setDecl1] = useState(false);
@@ -243,6 +244,7 @@ export default function NewCase() {
         share_count: isShareRelated && shareCount ? Number(shareCount) : null,
         unit_number: unitNumber.trim() || null,
         original_contract_number: originalContractNumber.trim() || null,
+        annual_fee: annualFee ? Number(annualFee) : null,
         created_at: now,
         updated_at: now,
       });
@@ -306,6 +308,7 @@ export default function NewCase() {
     securitiesAccountProvider,
     securitiesAccountId,
     ownerBirthName,
+    annualFee,
     toast,
   ]);
 
@@ -465,6 +468,7 @@ export default function NewCase() {
           !!rightsEnd &&
           hasShares !== "" &&
           !!originalContractNumber &&
+          !!annualFee &&
           (usageFrequency === "annual" || (usageFrequency === "biennial" && !!usageParity)) &&
           (hasShares !== "yes" || (!!issuerName && !!clientNumber && !!shareSeries && !!nominalValue && !!isin && !!securitiesAccountProvider && !!securitiesAccountId))
         );
@@ -826,6 +830,18 @@ export default function NewCase() {
                     placeholder="pl. SZ-2005/1234"
                     value={originalContractNumber}
                     onChange={(e) => setOriginalContractNumber(e.target.value)}
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label htmlFor="annualFee">Tárgyévi fenntartási díj (HUF) *</Label>
+                  <Input
+                    id="annualFee"
+                    type="number"
+                    min={0}
+                    placeholder="pl. 150000"
+                    value={annualFee}
+                    onChange={(e) => setAnnualFee(e.target.value)}
                   />
                 </div>
 
