@@ -466,6 +466,7 @@ export default function NewCase() {
           !!rightsEnd &&
           hasShares !== "" &&
           !!originalContractNumber &&
+          !!annualFee &&
           (usageFrequency === "annual" || (usageFrequency === "biennial" && !!usageParity)) &&
           (hasShares !== "yes" || (!!issuerName && !!clientNumber && !!shareSeries && !!nominalValue && !!isin && !!securitiesAccountProvider && !!securitiesAccountId))
         );
