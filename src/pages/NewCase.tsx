@@ -430,6 +430,7 @@ export default function NewCase() {
           ownerPhone &&
           ownerBirthDate &&
           ownerBirthPlace &&
+          ownerBirthName &&
           ownerMotherName &&
           ownerIdNumber
         );
@@ -438,11 +439,14 @@ export default function NewCase() {
           !!resort &&
           !!weekNumber &&
           !!apartmentType &&
+          !!unitNumber &&
           !!seasonName &&
           !!rightsStart &&
           !!rightsEnd &&
           hasShares !== "" &&
-          (usageFrequency === "annual" || (usageFrequency === "biennial" && !!usageParity))
+          !!originalContractNumber &&
+          (usageFrequency === "annual" || (usageFrequency === "biennial" && !!usageParity)) &&
+          (hasShares !== "yes" || (!!issuerName && !!clientNumber && !!shareSeries && !!nominalValue && !!isin && !!securitiesAccountProvider && !!securitiesAccountId))
         );
       case 2:
         return decl1 && decl2 && decl3;
