@@ -15,7 +15,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { uploadCaseDocument } from "@/lib/documentUpload";
 import { submitCase } from "@/integrations/supabase/api";
 
-const supabaseAny: any = supabase;
+
 
 const STEPS = ["Tulajdonos adatai", "Üdülési jog adatai", "Nyilatkozatok", "Dokumentum feltöltés"];
 
@@ -122,7 +122,7 @@ export default function NewCase() {
   // Resorts betöltése DB-ből
   useEffect(() => {
     const loadResorts = async () => {
-      const { data } = await supabaseAny
+      const { data } = await supabase
         .from("resorts")
         .select("id, name")
         .eq("is_active", true)
@@ -137,7 +137,7 @@ export default function NewCase() {
   const ensureDocTypesLoaded = useCallback(async () => {
     if (docTypesLoaded.current) return;
     docTypesLoaded.current = true;
-    const { data } = await supabaseAny.from("document_types").select("id, code").eq("is_active", true);
+    const { data } = await supabase.from("document_types").select("id, code").eq("is_active", true);
     if (data) {
       const map: Record<string, string> = {};
       for (const dt of data) map[dt.code] = dt.id;
@@ -154,7 +154,7 @@ export default function NewCase() {
     try {
       const {
         data: { session },
-      } = await supabaseAny.auth.getSession();
+      } = await supabase.auth.getSession();
       if (!session) {
         toast({ title: "Hiba", description: "Nincs bejelentkezett felhasználó.", variant: "destructive" });
         return null;
@@ -170,7 +170,7 @@ export default function NewCase() {
         .filter(Boolean)
         .join("\n");
 
-      const { data: sellerProfile, error: spErr } = await supabaseAny
+      const { data: sellerProfile, error: spErr } = await supabase
         .from("seller_profiles")
         .upsert(
           {
@@ -192,7 +192,7 @@ export default function NewCase() {
 
       // Create case
       const generatedCaseNumber = `TS-${new Date().getFullYear()}-${Date.now().toString().slice(-6)}`;
-      const { data: caseData, error: caseErr } = await supabaseAny
+      const { data: caseData, error: caseErr } = await supabase
         .from("cases")
         .insert({
           case_number: generatedCaseNumber,
@@ -215,7 +215,7 @@ export default function NewCase() {
       // Create week_offer
       const selectedResort = resortOptions.find((r) => r.name === resort);
 
-      await supabaseAny.from("week_offers").insert({
+      await supabase.from("week_offers").insert({
         case_id: caseId,
         resort_id: selectedResort?.id ?? null,
         resort_name_raw: resort.trim(),
@@ -234,7 +234,7 @@ export default function NewCase() {
 
       // Abbázia részvény adatok mentése külön táblába
       if (isShareRelated && shareCount) {
-        await supabaseAny.from("abbazia_shares").insert({
+        await supabase.from("abbazia_shares").insert({
           case_id: caseId,
           share_count: Number(shareCount),
           transfer_status: "pending",
@@ -325,7 +325,7 @@ export default function NewCase() {
 
       // Ha a map még nem töltődött be, betöltjük most
       if (!docTypeId) {
-        const { data } = await supabaseAny.from("document_types").select("id, code").eq("is_active", true);
+        const { data } = await supabase.from("document_types").select("id, code").eq("is_active", true);
         if (data) {
           const freshMap: Record<string, string> = {};
           for (const dt of data) freshMap[dt.code] = dt.id;
