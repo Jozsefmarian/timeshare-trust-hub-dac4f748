@@ -308,6 +308,7 @@ export default function NewCase() {
     securitiesAccountProvider,
     securitiesAccountId,
     ownerBirthName,
+    annualFee,
     toast,
   ]);
 
