@@ -244,6 +244,7 @@ export default function NewCase() {
         share_count: isShareRelated && shareCount ? Number(shareCount) : null,
         unit_number: unitNumber.trim() || null,
         original_contract_number: originalContractNumber.trim() || null,
+        annual_fee: annualFee ? Number(annualFee) : null,
         created_at: now,
         updated_at: now,
       });
