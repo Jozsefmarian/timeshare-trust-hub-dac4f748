@@ -809,6 +809,16 @@ export default function NewCase() {
                   />
                 </div>
 
+                <div className="space-y-1.5">
+                  <Label htmlFor="originalContractNumber">Eredeti szerződés sorszáma *</Label>
+                  <Input
+                    id="originalContractNumber"
+                    placeholder="pl. SZ-2005/1234"
+                    value={originalContractNumber}
+                    onChange={(e) => setOriginalContractNumber(e.target.value)}
+                  />
+                </div>
+
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-1.5">
                     <Label htmlFor="rightsStart">Jogosultság kezdete (év)</Label>
