@@ -320,7 +320,15 @@ export default function CaseDetail() {
     };
 
     return checkResults
-      .filter((cr) => cr.result === "correction_required" || cr.severity === "correction")
+      .filter(
+        (cr) =>
+          cr.result === "correction_required" ||
+          cr.result === "fail" ||
+          cr.result === "warning" ||
+          cr.severity === "correction" ||
+          cr.severity === "medium" ||
+          cr.severity === "high",
+      )
       .map((cr) => {
         const details = cr.details ?? {};
 
@@ -331,7 +339,9 @@ export default function CaseDetail() {
           message: buildFriendlyMessage(cr),
           document_type_id: details.document_type_id,
           document_type_label: details.document_type_label,
-          field_name: details.field_name,
+          field_name:
+            details.field_name ??
+            (cr.check_type.startsWith("field_presence:") ? cr.check_type.replace("field_presence:", "") : undefined),
           field_label: details.field_label,
           current_value: details.current_value ?? details.form_value ?? null,
           expected_value:
