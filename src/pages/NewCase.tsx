@@ -83,6 +83,7 @@ export default function NewCase() {
   const [ownerBirthDate, setOwnerBirthDate] = useState("");
   const [ownerBirthPlace, setOwnerBirthPlace] = useState("");
   const [ownerMotherName, setOwnerMotherName] = useState("");
+  const [ownerBirthName, setOwnerBirthName] = useState("");
   const [ownerIdNumber, setOwnerIdNumber] = useState("");
   const [ownerTaxId, setOwnerTaxId] = useState("");
 
@@ -98,8 +99,19 @@ export default function NewCase() {
   const [rightsEnd, setRightsEnd] = useState("");
   const [hasShares, setHasShares] = useState<string>("");
   const [shareCount, setShareCount] = useState("");
+  const [unitNumber, setUnitNumber] = useState("");
+  const [originalContractNumber, setOriginalContractNumber] = useState("");
   const [usageFrequency, setUsageFrequency] = useState<"annual" | "biennial">("annual");
   const [usageParity, setUsageParity] = useState<"even" | "odd" | null>(null);
+
+  // Abbázia share fields
+  const [issuerName, setIssuerName] = useState("");
+  const [clientNumber, setClientNumber] = useState("");
+  const [shareSeries, setShareSeries] = useState("");
+  const [nominalValue, setNominalValue] = useState("");
+  const [isin, setIsin] = useState("");
+  const [securitiesAccountProvider, setSecuritiesAccountProvider] = useState("");
+  const [securitiesAccountId, setSecuritiesAccountId] = useState("");
 
   // Step 3
   const [decl1, setDecl1] = useState(false);
@@ -181,6 +193,7 @@ export default function NewCase() {
             tax_id: ownerTaxId.trim() || null,
             birth_date: ownerBirthDate || null,
             birth_place: ownerBirthPlace.trim() || null,
+            birth_name: ownerBirthName.trim() || null,
             mother_name: ownerMotherName.trim() || null,
             notes: sellerProfileNotes || null,
           },
@@ -228,6 +241,8 @@ export default function NewCase() {
         usage_parity: usageFrequency === "biennial" ? usageParity : null,
         share_related: isShareRelated,
         share_count: isShareRelated && shareCount ? Number(shareCount) : null,
+        unit_number: unitNumber.trim() || null,
+        original_contract_number: originalContractNumber.trim() || null,
         created_at: now,
         updated_at: now,
       });
@@ -238,6 +253,13 @@ export default function NewCase() {
           case_id: caseId,
           share_count: Number(shareCount),
           transfer_status: "pending",
+          share_series: shareSeries || null,
+          nominal_value: nominalValue ? Number(nominalValue) : null,
+          isin: isin || null,
+          securities_account_provider: securitiesAccountProvider || null,
+          securities_account_id: securitiesAccountId || null,
+          issuer_name: issuerName || null,
+          client_number: clientNumber || null,
           created_at: now,
         });
       }
@@ -274,6 +296,16 @@ export default function NewCase() {
     rightsEnd,
     isShareRelated,
     shareCount,
+    unitNumber,
+    originalContractNumber,
+    issuerName,
+    clientNumber,
+    shareSeries,
+    nominalValue,
+    isin,
+    securitiesAccountProvider,
+    securitiesAccountId,
+    ownerBirthName,
     toast,
   ]);
 
@@ -418,6 +450,7 @@ export default function NewCase() {
           ownerPhone &&
           ownerBirthDate &&
           ownerBirthPlace &&
+          ownerBirthName &&
           ownerMotherName &&
           ownerIdNumber
         );
@@ -426,11 +459,14 @@ export default function NewCase() {
           !!resort &&
           !!weekNumber &&
           !!apartmentType &&
+          !!unitNumber &&
           !!seasonName &&
           !!rightsStart &&
           !!rightsEnd &&
           hasShares !== "" &&
-          (usageFrequency === "annual" || (usageFrequency === "biennial" && !!usageParity))
+          !!originalContractNumber &&
+          (usageFrequency === "annual" || (usageFrequency === "biennial" && !!usageParity)) &&
+          (hasShares !== "yes" || (!!issuerName && !!clientNumber && !!shareSeries && !!nominalValue && !!isin && !!securitiesAccountProvider && !!securitiesAccountId))
         );
       case 2:
         return decl1 && decl2 && decl3;
@@ -652,6 +688,15 @@ export default function NewCase() {
                   </div>
                 </div>
                 <div className="space-y-1.5">
+                  <Label htmlFor="ownerBirthName">Születési név *</Label>
+                  <Input
+                    id="ownerBirthName"
+                    placeholder="pl. Kovács János"
+                    value={ownerBirthName}
+                    onChange={(e) => setOwnerBirthName(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-1.5">
                   <Label htmlFor="ownerMotherName">Anyja neve *</Label>
                   <Input
                     id="ownerMotherName"
@@ -702,12 +747,21 @@ export default function NewCase() {
                   </div>
 
                   <div className="space-y-1.5">
-                    <Label htmlFor="apartmentType">Apartman típus</Label>
+                    <Label htmlFor="apartmentType">Apartman típus *</Label>
                     <Input
                       id="apartmentType"
                       placeholder="pl. Studio, 1 hálós"
                       value={apartmentType}
                       onChange={(e) => setApartmentType(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="unitNumber">Apartman/egység száma *</Label>
+                    <Input
+                      id="unitNumber"
+                      placeholder="pl. A-12, 304"
+                      value={unitNumber}
+                      onChange={(e) => setUnitNumber(e.target.value)}
                     />
                   </div>
                 </div>
@@ -765,6 +819,16 @@ export default function NewCase() {
                   />
                 </div>
 
+                <div className="space-y-1.5">
+                  <Label htmlFor="originalContractNumber">Eredeti szerződés sorszáma *</Label>
+                  <Input
+                    id="originalContractNumber"
+                    placeholder="pl. SZ-2005/1234"
+                    value={originalContractNumber}
+                    onChange={(e) => setOriginalContractNumber(e.target.value)}
+                  />
+                </div>
+
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-1.5">
                     <Label htmlFor="rightsStart">Jogosultság kezdete (év)</Label>
@@ -807,16 +871,87 @@ export default function NewCase() {
                 </div>
 
                 {hasShares === "yes" && (
-                  <div className="space-y-1.5">
-                    <Label htmlFor="shareCount">Részvény darabszám</Label>
-                    <Input
-                      id="shareCount"
-                      type="number"
-                      min={1}
-                      placeholder="pl. 1"
-                      value={shareCount}
-                      onChange={(e) => setShareCount(e.target.value)}
-                    />
+                  <div className="grid gap-4">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="shareCount">Részvény darabszám *</Label>
+                      <Input
+                        id="shareCount"
+                        type="number"
+                        min={1}
+                        placeholder="pl. 1"
+                        value={shareCount}
+                        onChange={(e) => setShareCount(e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="issuerName">Kibocsátó neve *</Label>
+                      <Input
+                        id="issuerName"
+                        placeholder="pl. Abbázia Apartman Club Idegenforgalmi Zrt."
+                        value={issuerName}
+                        onChange={(e) => setIssuerName(e.target.value)}
+                      />
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="space-y-1.5">
+                        <Label htmlFor="clientNumber">Ügyfélszám *</Label>
+                        <Input
+                          id="clientNumber"
+                          placeholder="pl. 00123456"
+                          value={clientNumber}
+                          onChange={(e) => setClientNumber(e.target.value)}
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label htmlFor="shareSeries">Részvénysorozat megjelölés *</Label>
+                        <Input
+                          id="shareSeries"
+                          placeholder="pl. A sorozat"
+                          value={shareSeries}
+                          onChange={(e) => setShareSeries(e.target.value)}
+                        />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="space-y-1.5">
+                        <Label htmlFor="nominalValue">Névérték (HUF) *</Label>
+                        <Input
+                          id="nominalValue"
+                          type="number"
+                          min={1}
+                          placeholder="pl. 100000"
+                          value={nominalValue}
+                          onChange={(e) => setNominalValue(e.target.value)}
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label htmlFor="isin">ISIN azonosító *</Label>
+                        <Input
+                          id="isin"
+                          placeholder="pl. HU0000012345"
+                          value={isin}
+                          onChange={(e) => setIsin(e.target.value)}
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="securitiesAccountProvider">Értékpapír számlavezető intézmény *</Label>
+                      <Input
+                        id="securitiesAccountProvider"
+                        placeholder="pl. OTP Bank Nyrt."
+                        value={securitiesAccountProvider}
+                        onChange={(e) => setSecuritiesAccountProvider(e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="securitiesAccountId">Értékpapírszámla száma *</Label>
+                      <Input
+                        id="securitiesAccountId"
+                        placeholder="pl. 12345678-12345678-12345678"
+                        value={securitiesAccountId}
+                        onChange={(e) => setSecuritiesAccountId(e.target.value)}
+                      />
+                    </div>
                   </div>
                 )}
               </div>
