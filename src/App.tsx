@@ -11,6 +11,7 @@ import CaseDetail from "./pages/CaseDetail";
 import NewCase from "./pages/NewCase";
 import SellerCaseContracts from "./pages/SellerCaseContracts";
 import SellerCasePayment from "./pages/SellerCasePayment";
+import SellerSupport from "./pages/SellerSupport";
 import AdminDashboard from "./pages/AdminDashboard";
 import AdminCases from "./pages/AdminCases";
 import AdminCaseDetail from "./pages/AdminCaseDetail";
@@ -85,6 +86,15 @@ const App = () => (
             element={
               <ProtectedRoute allowedRoles={["seller"]}>
                 <SellerCasePayment />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/seller/support"
+            element={
+              <ProtectedRoute allowedRoles={["seller"]}>
+                <SellerSupport />
               </ProtectedRoute>
             }
           />
