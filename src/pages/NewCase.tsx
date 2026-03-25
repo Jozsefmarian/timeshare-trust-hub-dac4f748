@@ -83,6 +83,7 @@ export default function NewCase() {
   const [ownerBirthDate, setOwnerBirthDate] = useState("");
   const [ownerBirthPlace, setOwnerBirthPlace] = useState("");
   const [ownerMotherName, setOwnerMotherName] = useState("");
+  const [ownerBirthName, setOwnerBirthName] = useState("");
   const [ownerIdNumber, setOwnerIdNumber] = useState("");
   const [ownerTaxId, setOwnerTaxId] = useState("");
 
