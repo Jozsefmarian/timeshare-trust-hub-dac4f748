@@ -81,7 +81,7 @@ Deno.serve(async (req) => {
     // 3. Case betöltése és jogosultság ellenőrzés
     const { data: caseRow, error: caseError } = await authClient
       .from("cases")
-      .select("id, status, seller_user_id, ai_pipeline_status")
+      .select("id, status, seller_user_id, ai_pipeline_status, recheck_count")
       .eq("id", case_id)
       .maybeSingle();
 
