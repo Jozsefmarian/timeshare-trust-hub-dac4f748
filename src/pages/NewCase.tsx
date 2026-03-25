@@ -737,12 +737,21 @@ export default function NewCase() {
                   </div>
 
                   <div className="space-y-1.5">
-                    <Label htmlFor="apartmentType">Apartman típus</Label>
+                    <Label htmlFor="apartmentType">Apartman típus *</Label>
                     <Input
                       id="apartmentType"
                       placeholder="pl. Studio, 1 hálós"
                       value={apartmentType}
                       onChange={(e) => setApartmentType(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="unitNumber">Apartman/egység száma *</Label>
+                    <Input
+                      id="unitNumber"
+                      placeholder="pl. A-12, 304"
+                      value={unitNumber}
+                      onChange={(e) => setUnitNumber(e.target.value)}
                     />
                   </div>
                 </div>
