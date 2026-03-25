@@ -861,16 +861,87 @@ export default function NewCase() {
                 </div>
 
                 {hasShares === "yes" && (
-                  <div className="space-y-1.5">
-                    <Label htmlFor="shareCount">Részvény darabszám</Label>
-                    <Input
-                      id="shareCount"
-                      type="number"
-                      min={1}
-                      placeholder="pl. 1"
-                      value={shareCount}
-                      onChange={(e) => setShareCount(e.target.value)}
-                    />
+                  <div className="grid gap-4">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="shareCount">Részvény darabszám *</Label>
+                      <Input
+                        id="shareCount"
+                        type="number"
+                        min={1}
+                        placeholder="pl. 1"
+                        value={shareCount}
+                        onChange={(e) => setShareCount(e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="issuerName">Kibocsátó neve *</Label>
+                      <Input
+                        id="issuerName"
+                        placeholder="pl. Abbázia Apartman Club Idegenforgalmi Zrt."
+                        value={issuerName}
+                        onChange={(e) => setIssuerName(e.target.value)}
+                      />
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="space-y-1.5">
+                        <Label htmlFor="clientNumber">Ügyfélszám *</Label>
+                        <Input
+                          id="clientNumber"
+                          placeholder="pl. 00123456"
+                          value={clientNumber}
+                          onChange={(e) => setClientNumber(e.target.value)}
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label htmlFor="shareSeries">Részvénysorozat megjelölés *</Label>
+                        <Input
+                          id="shareSeries"
+                          placeholder="pl. A sorozat"
+                          value={shareSeries}
+                          onChange={(e) => setShareSeries(e.target.value)}
+                        />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="space-y-1.5">
+                        <Label htmlFor="nominalValue">Névérték (HUF) *</Label>
+                        <Input
+                          id="nominalValue"
+                          type="number"
+                          min={1}
+                          placeholder="pl. 100000"
+                          value={nominalValue}
+                          onChange={(e) => setNominalValue(e.target.value)}
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label htmlFor="isin">ISIN azonosító *</Label>
+                        <Input
+                          id="isin"
+                          placeholder="pl. HU0000012345"
+                          value={isin}
+                          onChange={(e) => setIsin(e.target.value)}
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="securitiesAccountProvider">Értékpapír számlavezető intézmény *</Label>
+                      <Input
+                        id="securitiesAccountProvider"
+                        placeholder="pl. OTP Bank Nyrt."
+                        value={securitiesAccountProvider}
+                        onChange={(e) => setSecuritiesAccountProvider(e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="securitiesAccountId">Értékpapírszámla száma *</Label>
+                      <Input
+                        id="securitiesAccountId"
+                        placeholder="pl. 12345678-12345678-12345678"
+                        value={securitiesAccountId}
+                        onChange={(e) => setSecuritiesAccountId(e.target.value)}
+                      />
+                    </div>
                   </div>
                 )}
               </div>
