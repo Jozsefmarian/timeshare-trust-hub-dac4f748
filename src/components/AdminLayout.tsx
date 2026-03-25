@@ -2,7 +2,7 @@ import { ReactNode, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   LayoutDashboard, FolderOpen, FileText, BookOpen, Building2,
-  Package, CreditCard, ClipboardList, Shield, LogOut, Menu,
+  Package, CreditCard, ClipboardList, Shield, LogOut, Menu, FileSignature,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -18,6 +18,7 @@ const adminNavItems = [
   { title: "Szabályzatok", icon: BookOpen, href: "/admin/policies" },
   { title: "Üdülőhelyek", icon: Building2, href: "/admin/resorts" },
   { title: "Készlet", icon: Package, href: "/admin/inventory" },
+  { title: "Szerződéssablonok", icon: FileSignature, href: "/admin/contract-templates" },
   { title: "Fizetések", icon: CreditCard, href: "/admin/payments" },
   { title: "Auditnapló", icon: ClipboardList, href: "/admin/audit" },
 ];
