@@ -241,6 +241,8 @@ export default function NewCase() {
         usage_parity: usageFrequency === "biennial" ? usageParity : null,
         share_related: isShareRelated,
         share_count: isShareRelated && shareCount ? Number(shareCount) : null,
+        unit_number: unitNumber.trim() || null,
+        original_contract_number: originalContractNumber.trim() || null,
         created_at: now,
         updated_at: now,
       });
@@ -251,6 +253,13 @@ export default function NewCase() {
           case_id: caseId,
           share_count: Number(shareCount),
           transfer_status: "pending",
+          share_series: shareSeries || null,
+          nominal_value: nominalValue ? Number(nominalValue) : null,
+          isin: isin || null,
+          securities_account_provider: securitiesAccountProvider || null,
+          securities_account_id: securitiesAccountId || null,
+          issuer_name: issuerName || null,
+          client_number: clientNumber || null,
           created_at: now,
         });
       }
