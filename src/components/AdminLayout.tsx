@@ -18,6 +18,7 @@ const adminNavItems = [
   { title: "Szabályzatok", icon: BookOpen, href: "/admin/policies" },
   { title: "Üdülőhelyek", icon: Building2, href: "/admin/resorts" },
   { title: "Készlet", icon: Package, href: "/admin/inventory" },
+  { title: "Szerződéssablonok", icon: FileSignature, href: "/admin/contract-templates" },
   { title: "Fizetések", icon: CreditCard, href: "/admin/payments" },
   { title: "Auditnapló", icon: ClipboardList, href: "/admin/audit" },
 ];

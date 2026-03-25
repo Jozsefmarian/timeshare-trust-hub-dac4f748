@@ -174,6 +174,14 @@ const App = () => (
             }
           />
           <Route
+            path="/admin/contract-templates"
+            element={
+              <ProtectedRoute allowedRoles={["admin"]}>
+                <AdminContractTemplates />
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="/admin/payments"
             element={
               <ProtectedRoute allowedRoles={["admin"]}>
