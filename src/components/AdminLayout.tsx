@@ -2,7 +2,7 @@ import { ReactNode, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   LayoutDashboard, FolderOpen, FileText, BookOpen, Building2,
-  Package, CreditCard, ClipboardList, Shield, LogOut, Menu,
+  Package, CreditCard, ClipboardList, Shield, LogOut, Menu, FileSignature,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
