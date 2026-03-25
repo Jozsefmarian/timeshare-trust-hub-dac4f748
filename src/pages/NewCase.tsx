@@ -678,6 +678,15 @@ export default function NewCase() {
                   </div>
                 </div>
                 <div className="space-y-1.5">
+                  <Label htmlFor="ownerBirthName">Születési név *</Label>
+                  <Input
+                    id="ownerBirthName"
+                    placeholder="pl. Kovács János"
+                    value={ownerBirthName}
+                    onChange={(e) => setOwnerBirthName(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-1.5">
                   <Label htmlFor="ownerMotherName">Anyja neve *</Label>
                   <Input
                     id="ownerMotherName"
