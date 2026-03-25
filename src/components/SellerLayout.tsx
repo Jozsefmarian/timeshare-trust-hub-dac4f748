@@ -25,6 +25,7 @@ const sellerNavItems = [
   { title: "Ügyeim", icon: FolderOpen, href: "/seller/cases" },
   { title: "Új ügy indítása", icon: PlusCircle, href: "/seller/new-case" },
   { title: "Profil", icon: User, href: "/seller/profile" },
+  { title: "Ügyfélszolgálat", icon: HelpCircle, href: "/seller/support" },
 ];
 
 export default function SellerLayout({ children }: { children: ReactNode }) {

@@ -90,6 +90,15 @@ const App = () => (
             }
           />
 
+          <Route
+            path="/seller/support"
+            element={
+              <ProtectedRoute allowedRoles={["seller"]}>
+                <SellerSupport />
+              </ProtectedRoute>
+            }
+          />
+
           {/* Admin */}
           <Route
             path="/admin"
