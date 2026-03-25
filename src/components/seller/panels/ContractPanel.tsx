@@ -1,15 +1,13 @@
-import { useState, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { FileText, Upload, Loader2, Download, CheckCircle2 } from "lucide-react";
+import { FileText, Upload, Loader2, Download, CheckCircle2, ExternalLink, Plus } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 
-const supabaseAny: any = supabase;
-
-// ── Típusok ───────────────────────────────────────────────────────────────
+// ── Types ─────────────────────────────────────────────────────────────────
 
 interface ContractRow {
   id: string;
@@ -25,6 +23,21 @@ interface ContractRow {
   signed_uploaded_at: string | null;
 }
 
+interface SignedFile {
+  id: string;
+  contract_id: string;
+  case_id: string;
+  file_name: string;
+  file_size: number | null;
+  mime_type: string | null;
+  storage_bucket: string;
+  storage_path: string;
+  sort_order: number;
+  uploaded_at: string;
+  uploaded_by: string | null;
+  created_at: string;
+}
+
 interface ContractPanelProps {
   contracts: ContractRow[];
   caseId: string;
@@ -33,7 +46,7 @@ interface ContractPanelProps {
   onCaseStatusUpdated: (newStatus: string) => void;
 }
 
-// ── Segédfüggvények ───────────────────────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────────────────────
 
 const CONTRACT_TYPE_LABELS: Record<string, string> = {
   timeshare_transfer: "Üdülőhasználati átadási szerződés",
@@ -48,18 +61,12 @@ function contractTypeLabel(type: string): string {
 
 function contractStatusLabel(s: string): string {
   switch (s) {
-    case "pending_generation":
-      return "Generálásra vár";
-    case "generated":
-      return "Letölthető";
-    case "awaiting_signature":
-      return "Aláírásra vár";
-    case "signed_uploaded":
-      return "Aláírt példány feltöltve";
-    case "verified":
-      return "Ellenőrizve";
-    default:
-      return s;
+    case "pending_generation": return "Generálásra vár";
+    case "generated": return "Letölthető";
+    case "awaiting_signature": return "Aláírásra vár";
+    case "signed_uploaded": return "Aláírt példány feltöltve";
+    case "verified": return "Ellenőrizve";
+    default: return s;
   }
 }
 
@@ -68,30 +75,26 @@ function formatDateTime(value?: string | null) {
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return "—";
   return d.toLocaleString("hu-HU", {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
+    year: "numeric", month: "long", day: "numeric",
+    hour: "2-digit", minute: "2-digit",
   });
 }
 
-// ── Egyetlen szerződés kártya ─────────────────────────────────────────────
+// ── SingleContractCard ───────────────────────────────────────────────────
 
 interface SingleContractCardProps {
   contract: ContractRow;
   caseId: string;
-  onUploaded: (contractId: string) => void;
+  signedFiles: SignedFile[];
+  onUploaded: () => void;
 }
 
-function SingleContractCard({ contract, caseId, onUploaded }: SingleContractCardProps) {
-  const [signedFile, setSignedFile] = useState<File | null>(null);
+function SingleContractCard({ contract, caseId, signedFiles, onUploaded }: SingleContractCardProps) {
   const [isUploading, setIsUploading] = useState(false);
-  const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  const isSigned = contract.status === "signed_uploaded" || contract.status === "verified";
-  const canUpload = contract.status === "generated" || contract.status === "awaiting_signature";
+  const hasSigned = signedFiles.length > 0;
+  const canUpload = contract.status === "generated" || contract.status === "awaiting_signature" || contract.status === "signed_uploaded";
 
   const handleDownload = async () => {
     if (!contract.generated_storage_bucket || !contract.generated_storage_path) return;
@@ -102,52 +105,78 @@ function SingleContractCard({ contract, caseId, onUploaded }: SingleContractCard
       if (error) throw error;
       if (data?.signedUrl) window.open(data.signedUrl, "_blank", "noopener,noreferrer");
     } catch {
-      setMessage({ type: "error", text: "A fájl megnyitása nem sikerült." });
+      toast.error("A fájl megnyitása nem sikerült.");
     }
   };
 
-  const handleUploadSigned = async () => {
-    if (!signedFile) return;
-    setMessage(null);
-    setIsUploading(true);
-
+  const handleOpenSignedFile = async (file: SignedFile) => {
     try {
-      const ts = Date.now();
-      const storagePath = `cases/${caseId}/contracts/signed/${ts}-${contract.contract_type}-${signedFile.name}`;
-      const bucket = "signed-contracts";
+      const { data, error } = await supabase.storage
+        .from(file.storage_bucket)
+        .createSignedUrl(file.storage_path, 60);
+      if (error) throw error;
+      if (data?.signedUrl) window.open(data.signedUrl, "_blank", "noopener,noreferrer");
+    } catch {
+      toast.error("A fájl megnyitása nem sikerült.");
+    }
+  };
 
-      const { error: uploadErr } = await supabase.storage.from(bucket).upload(storagePath, signedFile, {
-        contentType: signedFile.type || "application/octet-stream",
-        upsert: false,
-      });
-      if (uploadErr) throw uploadErr;
+  const handleFilesSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
 
-      const { error: contractErr } = await supabaseAny
+    setIsUploading(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      const uploadedBy = user?.id ?? null;
+
+      for (const file of Array.from(files)) {
+        const ts = Date.now();
+        const storagePath = `cases/${caseId}/contracts/signed/${contract.id}/${ts}-${file.name}`;
+
+        const { error: uploadErr } = await supabase.storage
+          .from("signed-contracts")
+          .upload(storagePath, file, {
+            contentType: file.type || "application/octet-stream",
+            upsert: false,
+          });
+        if (uploadErr) throw uploadErr;
+
+        const { error: insertErr } = await supabase
+          .from("signed_contract_files")
+          .insert({
+            contract_id: contract.id,
+            case_id: caseId,
+            storage_bucket: "signed-contracts",
+            storage_path: storagePath,
+            file_name: file.name,
+            file_size: file.size,
+            mime_type: file.type || "application/octet-stream",
+            uploaded_by: uploadedBy,
+            sort_order: 0,
+          });
+        if (insertErr) throw insertErr;
+      }
+
+      // Update contract status
+      const { error: contractErr } = await supabase
         .from("contracts")
-        .update({
-          signed_storage_bucket: bucket,
-          signed_storage_path: storagePath,
-          signed_file_name: signedFile.name,
-          signed_uploaded_at: new Date().toISOString(),
-          status: "signed_uploaded",
-        })
+        .update({ status: "signed_uploaded" })
         .eq("id", contract.id);
       if (contractErr) throw contractErr;
 
-      setMessage({ type: "success", text: "Aláírt példány sikeresen feltöltve." });
-      setSignedFile(null);
-      if (fileRef.current) fileRef.current.value = "";
-      onUploaded(contract.id);
+      toast.success(`${files.length} fájl sikeresen feltöltve.`);
+      onUploaded();
     } catch (err: any) {
-      setMessage({ type: "error", text: err?.message || "A feltöltés nem sikerült." });
+      toast.error(err?.message || "A feltöltés nem sikerült.");
     } finally {
       setIsUploading(false);
+      if (fileRef.current) fileRef.current.value = "";
     }
   };
 
   return (
     <div className="rounded-lg border border-border p-4 space-y-3">
-      {/* Fejléc */}
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <div className="flex items-center gap-2">
           <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
@@ -155,18 +184,16 @@ function SingleContractCard({ contract, caseId, onUploaded }: SingleContractCard
         </div>
         <Badge
           variant="outline"
-          className={isSigned ? "border-success/40 text-success" : "border-muted-foreground/30 text-muted-foreground"}
+          className={hasSigned ? "border-success/40 text-success" : "border-muted-foreground/30 text-muted-foreground"}
         >
           {contractStatusLabel(contract.status)}
         </Badge>
       </div>
 
-      {/* Generálás dátuma */}
       {contract.generated_at && (
         <p className="text-xs text-muted-foreground">Generálva: {formatDateTime(contract.generated_at)}</p>
       )}
 
-      {/* Letöltés gomb */}
       {contract.generated_storage_path && (
         <Button variant="outline" size="sm" className="w-full" onClick={handleDownload}>
           <Download className="h-4 w-4 mr-2" />
@@ -174,58 +201,74 @@ function SingleContractCard({ contract, caseId, onUploaded }: SingleContractCard
         </Button>
       )}
 
-      {/* Aláírt feltöltés */}
+      {/* Uploaded signed files list */}
+      {signedFiles.length > 0 && (
+        <>
+          <Separator />
+          <div className="space-y-2">
+            <p className="text-xs font-medium text-foreground">Feltöltött aláírt fájlok ({signedFiles.length})</p>
+            {signedFiles.map((sf) => (
+              <div key={sf.id} className="flex items-center justify-between gap-2 p-2 rounded-md bg-muted/30 border border-border">
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-medium text-foreground truncate">{sf.file_name}</p>
+                  <p className="text-xs text-muted-foreground">{formatDateTime(sf.uploaded_at)}</p>
+                </div>
+                <Button variant="ghost" size="sm" onClick={() => handleOpenSignedFile(sf)}>
+                  <ExternalLink className="h-3.5 w-3.5 mr-1" />
+                  Megnyitás
+                </Button>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+
+      {/* Upload area */}
       {canUpload && (
         <>
           <Separator />
           <p className="text-xs text-muted-foreground">
-            Töltse le, nyomtassa ki, írja alá, majd töltse vissza az aláírt példányt.
+            Töltse le, nyomtassa ki, írja alá, majd töltse vissza az aláírt példányt. Egyszerre több fájl is kiválasztható.
           </p>
-          <Input
+          <input
             ref={fileRef}
             type="file"
             accept=".pdf,.jpg,.jpeg,.png"
+            multiple
+            className="hidden"
             disabled={isUploading}
-            onChange={(e) => setSignedFile(e.target.files?.[0] ?? null)}
+            onChange={handleFilesSelected}
           />
-          <Button size="sm" className="w-full" disabled={isUploading || !signedFile} onClick={handleUploadSigned}>
+          <Button
+            size="sm"
+            variant={hasSigned ? "outline" : "default"}
+            className="w-full"
+            disabled={isUploading}
+            onClick={() => fileRef.current?.click()}
+          >
             {isUploading ? (
-              <>
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                Feltöltés...
-              </>
+              <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Feltöltés...</>
+            ) : hasSigned ? (
+              <><Plus className="h-4 w-4 mr-2" />További fájlok hozzáadása</>
             ) : (
-              <>
-                <Upload className="h-4 w-4 mr-2" />
-                Aláírt példány feltöltése
-              </>
+              <><Upload className="h-4 w-4 mr-2" />Aláírt példány feltöltése</>
             )}
           </Button>
         </>
       )}
 
-      {/* Sikeres feltöltés visszajelzés */}
-      {isSigned && (
+      {/* Success indicator when not uploadable anymore */}
+      {hasSigned && !canUpload && (
         <div className="flex items-center gap-2 p-2 rounded-lg bg-success/5 border border-success/20">
           <CheckCircle2 className="h-4 w-4 text-success shrink-0" />
-          <div>
-            <p className="text-xs text-success font-medium">Aláírt példány feltöltve</p>
-            {contract.signed_uploaded_at && (
-              <p className="text-xs text-muted-foreground">{formatDateTime(contract.signed_uploaded_at)}</p>
-            )}
-          </div>
+          <p className="text-xs text-success font-medium">Aláírt példány feltöltve</p>
         </div>
-      )}
-
-      {/* Hibaüzenet */}
-      {message && (
-        <p className={`text-xs ${message.type === "success" ? "text-success" : "text-destructive"}`}>{message.text}</p>
       )}
     </div>
   );
 }
 
-// ── Fő panel ─────────────────────────────────────────────────────────────
+// ── Main Panel ───────────────────────────────────────────────────────────
 
 export default function ContractPanel({
   contracts,
@@ -234,35 +277,59 @@ export default function ContractPanel({
   onContractsUpdated,
   onCaseStatusUpdated,
 }: ContractPanelProps) {
+  const [signedFilesMap, setSignedFilesMap] = useState<Record<string, SignedFile[]>>({});
+  const [loadingFiles, setLoadingFiles] = useState(true);
+
+  const loadSignedFiles = useCallback(async () => {
+    setLoadingFiles(true);
+    try {
+      const { data, error } = await supabase
+        .from("signed_contract_files")
+        .select("*")
+        .eq("case_id", caseId)
+        .order("uploaded_at", { ascending: false });
+
+      if (error) throw error;
+
+      const grouped: Record<string, SignedFile[]> = {};
+      for (const row of (data ?? []) as SignedFile[]) {
+        if (!grouped[row.contract_id]) grouped[row.contract_id] = [];
+        grouped[row.contract_id].push(row);
+      }
+      setSignedFilesMap(grouped);
+    } catch {
+      // silent
+    } finally {
+      setLoadingFiles(false);
+    }
+  }, [caseId]);
+
+  useEffect(() => {
+    if (caseId) loadSignedFiles();
+  }, [caseId, loadSignedFiles]);
+
   const totalCount = contracts.length;
-  const signedCount = contracts.filter((c) => c.status === "signed_uploaded" || c.status === "verified").length;
+  const signedCount = contracts.filter((c) => (signedFilesMap[c.id]?.length ?? 0) > 0).length;
   const allSigned = totalCount > 0 && signedCount === totalCount;
 
-  const handleOneUploaded = async (contractId: string) => {
-    // Frissítjük a listát
+  const handleUploaded = async () => {
     onContractsUpdated();
+    await loadSignedFiles();
 
-    // Ellenőrizzük hogy minden szerz. alá van-e írva
-    const { data: updatedContracts } = await supabaseAny
-      .from("contracts")
-      .select("id, status")
-      .eq("case_id", caseId)
-      .in("contract_type", ["timeshare_transfer", "power_of_attorney", "share_transfer", "securities_transfer"]);
+    // Re-check if all contracts now have signed files
+    const { data: freshFiles } = await supabase
+      .from("signed_contract_files")
+      .select("contract_id")
+      .eq("case_id", caseId);
 
-    if (!updatedContracts) return;
+    if (!freshFiles) return;
 
-    const generatedContracts = updatedContracts.filter((c: any) =>
-      ["timeshare_transfer", "power_of_attorney", "share_transfer", "securities_transfer"].includes(c.contract_type),
-    );
+    const contractIdsWithFiles = new Set(freshFiles.map((f: any) => f.contract_id));
+    const nowAllSigned = contracts.length > 0 && contracts.every((c) => contractIdsWithFiles.has(c.id));
 
-    const allNowSigned =
-      generatedContracts.length > 0 &&
-      generatedContracts.every((c: any) => c.status === "signed_uploaded" || c.status === "verified");
-
-    if (allNowSigned) {
-      // ÚJ (biztonságos - az EF service_role-lal fut):
+    if (nowAllSigned) {
       const { error: recheckErr } = await supabase.functions.invoke("confirm-document-upload", {
-        body: { document_id: contractId, is_signed_contract: true, case_id: caseId },
+        body: { document_id: contracts[0].id, is_signed_contract: true, case_id: caseId },
       });
       if (!recheckErr) {
         onCaseStatusUpdated("signed_contract_uploaded");
@@ -302,21 +369,24 @@ export default function ContractPanel({
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        {/* Útmutató */}
         <div className="p-3 rounded-lg bg-muted/40 border border-border text-xs text-muted-foreground space-y-1">
           <p className="font-medium text-foreground">Teendők:</p>
           <p>1. Töltse le az összes szerződést az alábbi gombokkal</p>
           <p>2. Nyomtassa ki, írja alá kézzel</p>
           <p>3. Szkenneli vagy fotózza le az aláírt példányokat</p>
-          <p>4. Töltse vissza az aláírt fájlokat az egyes szerződésekhez</p>
+          <p>4. Töltse vissza az aláírt fájlokat (típusonként több fájl is feltölthető)</p>
         </div>
 
-        {/* Minden szerződés kártyája */}
         {contracts.map((contract) => (
-          <SingleContractCard key={contract.id} contract={contract} caseId={caseId} onUploaded={handleOneUploaded} />
+          <SingleContractCard
+            key={contract.id}
+            contract={contract}
+            caseId={caseId}
+            signedFiles={signedFilesMap[contract.id] ?? []}
+            onUploaded={handleUploaded}
+          />
         ))}
 
-        {/* Összesítő üzenet ha minden aláírva */}
         {allSigned && (
           <div className="flex items-center gap-2 p-3 rounded-lg bg-success/5 border border-success/20">
             <CheckCircle2 className="h-5 w-5 text-success shrink-0" />
