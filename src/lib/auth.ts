@@ -25,7 +25,7 @@ export async function getSessionAndProfile(): Promise<{
     return { session: null, profile: null };
   }
 
-  const { data: profile, error: profileError } = await (supabase as any)
+  const { data: profile, error: profileError } = await supabase
     .from("profiles")
     .select("id, email, full_name, role")
     .eq("id", session.user.id)
