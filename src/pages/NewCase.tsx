@@ -112,6 +112,7 @@ export default function NewCase() {
   const [isin, setIsin] = useState("");
   const [securitiesAccountProvider, setSecuritiesAccountProvider] = useState("");
   const [securitiesAccountId, setSecuritiesAccountId] = useState("");
+  const [annualFee, setAnnualFee] = useState("");
 
   // Step 3
   const [decl1, setDecl1] = useState(false);
