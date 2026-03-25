@@ -296,6 +296,16 @@ export default function NewCase() {
     rightsEnd,
     isShareRelated,
     shareCount,
+    unitNumber,
+    originalContractNumber,
+    issuerName,
+    clientNumber,
+    shareSeries,
+    nominalValue,
+    isin,
+    securitiesAccountProvider,
+    securitiesAccountId,
+    ownerBirthName,
     toast,
   ]);
 
