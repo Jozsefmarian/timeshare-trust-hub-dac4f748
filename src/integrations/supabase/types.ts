@@ -134,7 +134,7 @@ export type Database = {
           },
         ]
       }
-      ai_validation_results: {
+      ai_validation_results_archived: {
         Row: {
           case_id: string
           created_at: string
@@ -244,60 +244,6 @@ export type Database = {
           },
         ]
       }
-      case_classification_results: {
-        Row: {
-          case_id: string
-          classification: Database["public"]["Enums"]["classification_enum"]
-          created_at: string
-          decided_by: string | null
-          details: Json
-          id: string
-          policy_version_id: string | null
-          reason_codes: string[]
-          reason_summary: string | null
-          source: string
-        }
-        Insert: {
-          case_id: string
-          classification: Database["public"]["Enums"]["classification_enum"]
-          created_at?: string
-          decided_by?: string | null
-          details?: Json
-          id?: string
-          policy_version_id?: string | null
-          reason_codes?: string[]
-          reason_summary?: string | null
-          source?: string
-        }
-        Update: {
-          case_id?: string
-          classification?: Database["public"]["Enums"]["classification_enum"]
-          created_at?: string
-          decided_by?: string | null
-          details?: Json
-          id?: string
-          policy_version_id?: string | null
-          reason_codes?: string[]
-          reason_summary?: string | null
-          source?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "case_classification_results_case_id_fkey"
-            columns: ["case_id"]
-            isOneToOne: false
-            referencedRelation: "cases"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "case_classification_results_policy_version_id_fkey"
-            columns: ["policy_version_id"]
-            isOneToOne: false
-            referencedRelation: "policy_versions"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       case_restriction_hits: {
         Row: {
           action: Database["public"]["Enums"]["restriction_action_enum"]
@@ -367,7 +313,7 @@ export type Database = {
             foreignKeyName: "case_restriction_hits_rule_id_fkey"
             columns: ["rule_id"]
             isOneToOne: false
-            referencedRelation: "policy_restriction_rules"
+            referencedRelation: "restriction_rules"
             referencedColumns: ["id"]
           },
         ]
@@ -1053,62 +999,6 @@ export type Database = {
           },
         ]
       }
-      policy_classification_rules: {
-        Row: {
-          created_at: string
-          field_key: string
-          id: string
-          is_active: boolean
-          operator: Database["public"]["Enums"]["policy_operator_enum"]
-          policy_version_id: string
-          reason_code: string
-          scope: Database["public"]["Enums"]["policy_rule_scope_enum"]
-          seller_message: string | null
-          sort_index: number
-          updated_at: string
-          value_json: Json | null
-          value_text: string | null
-        }
-        Insert: {
-          created_at?: string
-          field_key: string
-          id?: string
-          is_active?: boolean
-          operator: Database["public"]["Enums"]["policy_operator_enum"]
-          policy_version_id: string
-          reason_code: string
-          scope: Database["public"]["Enums"]["policy_rule_scope_enum"]
-          seller_message?: string | null
-          sort_index?: number
-          updated_at?: string
-          value_json?: Json | null
-          value_text?: string | null
-        }
-        Update: {
-          created_at?: string
-          field_key?: string
-          id?: string
-          is_active?: boolean
-          operator?: Database["public"]["Enums"]["policy_operator_enum"]
-          policy_version_id?: string
-          reason_code?: string
-          scope?: Database["public"]["Enums"]["policy_rule_scope_enum"]
-          seller_message?: string | null
-          sort_index?: number
-          updated_at?: string
-          value_json?: Json | null
-          value_text?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "policy_classification_rules_policy_version_id_fkey"
-            columns: ["policy_version_id"]
-            isOneToOne: false
-            referencedRelation: "policy_versions"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       policy_message_templates: {
         Row: {
           body: string
@@ -1146,65 +1036,6 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "policy_message_templates_policy_version_id_fkey"
-            columns: ["policy_version_id"]
-            isOneToOne: false
-            referencedRelation: "policy_versions"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      policy_restriction_rules: {
-        Row: {
-          action: Database["public"]["Enums"]["restriction_action_enum"]
-          category: string
-          created_at: string
-          id: string
-          is_active: boolean
-          name: string
-          notes: string | null
-          pattern: string
-          policy_version_id: string
-          rule_type: Database["public"]["Enums"]["policy_rule_type_enum"]
-          severity: Database["public"]["Enums"]["restriction_severity_enum"]
-          sort_index: number
-          updated_at: string
-          weight: number
-        }
-        Insert: {
-          action?: Database["public"]["Enums"]["restriction_action_enum"]
-          category?: string
-          created_at?: string
-          id?: string
-          is_active?: boolean
-          name: string
-          notes?: string | null
-          pattern: string
-          policy_version_id: string
-          rule_type?: Database["public"]["Enums"]["policy_rule_type_enum"]
-          severity?: Database["public"]["Enums"]["restriction_severity_enum"]
-          sort_index?: number
-          updated_at?: string
-          weight?: number
-        }
-        Update: {
-          action?: Database["public"]["Enums"]["restriction_action_enum"]
-          category?: string
-          created_at?: string
-          id?: string
-          is_active?: boolean
-          name?: string
-          notes?: string | null
-          pattern?: string
-          policy_version_id?: string
-          rule_type?: Database["public"]["Enums"]["policy_rule_type_enum"]
-          severity?: Database["public"]["Enums"]["restriction_severity_enum"]
-          sort_index?: number
-          updated_at?: string
-          weight?: number
-        }
-        Relationships: [
-          {
-            foreignKeyName: "policy_restriction_rules_policy_version_id_fkey"
             columns: ["policy_version_id"]
             isOneToOne: false
             referencedRelation: "policy_versions"
@@ -1759,19 +1590,19 @@ export type Database = {
         | "error"
       case_status_enum:
         | "draft"
+        | "docs_uploaded"
         | "submitted"
-        | "documents_uploaded"
         | "ai_processing"
+        | "green_approved"
         | "yellow_review"
         | "red_rejected"
-        | "green_approved"
         | "contract_generated"
         | "awaiting_signed_contract"
         | "signed_contract_uploaded"
-        | "service_agreement_signed"
+        | "service_agreement_accepted"
         | "payment_pending"
-        | "payment_completed"
-        | "case_closed"
+        | "paid"
+        | "closed"
         | "cancelled"
         | "stuck_needs_support"
       classification_enum: "red" | "yellow" | "green"
@@ -1941,19 +1772,19 @@ export const Constants = {
       ],
       case_status_enum: [
         "draft",
+        "docs_uploaded",
         "submitted",
-        "documents_uploaded",
         "ai_processing",
+        "green_approved",
         "yellow_review",
         "red_rejected",
-        "green_approved",
         "contract_generated",
         "awaiting_signed_contract",
         "signed_contract_uploaded",
-        "service_agreement_signed",
+        "service_agreement_accepted",
         "payment_pending",
-        "payment_completed",
-        "case_closed",
+        "paid",
+        "closed",
         "cancelled",
         "stuck_needs_support",
       ],
