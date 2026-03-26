@@ -30,6 +30,109 @@ function jsonResponse(body: Record<string, unknown>, status = 200, req?: Request
   });
 }
 
+function formatDateHu(dateStr: string): string {
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return dateStr;
+  return d.toLocaleString("hu-HU", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "Europe/Budapest",
+  });
+}
+
+// ── Resend email küldés ───────────────────────────────────────────────────────
+
+async function sendEmail(params: { to: string; subject: string; html: string; resendApiKey: string }): Promise<void> {
+  const res = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${params.resendApiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      from: "TSR Megoldások <kapcsolat@tsrmegoldasok.hu>",
+      to: [params.to],
+      subject: params.subject,
+      html: params.html,
+    }),
+  });
+
+  if (!res.ok) {
+    const err = await res.text();
+    console.error("Resend error:", err);
+    // Nem blokkoló — a fő folyamat folytatódik
+  }
+}
+
+// ── Visszaigazoló email sablon ────────────────────────────────────────────────
+
+function buildConfirmationEmailHtml(params: {
+  sellerName: string;
+  caseNumber: string;
+  acceptedAt: string;
+  ipAddress: string | null;
+  acceptanceHash: string;
+  agreementVersion: string;
+  contactEmail: string;
+}): string {
+  const { sellerName, caseNumber, acceptedAt, ipAddress, acceptanceHash, agreementVersion, contactEmail } = params;
+
+  return `<!DOCTYPE html>
+<html lang="hu">
+<head><meta charset="UTF-8"></head>
+<body style="font-family: Arial, sans-serif; max-width: 600px; margin: 40px auto; padding: 20px; color: #222; line-height: 1.6;">
+  <h2 style="color: #1a4a7a;">📄 Szolgáltatási szerződés elfogadásának visszaigazolása</h2>
+  <p>Kedves ${sellerName}!</p>
+  <p>Visszaigazoljuk, hogy a <strong>${caseNumber}</strong> számú ügyéhez tartozó szolgáltatási szerződést sikeresen elfogadta.</p>
+
+  <div style="background: #f0f4f8; border: 1px solid #d0dce8; border-radius: 8px; padding: 16px; margin: 24px 0;">
+    <p style="margin: 0 0 8px; font-size: 13px; font-weight: bold; color: #444;">Elfogadás részletei (jogi bizonyíték)</p>
+    <table style="width: 100%; font-size: 13px; border-collapse: collapse;">
+      <tr>
+        <td style="padding: 4px 8px 4px 0; color: #666; width: 160px;">Elfogadás időpontja:</td>
+        <td style="padding: 4px 0;"><strong>${formatDateHu(acceptedAt)}</strong></td>
+      </tr>
+      <tr>
+        <td style="padding: 4px 8px 4px 0; color: #666;">IP cím:</td>
+        <td style="padding: 4px 0;"><strong>${ipAddress ?? "—"}</strong></td>
+      </tr>
+      <tr>
+        <td style="padding: 4px 8px 4px 0; color: #666;">Szerződés verziója:</td>
+        <td style="padding: 4px 0;"><strong>${agreementVersion}</strong></td>
+      </tr>
+      <tr>
+        <td style="padding: 4px 8px 4px 0; color: #666; vertical-align: top;">Elfogadási hash:</td>
+        <td style="padding: 4px 0; word-break: break-all; font-family: monospace; font-size: 11px;">${acceptanceHash}</td>
+      </tr>
+    </table>
+  </div>
+
+  <p style="font-size: 13px; color: #555;">
+    A szerződés elektronikus úton jött létre. Az elfogadás gomb megnyomásával és a szolgáltatási díj 
+    megfizetésével a szerződés kötelező érvényűvé válik. Ez az email jogi bizonyítékként szolgál 
+    az elfogadás tényéről.
+  </p>
+
+  <p style="font-size: 13px; color: #555;">
+    Következő lépés: a szolgáltatási díj megfizetése, amelyről a platformon tud intézkedni.
+  </p>
+
+  <p style="font-size: 13px; color: #555;">
+    Ha kérdése van, írjon nekünk: 
+    <a href="mailto:${contactEmail}" style="color: #1a4a7a;">${contactEmail}</a>
+  </p>
+
+  <hr style="margin-top: 40px; border: none; border-top: 1px solid #eee;">
+  <p style="font-size: 12px; color: #999;">TSR Megoldások — Zaleo Consulting Kft. | 8864 Tótszerdahely, Kossuth Lajos u. 154.</p>
+</body>
+</html>`;
+}
+
+// ── Fő handler ────────────────────────────────────────────────────────────────
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: getCorsHeaders(req) });
@@ -40,15 +143,21 @@ Deno.serve(async (req) => {
   }
 
   try {
-    // 1. Authenticate
+    // 1. Auth
     const authHeader = req.headers.get("Authorization");
     if (!authHeader?.startsWith("Bearer ")) {
       return jsonResponse({ error: "Unauthorized" }, 401);
     }
 
-    const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY")!, {
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
+    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const resendApiKey = Deno.env.get("RESEND_API_KEY") ?? "";
+
+    const supabase = createClient(supabaseUrl, anonKey, {
       global: { headers: { Authorization: authHeader } },
     });
+    const serviceClient = createClient(supabaseUrl, serviceRoleKey);
 
     const token = authHeader.replace("Bearer ", "");
     const { data: userData, error: userError } = await supabase.auth.getUser(token);
@@ -58,7 +167,7 @@ Deno.serve(async (req) => {
 
     const userId = userData.user.id;
 
-    // 2. Parse & validate body
+    // 2. Body validálás
     const body = await req.json();
     const { case_id, typed_confirmation, checkbox_checked } = body;
 
@@ -71,15 +180,14 @@ Deno.serve(async (req) => {
     if (!typed_confirmation || typeof typed_confirmation !== "string" || !typed_confirmation.trim()) {
       return jsonResponse({ error: "typed_confirmation must not be empty" }, 400);
     }
-
     if (typed_confirmation.trim().toUpperCase() !== "ELFOGADOM") {
       return jsonResponse({ error: "typed_confirmation must be ELFOGADOM" }, 400);
     }
 
-    // 3. Verify case exists and belongs to seller (RLS enforces ownership)
+    // 3. Case ellenőrzés
     const { data: caseData, error: caseError } = await supabase
       .from("cases")
-      .select("id, status, seller_user_id")
+      .select("id, status, seller_user_id, case_number")
       .eq("id", case_id)
       .maybeSingle();
 
@@ -93,7 +201,14 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: "Forbidden" }, 403);
     }
 
-    // 4. Load active service agreement
+    // 4. Seller adatok (emailhez)
+    const { data: sellerProfile } = await serviceClient
+      .from("profiles")
+      .select("full_name, email")
+      .eq("id", userId)
+      .maybeSingle();
+
+    // 5. Aktív szolgáltatási szerződés
     const { data: agreement, error: agError } = await supabase
       .from("service_agreements")
       .select("id, version")
@@ -107,7 +222,31 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: "No active service agreement found" }, 404);
     }
 
-    // 5. Build acceptance hash
+    // 6. Contact email a policy_settings-ből
+    let contactEmail = "kapcsolat@tsrmegoldasok.hu";
+    const { data: publishedPolicy } = await serviceClient
+      .from("policy_versions")
+      .select("id")
+      .eq("status", "published")
+      .order("published_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (publishedPolicy) {
+      const { data: contactSetting } = await serviceClient
+        .from("policy_settings")
+        .select("setting_value")
+        .eq("policy_version_id", publishedPolicy.id)
+        .eq("setting_key", "contact_email")
+        .maybeSingle();
+
+      if (contactSetting?.setting_value) {
+        const val = contactSetting.setting_value;
+        contactEmail = typeof val === "string" ? val.replace(/^"|"$/g, "") : String(val);
+      }
+    }
+
+    // 7. Acceptance hash generálás
     const acceptedAt = new Date().toISOString();
     const hashInput = `${case_id}|${agreement.version}|${acceptedAt}|${typed_confirmation.trim()}`;
     const encoder = new TextEncoder();
@@ -116,11 +255,11 @@ Deno.serve(async (req) => {
       .map((b) => b.toString(16).padStart(2, "0"))
       .join("");
 
-    // 6. Extract IP and User-Agent
+    // 8. IP és User-Agent
     const ipAddress = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || req.headers.get("x-real-ip") || null;
     const userAgent = req.headers.get("user-agent") || null;
 
-    // 7. Insert declaration_acceptances
+    // 9. declaration_acceptances INSERT
     const { data: acceptance, error: insertError } = await supabase
       .from("declaration_acceptances")
       .insert({
@@ -143,8 +282,15 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: "Failed to record acceptance", detail: insertError.message }, 500);
     }
 
-    // 8. Update case status (only if appropriate)
-    const allowedStatuses = ["contract_preparing", "contract_generated", "signed_uploaded", "verified", "submitted"];
+    // 10. Case státusz frissítése
+    const allowedStatuses = [
+      "contract_preparing",
+      "contract_generated",
+      "signed_uploaded",
+      "signed_contract_uploaded",
+      "verified",
+      "submitted",
+    ];
 
     let newStatus = caseData.status;
     if (allowedStatuses.includes(caseData.status)) {
@@ -160,8 +306,13 @@ Deno.serve(async (req) => {
       }
     }
 
-    // 9. Audit log (use service client to bypass RLS)
-    const serviceClient = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+    // 11. confirmation_sent_at frissítése + audit log
+    const confirmationSentAt = new Date().toISOString();
+
+    await serviceClient
+      .from("declaration_acceptances")
+      .update({ confirmation_sent_at: confirmationSentAt })
+      .eq("id", acceptance.id);
 
     await serviceClient.from("audit_logs").insert({
       action: "service_agreement_accepted",
@@ -174,10 +325,33 @@ Deno.serve(async (req) => {
         service_agreement_id: agreement.id,
         service_agreement_version: agreement.version,
         acceptance_hash: acceptanceHash,
+        ip_address: ipAddress,
       },
     });
 
-    // 10. Return
+    // 12. Visszaigazoló email küldése (Resend)
+    if (sellerProfile?.email && resendApiKey) {
+      try {
+        await sendEmail({
+          to: sellerProfile.email,
+          subject: `📄 Szolgáltatási szerződés visszaigazolása – ${caseData.case_number}`,
+          html: buildConfirmationEmailHtml({
+            sellerName: sellerProfile.full_name ?? "Tisztelt Ügyfelünk",
+            caseNumber: caseData.case_number,
+            acceptedAt,
+            ipAddress,
+            acceptanceHash,
+            agreementVersion: agreement.version,
+            contactEmail,
+          }),
+          resendApiKey,
+        });
+      } catch (emailErr) {
+        console.error("Confirmation email send error:", emailErr);
+        // Nem blokkoló hiba
+      }
+    }
+
     return jsonResponse(
       {
         success: true,
