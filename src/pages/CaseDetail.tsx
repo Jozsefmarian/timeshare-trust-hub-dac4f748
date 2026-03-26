@@ -116,7 +116,6 @@ function normalizeCaseStatus(status: string | null | undefined): string {
     approved: "green_approved",
     rejected: "red_rejected",
     ready_for_contract: "green_approved",
-    contract_preparing: "contract_generated",
     signed: "signed_contract_uploaded",
     waiting_payment: "payment_pending",
     completed: "closed",
