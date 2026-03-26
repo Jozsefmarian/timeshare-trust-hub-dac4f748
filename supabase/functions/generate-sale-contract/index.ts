@@ -11,9 +11,7 @@ const ALLOWED_ORIGINS = [
 function getCorsHeaders(req: Request): Record<string, string> {
   const origin = req.headers.get("Origin") ?? "";
   const isAllowed =
-    ALLOWED_ORIGINS.includes(origin) ||
-    origin.endsWith(".lovable.app") ||
-    origin.endsWith(".lovableproject.com");
+    ALLOWED_ORIGINS.includes(origin) || origin.endsWith(".lovable.app") || origin.endsWith(".lovableproject.com");
   const allowedOrigin = isAllowed ? origin : ALLOWED_ORIGINS[0];
   return {
     "Access-Control-Allow-Origin": allowedOrigin,
@@ -41,6 +39,43 @@ function formatDateHu(dateStr: string | null | undefined): string {
     month: "long",
     day: "numeric",
   });
+}
+
+// ── HTML → PDF konverzió PDFShift API-val ────────────────────────────────
+
+async function convertHtmlToPdf(html: string, pdfShiftKey: string): Promise<Uint8Array | null> {
+  try {
+    const response = await fetch("https://api.pdfshift.io/v3/convert/pdf", {
+      method: "POST",
+      headers: {
+        Authorization: `Basic ${btoa(`api:${pdfShiftKey}`)}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        source: html,
+        landscape: false,
+        use_print: true,
+        margin: {
+          top: "20mm",
+          bottom: "20mm",
+          left: "20mm",
+          right: "20mm",
+        },
+      }),
+    });
+
+    if (!response.ok) {
+      const err = await response.text();
+      console.error("PDFShift error:", response.status, err);
+      return null;
+    }
+
+    const buffer = await response.arrayBuffer();
+    return new Uint8Array(buffer);
+  } catch (err) {
+    console.error("PDFShift conversion error:", err);
+    return null;
+  }
 }
 
 function escapeHtml(str: string | null | undefined): string {
@@ -179,11 +214,7 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: "Unauthorized" }, 401);
     }
 
-    const { data: profile } = await serviceClient
-      .from("profiles")
-      .select("role")
-      .eq("id", claimsData.user.id)
-      .single();
+    const { data: profile } = await serviceClient.from("profiles").select("role").eq("id", claimsData.user.id).single();
 
     if (!profile || profile.role !== "admin") {
       return jsonResponse({ error: "Forbidden – admin only" }, 403);
@@ -198,11 +229,7 @@ Deno.serve(async (req) => {
 
     // ── Adatok betöltése ──────────────────────────────────────────────────────
 
-    const { data: caseData, error: caseErr } = await serviceClient
-      .from("cases")
-      .select("*")
-      .eq("id", case_id)
-      .single();
+    const { data: caseData, error: caseErr } = await serviceClient.from("cases").select("*").eq("id", case_id).single();
 
     if (caseErr || !caseData) {
       return jsonResponse({ error: "Case not found" }, 404);
@@ -285,15 +312,13 @@ Deno.serve(async (req) => {
 
         for (const row of fallbackRows ?? []) {
           const val = row.setting_value;
-          policySettings[row.setting_key] =
-            typeof val === "string" ? val.replace(/^"|"$/g, "") : String(val ?? "");
+          policySettings[row.setting_key] = typeof val === "string" ? val.replace(/^"|"$/g, "") : String(val ?? "");
         }
       }
     } else {
       for (const row of policyRows) {
         const val = row.setting_value;
-        policySettings[row.setting_key] =
-          typeof val === "string" ? val.replace(/^"|"$/g, "") : String(val ?? "");
+        policySettings[row.setting_key] = typeof val === "string" ? val.replace(/^"|"$/g, "") : String(val ?? "");
       }
     }
 
@@ -371,31 +396,32 @@ Deno.serve(async (req) => {
     const bucket = "generated-contracts";
     const now = new Date().toISOString();
     const generatedContracts: Array<{ type: string; path: string }> = [];
+    const pdfShiftKey = Deno.env.get("PDFSHIFT_API_KEY") ?? "";
 
     for (const contractType of contractTypes) {
       // Sablon alkalmazása — ha nincs DB sablon, fallback HTML
       const rawTemplate = templateMap[contractType];
-      const html = rawTemplate
-        ? applyTemplate(rawTemplate, vars)
-        : fallbackHtml(contractType, vars);
+      const html = rawTemplate ? applyTemplate(rawTemplate, vars) : fallbackHtml(contractType, vars);
 
-      const fileName = `${contractType}-${caseData.case_number}.html`;
+      // PDF konverzió PDFShift-tel, fallback HTML-re ha nem sikerül
+      const pdfBytes = pdfShiftKey ? await convertHtmlToPdf(html, pdfShiftKey) : null;
+
+      const usePdf = pdfBytes !== null;
+      const fileName = `${contractType}-${caseData.case_number}.${usePdf ? "pdf" : "html"}`;
       const storagePath = `cases/${case_id}/contracts/generated/${fileName}`;
+      const contentType = usePdf ? "application/pdf" : "text/html; charset=utf-8";
+      const fileContent = usePdf ? pdfBytes : new Blob([html], { type: contentType });
 
-      const blob = new Blob([html], { type: "text/html; charset=utf-8" });
-      const { error: uploadErr } = await serviceClient.storage
-        .from(bucket)
-        .upload(storagePath, blob, {
-          contentType: "text/html; charset=utf-8",
-          upsert: true,
-        });
+      console.log(`${contractType}: ${usePdf ? "PDF generálva" : "HTML fallback (PDFShift nem elérhető)"}`);
+
+      const { error: uploadErr } = await serviceClient.storage.from(bucket).upload(storagePath, fileContent, {
+        contentType,
+        upsert: true,
+      });
 
       if (uploadErr) {
         console.error(`Storage upload error for ${contractType}:`, uploadErr);
-        return jsonResponse(
-          { error: `Failed to upload ${contractType}`, detail: uploadErr.message },
-          500,
-        );
+        return jsonResponse({ error: `Failed to upload ${contractType}`, detail: uploadErr.message }, 500);
       }
 
       // Contracts rekord upsert
