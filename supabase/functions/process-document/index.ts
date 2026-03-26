@@ -750,8 +750,18 @@ Deno.serve(async (req) => {
     // 7. Dokumentumtípus felismerés
     const detectedType = detectDocumentType(doc.document_type, doc.original_file_name);
 
-    // 8. Mező kinyerés
-    const extractedFields = extractFieldsFromText(extractedTextRaw, detectedType);
+    // 8. Mező kinyerés — regex alapú alap + AI strukturált kinyerés
+    const regexFields = extractFieldsFromText(extractedTextRaw, detectedType);
+    let aiFields: Record<string, unknown> = {};
+
+    if (extractedTextRaw.length > 50 && openAiKey) {
+      console.log("Running AI field extraction...");
+      aiFields = await extractFieldsWithAI(extractedTextRaw, openAiKey);
+      console.log("AI extracted fields:", JSON.stringify(aiFields));
+    }
+
+    // AI mezők felülírják a regex eredményeket (AI pontosabb)
+    const extractedFields = { ...regexFields, ...aiFields };
 
     // 9. Form vs. dokumentum összehasonlítás (mismatch motor)
     let mismatchResults: MismatchResult[] = [];
