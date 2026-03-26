@@ -294,6 +294,66 @@ function extractFieldsFromText(text: string, detectedType: string) {
   return result;
 }
 
+// ── Strukturált mező kinyerés OpenAI-jal ─────────────────────────────────
+
+async function extractFieldsWithAI(text: string, openAiKey: string): Promise<Record<string, unknown>> {
+  if (!text || text.length < 50 || !openAiKey) {
+    return {};
+  }
+
+  try {
+    const response = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${openAiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "gpt-5.4-nano",
+        messages: [
+          {
+            role: "system",
+            content: `Te egy magyar üdülési szerződéseket elemző asszisztens vagy. 
+A megadott szerződés szövegéből nyerd ki a következő mezőket JSON formátumban.
+Csak valóban megtalált adatokat adj vissza, ne találj ki semmit.
+Ha egy mező nem található, hagyd ki a JSON-ból.
+
+Keresendő mezők:
+- resort_name: az üdülőhely/hotel neve (pl. "Abbázia Club Hotel Keszthely")
+- week_number: a hét száma számként (1-53 közötti egész)
+- owner_name: a tulajdonos/jogosult neve
+- contract_number: a szerződés száma/azonosítója
+- annual_fee: az éves fenntartási díj számként (csak a szám, pl. 150000)
+- share_count: részvény darabszám számként
+- unit_type: apartman típus (pl. "Studio", "2 hálós")
+
+Válaszolj KIZÁRÓLAG valid JSON objektummal, semmi mással.`,
+          },
+          {
+            role: "user",
+            content: text.substring(0, 6000),
+          },
+        ],
+        max_completion_tokens: 500,
+      }),
+    });
+
+    if (!response.ok) {
+      console.error("OpenAI field extraction error:", response.status);
+      return {};
+    }
+
+    const data = await response.json();
+    const content = data.choices?.[0]?.message?.content ?? "{}";
+
+    const cleaned = content.replace(/```json|```/g, "").trim();
+    return JSON.parse(cleaned);
+  } catch (err) {
+    console.error("Field extraction AI error:", err);
+    return {};
+  }
+}
+
 // ── Tiltó klauzulák keresése ─────────────────────────────────────────────
 
 function buildRestrictionHits(text: string) {
@@ -423,19 +483,6 @@ function compareWithWeekOffer(extractedFields: Record<string, unknown>, weekOffe
       form_value: formUnit,
       doc_value: docUnit,
       is_mismatch: !textSimilar(docUnit, formUnit),
-    });
-  }
-
-  // 4. Jogosultság vége (end_year)
-  const docEndYear = extractedFields.end_year as number | null | undefined;
-  const formEndYear = weekOffer.rights_end_year;
-  if (docEndYear != null && formEndYear != null) {
-    results.push({
-      field_name: "rights_end_year",
-      field_label: "Jogosultság vége (év)",
-      form_value: formEndYear,
-      doc_value: docEndYear,
-      is_mismatch: Number(docEndYear) !== Number(formEndYear),
     });
   }
 
