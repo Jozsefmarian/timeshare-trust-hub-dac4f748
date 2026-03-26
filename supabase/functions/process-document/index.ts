@@ -251,11 +251,11 @@ async function extractTextFromFile(
 function detectDocumentType(documentType: string | null, fileName: string | null): string {
   const source = normalizeText(`${documentType ?? ""} ${fileName ?? ""}`);
 
+  if (source.includes("timeshare") || source.includes("szerzodes") || source.includes("contract"))
+    return "timeshare_contract";
   if (source.includes("share") || source.includes("reszveny")) return "share_statement";
   if (source.includes("szemelyi") || source.includes("id") || source.includes("passport")) return "id_document";
   if (source.includes("fee") || source.includes("dij") || source.includes("szamla")) return "annual_fee_invoice";
-  if (source.includes("contract") || source.includes("szerzodes") || source.includes("timeshare"))
-    return "timeshare_contract";
 
   return "other";
 }
