@@ -367,7 +367,6 @@ export default function AdminCaseReview() {
           ? "red"
           : "pending";
 
-
   // ---------- Document Actions ----------
 
   const handleDocReview = async (docId: string, status: string) => {
@@ -456,7 +455,6 @@ export default function AdminCaseReview() {
       setIsCaseAction(false);
     }
   };
-
 
   // ---------- Render ----------
 
@@ -602,7 +600,9 @@ export default function AdminCaseReview() {
                     {documents.map((doc) => {
                       const canReviewDocument = doc.upload_status === "completed";
                       const canPreviewDocument =
-                        !!doc.storage_bucket && !!doc.storage_path && doc.upload_status === "completed";
+                        !!doc.storage_bucket &&
+                        !!doc.storage_path &&
+                        (doc.upload_status === "uploaded" || doc.upload_status === "completed");
 
                       return (
                         <div key={doc.id} className="px-6 py-4 space-y-3">
@@ -836,15 +836,12 @@ export default function AdminCaseReview() {
                   <XCircle className="h-4 w-4" />
                   Pirosra állítás
                 </Button>
-                <p className="text-xs text-muted-foreground">
-                  Az indoklás mező kitöltése ajánlott, de nem kötelező.
-                </p>
+                <p className="text-xs text-muted-foreground">Az indoklás mező kitöltése ajánlott, de nem kötelező.</p>
               </CardContent>
             </Card>
           </div>
         </div>
       </div>
-
     </AdminLayout>
   );
 }
