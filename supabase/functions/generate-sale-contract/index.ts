@@ -380,11 +380,17 @@ Deno.serve(async (req) => {
 
     // ── Sablonok betöltése a contract_templates táblából ─────────────────────
 
-    const { data: templates } = await serviceClient
+    const { data: templates, error: templatesError } = await serviceClient
       .from("contract_templates" as any)
-      .select("contract_type, html_content, name, version")
+      .select("contract_type, html_content, title, version")
       .in("contract_type", contractTypes)
       .eq("is_active", true);
+
+    if (templatesError) {
+      console.error("Failed to load contract templates:", templatesError.message);
+    } else {
+      console.log(`Loaded ${templates?.length ?? 0} active templates`);
+    }
 
     const templateMap: Record<string, string> = {};
     for (const t of templates ?? []) {
