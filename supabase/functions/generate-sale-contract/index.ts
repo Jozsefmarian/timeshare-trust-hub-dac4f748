@@ -195,7 +195,7 @@ Deno.serve(async (req) => {
   try {
     const authHeader = req.headers.get("Authorization");
     if (!authHeader?.startsWith("Bearer ")) {
-      return jsonResponse({ error: "Unauthorized" }, 401);
+      return jsonResponse({ error: "Unauthorized" }, 401, req);
     }
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
@@ -211,20 +211,20 @@ Deno.serve(async (req) => {
     const token = authHeader.replace("Bearer ", "");
     const { data: claimsData, error: claimsError } = await authClient.auth.getUser(token);
     if (claimsError || !claimsData?.user) {
-      return jsonResponse({ error: "Unauthorized" }, 401);
+      return jsonResponse({ error: "Unauthorized" }, 401, req);
     }
 
     const { data: profile } = await serviceClient.from("profiles").select("role").eq("id", claimsData.user.id).single();
 
     if (!profile || profile.role !== "admin") {
-      return jsonResponse({ error: "Forbidden – admin only" }, 403);
+      return jsonResponse({ error: "Forbidden – admin only" }, 403, req);
     }
 
     const body = await req.json();
     const { case_id } = body;
 
     if (!case_id) {
-      return jsonResponse({ error: "Missing case_id" }, 400);
+      return jsonResponse({ error: "Missing case_id" }, 400, req);
     }
 
     // ── Adatok betöltése ──────────────────────────────────────────────────────
@@ -232,7 +232,7 @@ Deno.serve(async (req) => {
     const { data: caseData, error: caseErr } = await serviceClient.from("cases").select("*").eq("id", case_id).single();
 
     if (caseErr || !caseData) {
-      return jsonResponse({ error: "Case not found" }, 404);
+      return jsonResponse({ error: "Case not found" }, 404, req);
     }
 
     const { data: sellerProfile } = await serviceClient
@@ -498,6 +498,7 @@ Deno.serve(async (req) => {
         detail: err instanceof Error ? err.message : "Unknown error",
       },
       500,
+      req,
     );
   }
 });
