@@ -384,20 +384,6 @@ export default function AdminCaseDetail() {
     }
   }, [caseId, loadCase, loadDocuments, loadDocumentTypes, loadValidationResults, loadContracts, loadWeekOffer, loadAiResults]);
 
-  // Actions
-  const handleDocReview = async (docId: string, status: string) => {
-    if (!caseId) return;
-    try {
-      setUpdatingDocId(docId);
-      await updateDocumentReviewStatus(docId, status);
-      toast.success(`Dokumentum státusz frissítve: ${reviewStatusLabel(status)}`);
-      await loadDocuments();
-    } catch {
-      toast.error("A dokumentum státusz frissítése nem sikerült.");
-    } finally {
-      setUpdatingDocId(null);
-    }
-  };
 
   const handleClassification = async (classification: string) => {
     if (!caseId) return;
