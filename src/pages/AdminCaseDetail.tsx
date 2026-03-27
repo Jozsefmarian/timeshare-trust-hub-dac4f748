@@ -12,10 +12,7 @@ import {
   User,
   MapPin,
   Calendar,
-  CheckCircle2,
-  AlertTriangle,
   MessageSquare,
-  RotateCcw,
   ShieldCheck,
   ShieldAlert,
   ShieldX,
@@ -121,57 +118,7 @@ type ContractRow = {
 
 // ---------- Helpers ----------
 
-async function updateDocumentReviewStatus(documentId: string, status: string) {
-  const { error } = await supabase.from("documents").update({ review_status: status }).eq("id", documentId);
-  if (error) throw error;
-}
 
-async function recalculateCaseStatus(caseId: string) {
-  const { data: docs, error: docsErr } = await supabase
-    .from("documents")
-    .select("id, review_status, document_type_id")
-    .eq("case_id", caseId);
-  if (docsErr) throw docsErr;
-  if (!docs || docs.length === 0) return;
-
-  const { data: requiredTypes } = await supabase
-    .from("document_types")
-    .select("id")
-    .eq("is_required", true)
-    .eq("is_active", true);
-
-  const requiredIds = new Set((requiredTypes ?? []).map((t) => t.id));
-  const statuses = docs.map((d) => d.review_status);
-
-  if (statuses.some((s) => s === "needs_reupload")) {
-    await supabase.from("cases").update({ status: "documents_uploaded" }).eq("id", caseId);
-    return;
-  }
-  if (statuses.some((s) => s === "rejected")) {
-    await supabase.from("cases").update({ status: "review_in_progress" }).eq("id", caseId);
-    return;
-  }
-  if (requiredIds.size > 0) {
-    const approvedTypeIds = new Set(
-      docs.filter((d) => d.review_status === "approved" && d.document_type_id).map((d) => d.document_type_id!),
-    );
-    const allRequiredApproved = [...requiredIds].every((id) => approvedTypeIds.has(id));
-    if (allRequiredApproved) {
-      await supabase.from("cases").update({ status: "ready_for_contract" }).eq("id", caseId);
-      return;
-    }
-  } else {
-    if (docs.length > 0 && statuses.every((s) => s === "approved")) {
-      await supabase.from("cases").update({ status: "ready_for_contract" }).eq("id", caseId);
-      return;
-    }
-  }
-  if (statuses.some((s) => s !== "pending")) {
-    await supabase.from("cases").update({ status: "review_in_progress" }).eq("id", caseId);
-    return;
-  }
-  await supabase.from("cases").update({ status: "documents_uploaded" }).eq("id", caseId);
-}
 
 async function updateCaseInternalNote(caseId: string, note: string) {
   const { error } = await supabase
@@ -309,7 +256,7 @@ export default function AdminCaseDetail() {
   const [comment, setComment] = useState("");
   const [adminNote, setAdminNote] = useState("");
   const [isSavingNote, setIsSavingNote] = useState(false);
-  const [updatingDocId, setUpdatingDocId] = useState<string | null>(null);
+  
   const [updatingClassification, setUpdatingClassification] = useState(false);
   const [previewLoadingId, setPreviewLoadingId] = useState<string | null>(null);
 
@@ -433,21 +380,6 @@ export default function AdminCaseDetail() {
     }
   }, [caseId, loadCase, loadDocuments, loadDocumentTypes, loadValidationResults, loadContracts, loadWeekOffer, loadAiResults]);
 
-  // Actions
-  const handleDocReview = async (docId: string, status: string) => {
-    if (!caseId) return;
-    try {
-      setUpdatingDocId(docId);
-      await updateDocumentReviewStatus(docId, status);
-      await recalculateCaseStatus(caseId);
-      toast.success(`Dokumentum státusz frissítve: ${reviewStatusLabel(status)}`);
-      await Promise.all([loadDocuments(), loadCase()]);
-    } catch {
-      toast.error("A dokumentum státusz frissítése nem sikerült.");
-    } finally {
-      setUpdatingDocId(null);
-    }
-  };
 
   const handleClassification = async (classification: string) => {
     if (!caseId) return;
@@ -662,39 +594,6 @@ export default function AdminCaseDetail() {
                               )}
                             </Button>
                           </div>
-                        </div>
-                        {/* Document review actions */}
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="text-success border-success/30 hover:bg-success/10"
-                            disabled={updatingDocId === doc.id || doc.review_status === "approved"}
-                            onClick={() => handleDocReview(doc.id, "approved")}
-                          >
-                            <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
-                            Jóváhagy
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="text-destructive border-destructive/30 hover:bg-destructive/10"
-                            disabled={updatingDocId === doc.id || doc.review_status === "rejected"}
-                            onClick={() => handleDocReview(doc.id, "rejected")}
-                          >
-                            <AlertTriangle className="h-3.5 w-3.5 mr-1" />
-                            Elutasít
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="text-warning border-warning/30 hover:bg-warning/10"
-                            disabled={updatingDocId === doc.id || doc.review_status === "needs_reupload"}
-                            onClick={() => handleDocReview(doc.id, "needs_reupload")}
-                          >
-                            <RotateCcw className="h-3.5 w-3.5 mr-1" />
-                            Újrafeltöltést kér
-                          </Button>
                         </div>
                       </div>
                     ))}
