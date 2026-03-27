@@ -90,6 +90,30 @@ function escapeHtml(str: string | null | undefined): string {
 
 // ── Változók behelyettesítése a sablonba ─────────────────────────────────────
 
+function ensureFullHtml(html: string): string {
+  const trimmed = html.trim().toLowerCase();
+  if (trimmed.startsWith("<!doctype") || trimmed.startsWith("<html")) {
+    return html;
+  }
+  return `<!DOCTYPE html>
+<html lang="hu">
+<head>
+  <meta charset="UTF-8">
+  <style>
+    body { font-family: Arial, sans-serif; max-width: 800px; margin: 40px auto; padding: 20px; color: #222; line-height: 1.6; }
+    h1 { text-align: center; font-size: 20px; }
+    h2 { font-size: 15px; margin-top: 24px; border-bottom: 1px solid #ccc; padding-bottom: 4px; }
+    p, li { font-size: 13px; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    td, th { padding: 4px 8px; border: 1px solid #ddd; }
+  </style>
+</head>
+<body>
+${html}
+</body>
+</html>`;
+}
+
 function applyTemplate(html: string, vars: Record<string, string>): string {
   let result = html;
   for (const [key, value] of Object.entries(vars)) {
