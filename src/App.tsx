@@ -15,7 +15,7 @@ import SellerSupport from "./pages/SellerSupport";
 import AdminDashboard from "./pages/AdminDashboard";
 import AdminCases from "./pages/AdminCases";
 import AdminCaseDetail from "./pages/AdminCaseDetail";
-import AdminCaseReview from "./pages/AdminCaseReview";
+
 import AdminResorts from "./pages/AdminResorts";
 import AdminInventory from "./pages/AdminInventory";
 import AdminInventoryDetail from "./pages/AdminInventoryDetail";
