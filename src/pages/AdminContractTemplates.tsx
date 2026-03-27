@@ -179,16 +179,31 @@ function TemplateSection({ type, label }: { type: string; label: string }) {
               <span className="font-semibold">Elérhető változók:</span> {AVAILABLE_VARIABLES}
             </div>
 
-            <Textarea
-              className="font-mono min-h-[400px]"
-              placeholder="HTML sablon tartalma..."
-              value={htmlContent}
-              onChange={(e) => setHtmlContent(e.target.value)}
-            />
+            <div className="rounded-md bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 p-3 text-xs text-blue-800 dark:text-blue-300 flex items-start gap-2">
+              <Info className="h-4 w-4 mt-0.5 shrink-0" />
+              <span>Ide HTML forráskódot kell beilleszteni. Konvertált .html fájlt Notepad++ vagy VS Code szerkesztővel nyiss meg, és onnan másold ide a forráskódot.</span>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <Textarea
+                className="font-mono min-h-[400px]"
+                placeholder="HTML sablon tartalma..."
+                value={htmlContent}
+                onChange={(e) => setHtmlContent(e.target.value)}
+              />
+              <div className="border rounded-md overflow-hidden bg-white min-h-[400px]">
+                <iframe
+                  ref={iframeRef}
+                  title="Élő előnézet"
+                  className="w-full h-full min-h-[400px]"
+                  sandbox="allow-same-origin"
+                />
+              </div>
+            </div>
 
             <div className="flex flex-wrap gap-2">
               <Button variant="outline" size="sm" onClick={handlePreview} disabled={!htmlContent.trim()}>
-                <Eye className="h-4 w-4 mr-1" /> Előnézet
+                <Maximize className="h-4 w-4 mr-1" /> Teljes képernyős előnézet
               </Button>
               <Button variant="secondary" size="sm" onClick={() => handleSave(false)} disabled={saving}>
                 <Save className="h-4 w-4 mr-1" /> Mentés piszkozatként
