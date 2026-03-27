@@ -157,7 +157,7 @@ export default function AuthPage() {
       <div className="hidden lg:flex lg:w-1/2 gradient-hero relative items-center justify-center p-12">
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_left,_hsla(174,84%,40%,0.2),_transparent_60%)]" />
         <div className="relative z-10 max-w-md">
-          <Shield className="h-12 w-12 text-secondary mb-8" />
+          <img src={tsrLogo} alt="TSR Megoldások" className="h-12 mb-8" />
           <h2 className="text-3xl font-bold text-primary-foreground mb-4">Üdvözöljük újra</h2>
           <p className="text-primary-foreground/70 text-lg">
             Kezelje üdülési jog átruházási ügyeit, kövesse nyomon dokumentumait és fizetéseit biztonságosan.
