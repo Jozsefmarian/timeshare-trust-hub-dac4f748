@@ -360,7 +360,7 @@ Deno.serve(async (req) => {
       contact_email: policySettings["contact_email"] ?? "—",
 
       // Eladó adatok
-      seller_name: sellerProfile?.full_name ?? sellerDetails?.billing_name ?? "—",
+      seller_name: sellerDetails?.billing_name ?? sellerProfile?.full_name ?? "—",
       seller_address: sellerDetails?.billing_address ?? "—",
       seller_birth_date: formatDateHu(sellerDetails?.birth_date),
       seller_birth_place: sellerDetails?.birth_place ?? "—",
