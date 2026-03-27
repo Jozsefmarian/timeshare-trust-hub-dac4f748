@@ -123,52 +123,6 @@ async function updateDocumentReviewStatus(documentId: string, status: string) {
   if (error) throw error;
 }
 
-async function recalculateCaseStatus(caseId: string) {
-  const { data: docs, error: docsErr } = await supabase
-    .from("documents")
-    .select("id, review_status, document_type_id")
-    .eq("case_id", caseId);
-  if (docsErr) throw docsErr;
-  if (!docs || docs.length === 0) return;
-
-  const { data: requiredTypes } = await supabase
-    .from("document_types")
-    .select("id")
-    .eq("is_required", true)
-    .eq("is_active", true);
-
-  const requiredIds = new Set((requiredTypes ?? []).map((t) => t.id));
-  const statuses = docs.map((d) => d.review_status);
-
-  if (statuses.some((s) => s === "needs_reupload")) {
-    await supabase.from("cases").update({ status: "documents_uploaded" }).eq("id", caseId);
-    return;
-  }
-  if (statuses.some((s) => s === "rejected")) {
-    await supabase.from("cases").update({ status: "review_in_progress" }).eq("id", caseId);
-    return;
-  }
-  if (requiredIds.size > 0) {
-    const approvedTypeIds = new Set(
-      docs.filter((d) => d.review_status === "approved" && d.document_type_id).map((d) => d.document_type_id!),
-    );
-    const allRequiredApproved = [...requiredIds].every((id) => approvedTypeIds.has(id));
-    if (allRequiredApproved) {
-      await supabase.from("cases").update({ status: "ready_for_contract" }).eq("id", caseId);
-      return;
-    }
-  } else {
-    if (docs.length > 0 && statuses.every((s) => s === "approved")) {
-      await supabase.from("cases").update({ status: "ready_for_contract" }).eq("id", caseId);
-      return;
-    }
-  }
-  if (statuses.some((s) => s !== "pending")) {
-    await supabase.from("cases").update({ status: "review_in_progress" }).eq("id", caseId);
-    return;
-  }
-  await supabase.from("cases").update({ status: "documents_uploaded" }).eq("id", caseId);
-}
 
 async function updateCaseInternalNote(caseId: string, note: string) {
   const { error } = await supabase
