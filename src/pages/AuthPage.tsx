@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Shield, Mail, Lock, ArrowRight, Sparkles } from "lucide-react";
+import { Mail, Lock, ArrowRight, Sparkles } from "lucide-react";
+import tsrLogo from "@/assets/tsr-logo-white.png";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -156,7 +157,7 @@ export default function AuthPage() {
       <div className="hidden lg:flex lg:w-1/2 gradient-hero relative items-center justify-center p-12">
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_left,_hsla(174,84%,40%,0.2),_transparent_60%)]" />
         <div className="relative z-10 max-w-md">
-          <Shield className="h-12 w-12 text-secondary mb-8" />
+          <img src={tsrLogo} alt="TSR Megoldások" className="h-12 mb-8" />
           <h2 className="text-3xl font-bold text-primary-foreground mb-4">Üdvözöljük újra</h2>
           <p className="text-primary-foreground/70 text-lg">
             Kezelje üdülési jog átruházási ügyeit, kövesse nyomon dokumentumait és fizetéseit biztonságosan.
@@ -168,8 +169,7 @@ export default function AuthPage() {
       <div className="flex-1 flex items-center justify-center p-8">
         <div className="w-full max-w-md">
           <Link to="/" className="flex items-center gap-2 mb-10">
-            <Shield className="h-7 w-7 text-secondary" />
-            <span className="text-xl font-bold text-primary">TimeshareRelease</span>
+            <img src={tsrLogo} alt="TSR Megoldások" className="h-8" />
           </Link>
 
           <h1 className="text-2xl font-bold text-foreground mb-2">Bejelentkezés a fiókjába</h1>
