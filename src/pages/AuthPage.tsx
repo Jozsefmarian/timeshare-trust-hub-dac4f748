@@ -169,8 +169,7 @@ export default function AuthPage() {
       <div className="flex-1 flex items-center justify-center p-8">
         <div className="w-full max-w-md">
           <Link to="/" className="flex items-center gap-2 mb-10">
-            <Shield className="h-7 w-7 text-secondary" />
-            <span className="text-xl font-bold text-primary">TimeshareRelease</span>
+            <img src={tsrLogo} alt="TSR Megoldások" className="h-8" />
           </Link>
 
           <h1 className="text-2xl font-bold text-foreground mb-2">Bejelentkezés a fiókjába</h1>
