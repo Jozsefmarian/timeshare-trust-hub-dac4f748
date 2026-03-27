@@ -260,7 +260,7 @@ export default function AdminCaseDetail() {
   const [comment, setComment] = useState("");
   const [adminNote, setAdminNote] = useState("");
   const [isSavingNote, setIsSavingNote] = useState(false);
-  const [updatingDocId, setUpdatingDocId] = useState<string | null>(null);
+  
   const [updatingClassification, setUpdatingClassification] = useState(false);
   const [previewLoadingId, setPreviewLoadingId] = useState<string | null>(null);
 
