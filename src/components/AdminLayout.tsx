@@ -9,7 +9,7 @@ import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { getInitials } from "@/lib/auth";
 import { useAuth } from "@/context/AuthContext";
-import tsrLogo from "@/assets/tsr-logo.png";
+import tsrLogo from "@/assets/tsr-logo-white.png";
 
 const adminNavItems = [
   { title: "Vezérlőpult", icon: LayoutDashboard, href: "/admin" },
