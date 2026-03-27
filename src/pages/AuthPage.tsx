@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Mail, Lock, ArrowRight, Sparkles } from "lucide-react";
 import tsrLogo from "@/assets/tsr-logo-white.png";
+import tsrLogoDark from "@/assets/tsr-logo-dark.png";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
