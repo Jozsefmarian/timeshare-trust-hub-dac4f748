@@ -46,7 +46,29 @@ function TemplateSection({ type, label }: { type: string; label: string }) {
   const [title, setTitle] = useState("");
   const [version, setVersion] = useState("");
   const [htmlContent, setHtmlContent] = useState("");
+  const [previewHtml, setPreviewHtml] = useState("");
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const iframeRef = useRef<HTMLIFrameElement>(null);
 
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      setPreviewHtml(htmlContent);
+    }, 500);
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
+  }, [htmlContent]);
+
+  useEffect(() => {
+    const iframe = iframeRef.current;
+    if (iframe && showEditor) {
+      const doc = iframe.contentDocument;
+      if (doc) {
+        doc.open();
+        doc.write(previewHtml);
+        doc.close();
+      }
+    }
+  }, [previewHtml, showEditor]);
   const load = useCallback(async () => {
     setLoading(true);
     const [activeRes, historyRes] = await Promise.all([
