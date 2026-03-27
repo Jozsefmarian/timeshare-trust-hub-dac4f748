@@ -406,13 +406,13 @@ export default function AdminCaseDetail() {
   const loadAiResults = useCallback(async () => {
     if (!caseId) return;
     const [classRes, checksRes] = await Promise.all([
-      supabase
-        .from("classifications" as any)
+      (supabase as any)
+        .from("classifications")
         .select("id, classification, reason_summary, reason_codes, created_at")
         .eq("case_id", caseId)
         .order("created_at", { ascending: false }),
-      supabase
-        .from("check_results" as any)
+      (supabase as any)
+        .from("check_results")
         .select("id, document_id, check_type, result, severity, message, details, created_at")
         .eq("case_id", caseId)
         .order("created_at", { ascending: false }),
