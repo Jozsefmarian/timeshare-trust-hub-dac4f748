@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Mail, Lock, ArrowRight, Sparkles } from "lucide-react";
 import tsrLogo from "@/assets/tsr-logo-white.png";
+import tsrLogoDark from "@/assets/tsr-logo-dark.png";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -169,7 +170,7 @@ export default function AuthPage() {
       <div className="flex-1 flex items-center justify-center p-8">
         <div className="w-full max-w-md">
           <Link to="/" className="flex items-center gap-2 mb-10">
-            <img src={tsrLogo} alt="TSR Megoldások" className="h-8" />
+            <img src={tsrLogoDark} alt="TSR Megoldások" className="h-8" />
           </Link>
 
           <h1 className="text-2xl font-bold text-foreground mb-2">Bejelentkezés a fiókjába</h1>
