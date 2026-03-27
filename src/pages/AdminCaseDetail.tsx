@@ -370,10 +370,10 @@ export default function AdminCaseDetail() {
         "id, case_id, contract_type, status, generated_file_name, generated_storage_bucket, generated_storage_path, signed_file_name, signed_storage_bucket, signed_storage_path, generated_at, signed_uploaded_at",
       )
       .eq("case_id", caseId)
-      .eq("contract_type", "sale_contract")
-      .maybeSingle();
+      .in("contract_type", ["timeshare_transfer", "power_of_attorney", "share_transfer", "securities_transfer"])
+      .order("created_at", { ascending: true });
 
-    setContract(data as ContractRow | null);
+    setContract((data && data.length > 0 ? data[0] : null) as ContractRow | null);
   }, [caseId]);
 
   useEffect(() => {
