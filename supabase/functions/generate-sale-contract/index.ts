@@ -432,9 +432,10 @@ Deno.serve(async (req) => {
       // Sablon alkalmazása — ha nincs DB sablon, fallback HTML
       const rawTemplate = templateMap[contractType];
       const html = rawTemplate ? applyTemplate(rawTemplate, vars) : fallbackHtml(contractType, vars);
+      const fullHtml = ensureFullHtml(html);
 
       // PDF konverzió PDFShift-tel, fallback HTML-re ha nem sikerül
-      const pdfBytes = pdfShiftKey ? await convertHtmlToPdf(html, pdfShiftKey) : null;
+      const pdfBytes = pdfShiftKey ? await convertHtmlToPdf(fullHtml, pdfShiftKey) : null;
 
       const usePdf = pdfBytes !== null;
       const fileName = `${contractType}-${caseData.case_number}.${usePdf ? "pdf" : "html"}`;
