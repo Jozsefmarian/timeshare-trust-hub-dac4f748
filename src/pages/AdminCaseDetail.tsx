@@ -118,10 +118,6 @@ type ContractRow = {
 
 // ---------- Helpers ----------
 
-async function updateDocumentReviewStatus(documentId: string, status: string) {
-  const { error } = await supabase.from("documents").update({ review_status: status }).eq("id", documentId);
-  if (error) throw error;
-}
 
 
 async function updateCaseInternalNote(caseId: string, note: string) {
