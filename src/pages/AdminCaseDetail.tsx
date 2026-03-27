@@ -613,39 +613,6 @@ export default function AdminCaseDetail() {
                             </Button>
                           </div>
                         </div>
-                        {/* Document review actions */}
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="text-success border-success/30 hover:bg-success/10"
-                            disabled={updatingDocId === doc.id || doc.review_status === "approved"}
-                            onClick={() => handleDocReview(doc.id, "approved")}
-                          >
-                            <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
-                            Jóváhagy
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="text-destructive border-destructive/30 hover:bg-destructive/10"
-                            disabled={updatingDocId === doc.id || doc.review_status === "rejected"}
-                            onClick={() => handleDocReview(doc.id, "rejected")}
-                          >
-                            <AlertTriangle className="h-3.5 w-3.5 mr-1" />
-                            Elutasít
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="text-warning border-warning/30 hover:bg-warning/10"
-                            disabled={updatingDocId === doc.id || doc.review_status === "needs_reupload"}
-                            onClick={() => handleDocReview(doc.id, "needs_reupload")}
-                          >
-                            <RotateCcw className="h-3.5 w-3.5 mr-1" />
-                            Újrafeltöltést kér
-                          </Button>
-                        </div>
                       </div>
                     ))}
                   </div>
