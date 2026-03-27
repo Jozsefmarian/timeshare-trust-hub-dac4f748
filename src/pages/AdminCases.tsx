@@ -309,7 +309,7 @@ export default function AdminCases() {
                           className="hover:underline"
                           onClick={(e) => {
                             e.stopPropagation();
-                            navigate(`/admin/cases/${c.id}/review`);
+                            navigate(`/admin/cases/${c.id}`);
                           }}
                         >
                           {c.case_number}

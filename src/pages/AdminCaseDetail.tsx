@@ -7,7 +7,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
 import {
   ArrowLeft,
-  Download,
   Eye,
   FileText,
   User,
@@ -21,6 +20,7 @@ import {
   ShieldAlert,
   ShieldX,
   Loader2,
+  Brain,
 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
@@ -75,6 +75,50 @@ type DocumentType = {
   label: string;
 };
 
+type WeekOfferRow = {
+  resort_name_raw: string | null;
+  week_number: number | null;
+  unit_type: string | null;
+  season_label: string | null;
+  rights_start_year: number | null;
+  rights_end_year: number | null;
+  usage_frequency: string | null;
+};
+
+type ClassificationRow = {
+  id: string;
+  classification: string;
+  reason_summary: string | null;
+  reason_codes: string[] | null;
+  created_at: string;
+};
+
+type CheckResultRow = {
+  id: string;
+  document_id: string | null;
+  check_type: string;
+  result: string;
+  severity: string | null;
+  message: string | null;
+  details: unknown;
+  created_at: string;
+};
+
+type ContractRow = {
+  id: string;
+  case_id: string;
+  contract_type: string;
+  status: string;
+  generated_file_name: string | null;
+  generated_storage_bucket: string | null;
+  generated_storage_path: string | null;
+  signed_file_name: string | null;
+  signed_storage_bucket: string | null;
+  signed_storage_path: string | null;
+  generated_at: string | null;
+  signed_uploaded_at: string | null;
+};
+
 // ---------- Helpers ----------
 
 async function updateDocumentReviewStatus(documentId: string, status: string) {
@@ -83,15 +127,13 @@ async function updateDocumentReviewStatus(documentId: string, status: string) {
 }
 
 async function recalculateCaseStatus(caseId: string) {
-  // 1) Load all documents for this case
   const { data: docs, error: docsErr } = await supabase
     .from("documents")
     .select("id, review_status, document_type_id")
     .eq("case_id", caseId);
   if (docsErr) throw docsErr;
-  if (!docs || docs.length === 0) return; // no docs → no change
+  if (!docs || docs.length === 0) return;
 
-  // 2) Load required document types
   const { data: requiredTypes } = await supabase
     .from("document_types")
     .select("id")
@@ -99,22 +141,16 @@ async function recalculateCaseStatus(caseId: string) {
     .eq("is_active", true);
 
   const requiredIds = new Set((requiredTypes ?? []).map((t) => t.id));
-
   const statuses = docs.map((d) => d.review_status);
 
-  // Rule 5: any needs_reupload → documents_uploaded
   if (statuses.some((s) => s === "needs_reupload")) {
     await supabase.from("cases").update({ status: "documents_uploaded" }).eq("id", caseId);
     return;
   }
-
-  // Rule 4: any rejected → review_in_progress
   if (statuses.some((s) => s === "rejected")) {
     await supabase.from("cases").update({ status: "review_in_progress" }).eq("id", caseId);
     return;
   }
-
-  // Rule 3: all required docs approved → ready_for_contract
   if (requiredIds.size > 0) {
     const approvedTypeIds = new Set(
       docs.filter((d) => d.review_status === "approved" && d.document_type_id).map((d) => d.document_type_id!),
@@ -125,20 +161,15 @@ async function recalculateCaseStatus(caseId: string) {
       return;
     }
   } else {
-    // No required types defined: if all docs approved → ready
     if (docs.length > 0 && statuses.every((s) => s === "approved")) {
       await supabase.from("cases").update({ status: "ready_for_contract" }).eq("id", caseId);
       return;
     }
   }
-
-  // Rule 2: at least one review started (not pending) → review_in_progress
   if (statuses.some((s) => s !== "pending")) {
     await supabase.from("cases").update({ status: "review_in_progress" }).eq("id", caseId);
     return;
   }
-
-  // Rule 1: has documents → documents_uploaded
   await supabase.from("cases").update({ status: "documents_uploaded" }).eq("id", caseId);
 }
 
@@ -154,57 +185,39 @@ async function updateCaseInternalNote(caseId: string, note: string) {
 
 function reviewStatusLabel(s: string): string {
   switch (s) {
-    case "pending":
-      return "Függőben";
-    case "approved":
-      return "Jóváhagyva";
-    case "rejected":
-      return "Elutasítva";
-    case "needs_reupload":
-      return "Újrafeltöltés szükséges";
-    default:
-      return s;
+    case "pending": return "Függőben";
+    case "approved": return "Jóváhagyva";
+    case "rejected": return "Elutasítva";
+    case "needs_reupload": return "Újrafeltöltés szükséges";
+    default: return s;
   }
 }
 
 function reviewStatusClasses(s: string): string {
   switch (s) {
-    case "pending":
-      return "bg-muted text-muted-foreground";
-    case "approved":
-      return "bg-success/10 text-success";
-    case "rejected":
-      return "bg-destructive/10 text-destructive";
-    case "needs_reupload":
-      return "bg-warning/10 text-warning";
-    default:
-      return "bg-muted text-muted-foreground";
+    case "pending": return "bg-muted text-muted-foreground";
+    case "approved": return "bg-success/10 text-success";
+    case "rejected": return "bg-destructive/10 text-destructive";
+    case "needs_reupload": return "bg-warning/10 text-warning";
+    default: return "bg-muted text-muted-foreground";
   }
 }
 
 function classificationLabel(c: string | null): string {
   switch (c) {
-    case "green":
-      return "Zöld";
-    case "yellow":
-      return "Sárga";
-    case "red":
-      return "Piros";
-    default:
-      return "Nincs besorolva";
+    case "green": return "Zöld";
+    case "yellow": return "Sárga";
+    case "red": return "Piros";
+    default: return "Nincs besorolva";
   }
 }
 
 function classificationClasses(c: string | null): string {
   switch (c) {
-    case "green":
-      return "bg-success/10 text-success";
-    case "yellow":
-      return "bg-warning/10 text-warning";
-    case "red":
-      return "bg-destructive/10 text-destructive";
-    default:
-      return "bg-muted text-muted-foreground";
+    case "green": return "bg-success/10 text-success";
+    case "yellow": return "bg-warning/10 text-warning";
+    case "red": return "bg-destructive/10 text-destructive";
+    default: return "bg-muted text-muted-foreground";
   }
 }
 
@@ -228,52 +241,53 @@ function formatDateTime(value?: string | null) {
   });
 }
 
+function contractTypeLabel(t: string): string {
+  switch (t) {
+    case "timeshare_transfer": return "Üdülőhasználati átadási szerződés";
+    case "power_of_attorney": return "Meghatalmazás";
+    case "share_transfer": return "Részvény adásvételi szerződés";
+    case "securities_transfer": return "Értékpapír transzfer nyilatkozat";
+    default: return t;
+  }
+}
+
 function contractStatusLabel(s: string): string {
   switch (s) {
-    case "pending_generation":
-      return "Generálásra vár";
-    case "generated":
-      return "Generálva";
-    case "awaiting_signature":
-      return "Aláírásra vár";
-    case "signed_uploaded":
-      return "Aláírt példány feltöltve";
-    case "verified":
-      return "Ellenőrizve";
-    default:
-      return s;
+    case "pending_generation": return "Generálásra vár";
+    case "generated": return "Generálva";
+    case "awaiting_signature": return "Aláírásra vár";
+    case "signed_uploaded": return "Aláírt példány feltöltve";
+    case "verified": return "Ellenőrizve";
+    default: return s;
   }
 }
 
 function contractStatusClasses(s: string): string {
   switch (s) {
-    case "generated":
-      return "bg-primary/10 text-primary";
-    case "awaiting_signature":
-      return "bg-warning/10 text-warning";
-    case "signed_uploaded":
-      return "bg-success/10 text-success";
-    case "verified":
-      return "bg-success/10 text-success";
-    default:
-      return "bg-muted text-muted-foreground";
+    case "generated": return "bg-primary/10 text-primary";
+    case "awaiting_signature": return "bg-warning/10 text-warning";
+    case "signed_uploaded": return "bg-success/10 text-success";
+    case "verified": return "bg-success/10 text-success";
+    default: return "bg-muted text-muted-foreground";
   }
 }
 
-type ContractRow = {
-  id: string;
-  case_id: string;
-  contract_type: string;
-  status: string;
-  generated_file_name: string | null;
-  generated_storage_bucket: string | null;
-  generated_storage_path: string | null;
-  signed_file_name: string | null;
-  signed_storage_bucket: string | null;
-  signed_storage_path: string | null;
-  generated_at: string | null;
-  signed_uploaded_at: string | null;
-};
+function usageFrequencyLabel(f: string | null): string {
+  switch (f) {
+    case "annual": return "Minden évben";
+    case "biennial": return "Minden második évben";
+    default: return f || "—";
+  }
+}
+
+function checkResultBadgeClass(result: string): string {
+  switch (result) {
+    case "pass": return "bg-success/10 text-success";
+    case "warning": return "bg-warning/10 text-warning";
+    case "fail": return "bg-destructive/10 text-destructive";
+    default: return "bg-muted text-muted-foreground";
+  }
+}
 
 // ---------- Component ----------
 
@@ -286,10 +300,14 @@ export default function AdminCaseDetail() {
   const [documents, setDocuments] = useState<CaseDocument[]>([]);
   const [documentTypes, setDocumentTypes] = useState<DocumentType[]>([]);
   const [validationResults, setValidationResults] = useState<AiValidationResult[]>([]);
-  const [contract, setContract] = useState<ContractRow | null>(null);
+  const [contracts, setContracts] = useState<ContractRow[]>([]);
+  const [weekOffer, setWeekOffer] = useState<WeekOfferRow | null>(null);
+  const [classificationRows, setClassificationRows] = useState<ClassificationRow[]>([]);
+  const [checkResults, setCheckResults] = useState<CheckResultRow[]>([]);
   const [isGeneratingContract, setIsGeneratingContract] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [comment, setComment] = useState("");
+  const [adminNote, setAdminNote] = useState("");
   const [isSavingNote, setIsSavingNote] = useState(false);
   const [updatingDocId, setUpdatingDocId] = useState<string | null>(null);
   const [updatingClassification, setUpdatingClassification] = useState(false);
@@ -319,7 +337,6 @@ export default function AdminCaseDetail() {
       setCaseData(row);
       setComment(row.internal_note || "");
 
-      // Load seller profile
       const { data: profile } = await supabase
         .from("profiles")
         .select("full_name, email, phone")
@@ -351,18 +368,16 @@ export default function AdminCaseDetail() {
   // Load document types
   const loadDocumentTypes = useCallback(async () => {
     const { data } = await supabase.from("document_types").select("id, code, label").eq("is_active", true);
-
     if (data) setDocumentTypes(data as DocumentType[]);
   }, []);
 
-  // Load AI validation results
+  // Load AI validation results (archived table – currently unused)
   const loadValidationResults = useCallback(async () => {
-    // ai_validation_results tábla archivált — check_results tábla helyettesíti
     setValidationResults([]);
   }, [caseId]);
 
-  // Load contract
-  const loadContract = useCallback(async () => {
+  // Load contracts (multiple types)
+  const loadContracts = useCallback(async () => {
     if (!caseId) return;
     const { data } = await (supabase as any)
       .from("contracts")
@@ -373,7 +388,37 @@ export default function AdminCaseDetail() {
       .in("contract_type", ["timeshare_transfer", "power_of_attorney", "share_transfer", "securities_transfer"])
       .order("created_at", { ascending: true });
 
-    setContract((data && data.length > 0 ? data[0] : null) as ContractRow | null);
+    setContracts((data ?? []) as ContractRow[]);
+  }, [caseId]);
+
+  // Load week offer
+  const loadWeekOffer = useCallback(async () => {
+    if (!caseId) return;
+    const { data } = await supabase
+      .from("week_offers")
+      .select("resort_name_raw, week_number, unit_type, season_label, rights_start_year, rights_end_year, usage_frequency")
+      .eq("case_id", caseId)
+      .maybeSingle();
+    setWeekOffer(data as WeekOfferRow | null);
+  }, [caseId]);
+
+  // Load classifications + check_results
+  const loadAiResults = useCallback(async () => {
+    if (!caseId) return;
+    const [classRes, checksRes] = await Promise.all([
+      (supabase as any)
+        .from("classifications")
+        .select("id, classification, reason_summary, reason_codes, created_at")
+        .eq("case_id", caseId)
+        .order("created_at", { ascending: false }),
+      (supabase as any)
+        .from("check_results")
+        .select("id, document_id, check_type, result, severity, message, details, created_at")
+        .eq("case_id", caseId)
+        .order("created_at", { ascending: false }),
+    ]);
+    setClassificationRows((classRes.data ?? []) as ClassificationRow[]);
+    setCheckResults((checksRes.data ?? []) as CheckResultRow[]);
   }, [caseId]);
 
   useEffect(() => {
@@ -382,9 +427,11 @@ export default function AdminCaseDetail() {
       loadDocuments();
       loadDocumentTypes();
       loadValidationResults();
-      loadContract();
+      loadContracts();
+      loadWeekOffer();
+      loadAiResults();
     }
-  }, [caseId, loadCase, loadDocuments, loadDocumentTypes, loadValidationResults, loadContract]);
+  }, [caseId, loadCase, loadDocuments, loadDocumentTypes, loadValidationResults, loadContracts, loadWeekOffer, loadAiResults]);
 
   // Actions
   const handleDocReview = async (docId: string, status: string) => {
@@ -410,12 +457,12 @@ export default function AdminCaseDetail() {
         body: {
           case_id: caseId,
           classification,
-          reason: "Admin besorolás az ügy detail oldalról",
+          reason: adminNote || "Admin besorolás az ügy detail oldalról",
         },
       });
       if (error) throw error;
       toast.success(`Ügy besorolása: ${classificationLabel(classification)}`);
-      await loadCase();
+      await Promise.all([loadCase(), loadAiResults()]);
     } catch {
       toast.error("A besorolás frissítése nem sikerült.");
     } finally {
@@ -446,7 +493,7 @@ export default function AdminCaseDetail() {
       });
       if (error) throw error;
       toast.success("Adásvételi szerződés sikeresen generálva.");
-      await Promise.all([loadContract(), loadCase()]);
+      await Promise.all([loadContracts(), loadCase()]);
     } catch (err: any) {
       toast.error(err?.message || "A szerződés generálása nem sikerült.");
     } finally {
@@ -454,39 +501,19 @@ export default function AdminCaseDetail() {
     }
   };
 
-  const handleOpenContract = async () => {
-    if (!contract?.generated_storage_bucket || !contract?.generated_storage_path) {
-      toast.error("A szerződés fájl útvonala hiányzik.");
+  const handleOpenContractFile = async (bucket: string | null, path: string | null, label: string) => {
+    if (!bucket || !path) {
+      toast.error(`A ${label} fájl útvonala hiányzik.`);
       return;
     }
     try {
-      const { data, error } = await supabase.storage
-        .from(contract.generated_storage_bucket)
-        .createSignedUrl(contract.generated_storage_path, 60);
+      const { data, error } = await supabase.storage.from(bucket).createSignedUrl(path, 60);
       if (error) throw error;
       if (data?.signedUrl) {
         window.open(data.signedUrl, "_blank", "noopener,noreferrer");
       }
     } catch {
-      toast.error("A szerződés megnyitása nem sikerült.");
-    }
-  };
-
-  const handleOpenSignedContract = async () => {
-    if (!contract?.signed_storage_bucket || !contract?.signed_storage_path) {
-      toast.error("Az aláírt szerződés fájl útvonala hiányzik.");
-      return;
-    }
-    try {
-      const { data, error } = await supabase.storage
-        .from(contract.signed_storage_bucket)
-        .createSignedUrl(contract.signed_storage_path, 60);
-      if (error) throw error;
-      if (data?.signedUrl) {
-        window.open(data.signedUrl, "_blank", "noopener,noreferrer");
-      }
-    } catch {
-      toast.error("Az aláírt szerződés megnyitása nem sikerült.");
+      toast.error(`A ${label} megnyitása nem sikerült.`);
     }
   };
 
@@ -495,14 +522,10 @@ export default function AdminCaseDetail() {
       toast.error("A dokumentum tárolási útvonala hiányzik.");
       return;
     }
-
     try {
       setPreviewLoadingId(doc.id);
-
       const { data, error } = await supabase.storage.from(doc.storage_bucket).createSignedUrl(doc.storage_path, 60);
-
       if (error) throw error;
-
       if (data?.signedUrl) {
         window.open(data.signedUrl, "_blank", "noopener,noreferrer");
       }
@@ -517,6 +540,8 @@ export default function AdminCaseDetail() {
     if (!docTypeId) return "—";
     return documentTypes.find((t) => t.id === docTypeId)?.label || "Ismeretlen típus";
   };
+
+  const latestClassification = classificationRows[0] ?? null;
 
   // ---------- Render ----------
 
@@ -566,7 +591,6 @@ export default function AdminCaseDetail() {
               </Badge>
             </div>
             {seller && <p className="text-muted-foreground text-sm mt-0.5">{seller.full_name || seller.email}</p>}
-            <Button onClick={() => navigate(`/admin/cases/${caseId}/review`)}>Review képernyő</Button>
           </div>
         </div>
 
@@ -679,6 +703,109 @@ export default function AdminCaseDetail() {
               </CardContent>
             </Card>
 
+            {/* Üdülési hét adatai */}
+            {weekOffer && (
+              <Card className="shadow-sm">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <MapPin className="h-4 w-4 text-primary" />
+                    Üdülési hét adatai
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid sm:grid-cols-2 gap-4">
+                    <InfoRow label="Üdülőhely" value={weekOffer.resort_name_raw || "—"} />
+                    <InfoRow label="Hét száma" value={weekOffer.week_number ? `${weekOffer.week_number}. hét` : "—"} />
+                    <InfoRow label="Apartman típus" value={weekOffer.unit_type || "—"} />
+                    <InfoRow label="Szezon" value={weekOffer.season_label || "—"} />
+                    <InfoRow
+                      label="Jogosultság időszaka"
+                      value={
+                        weekOffer.rights_start_year && weekOffer.rights_end_year
+                          ? `${weekOffer.rights_start_year} – ${weekOffer.rights_end_year}`
+                          : "—"
+                      }
+                    />
+                    <InfoRow label="Használat gyakorisága" value={usageFrequencyLabel(weekOffer.usage_frequency)} />
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* AI ellenőrzési eredmények */}
+            <Card className="shadow-sm">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Brain className="h-4 w-4 text-primary" />
+                  AI ellenőrzési eredmények
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {classificationRows.length === 0 && checkResults.length === 0 ? (
+                  <p className="text-sm text-muted-foreground text-center py-4">Még nincs AI ellenőrzési eredmény.</p>
+                ) : (
+                  <>
+                    {latestClassification && (
+                      <div className="rounded-lg border p-4 space-y-2">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-sm font-medium">Legutóbbi besorolás:</span>
+                          <Badge
+                            variant="outline"
+                            className={classificationClasses(latestClassification.classification)}
+                          >
+                            {classificationLabel(latestClassification.classification)}
+                          </Badge>
+                        </div>
+                        {latestClassification.reason_summary && (
+                          <p className="text-sm text-muted-foreground">{latestClassification.reason_summary}</p>
+                        )}
+                        {Array.isArray(latestClassification.reason_codes) &&
+                          latestClassification.reason_codes.length > 0 && (
+                            <div className="flex flex-wrap gap-2">
+                              {latestClassification.reason_codes.map((code: string) => (
+                                <Badge key={code} variant="outline">
+                                  {code}
+                                </Badge>
+                              ))}
+                            </div>
+                          )}
+                      </div>
+                    )}
+
+                    {checkResults.length > 0 && (
+                      <div className="rounded-lg border">
+                        <div className="px-4 py-3 border-b">
+                          <p className="text-sm font-medium">Ellenőrzési tételek</p>
+                        </div>
+                        <div className="divide-y divide-border">
+                          {checkResults.map((check) => {
+                            const relatedDoc = documents.find((d) => d.id === check.document_id);
+                            return (
+                              <div key={check.id} className="px-4 py-3 space-y-2">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <Badge className={checkResultBadgeClass(check.result)}>
+                                    {check.result}
+                                  </Badge>
+                                  <span className="text-sm font-medium">{check.check_type}</span>
+                                  {check.severity && <Badge variant="outline">{check.severity}</Badge>}
+                                </div>
+                                {check.message && <p className="text-sm text-muted-foreground">{check.message}</p>}
+                                {relatedDoc && (
+                                  <p className="text-xs text-muted-foreground">
+                                    Dokumentum: {relatedDoc.original_file_name || relatedDoc.file_name}
+                                  </p>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
+              </CardContent>
+            </Card>
+
             {/* Időpontok */}
             <Card className="shadow-sm">
               <CardHeader className="pb-3">
@@ -695,112 +822,62 @@ export default function AdminCaseDetail() {
                 </div>
               </CardContent>
             </Card>
-
-            {/* Ellenőrzési eredmény */}
-            {validationResults.length > 0 && (
-              <Card className="shadow-sm">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-base flex items-center gap-2">
-                    <ShieldCheck className="h-4 w-4 text-primary" />
-                    Ellenőrzési eredmény
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="p-0">
-                  <div className="divide-y divide-border">
-                    {validationResults.map((vr) => {
-                      const docName =
-                        documents.find((d) => d.id === vr.document_id)?.original_file_name ||
-                        documents.find((d) => d.id === vr.document_id)?.file_name ||
-                        "Ismeretlen dokumentum";
-                      return (
-                        <div key={vr.id} className="px-6 py-4 space-y-2">
-                          <p className="text-sm font-medium text-foreground">{docName}</p>
-                          <div className="flex items-center gap-4 flex-wrap">
-                            <Badge
-                              variant="outline"
-                              className={
-                                vr.validation_status === "completed"
-                                  ? "bg-success/10 text-success"
-                                  : vr.validation_status === "processing"
-                                    ? "bg-warning/10 text-warning"
-                                    : vr.validation_status === "failed"
-                                      ? "bg-destructive/10 text-destructive"
-                                      : "bg-muted text-muted-foreground"
-                              }
-                            >
-                              {vr.validation_status === "completed"
-                                ? "Kész"
-                                : vr.validation_status === "processing"
-                                  ? "Feldolgozás alatt"
-                                  : vr.validation_status === "failed"
-                                    ? "Sikertelen"
-                                    : "Függőben"}
-                            </Badge>
-                            {vr.field_match_score != null && (
-                              <span className="text-sm text-foreground">
-                                Egyezési pont: <strong>{vr.field_match_score}%</strong>
-                              </span>
-                            )}
-                          </div>
-                          {vr.notes && <p className="text-xs text-muted-foreground">{vr.notes}</p>}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </CardContent>
-              </Card>
-            )}
           </div>
 
           {/* Right column */}
           <div className="space-y-6">
-            {/* Szerződés */}
+            {/* Szerződések */}
             <Card className="shadow-sm">
               <CardHeader className="pb-3">
                 <CardTitle className="text-base flex items-center gap-2">
                   <FileText className="h-4 w-4 text-primary" />
-                  Szerződés
+                  Szerződések
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
-                {contract ? (
-                  <>
-                    <div className="space-y-2">
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs text-muted-foreground">Státusz:</span>
-                        <Badge variant="outline" className={contractStatusClasses(contract.status)}>
-                          {contractStatusLabel(contract.status)}
-                        </Badge>
+                {contracts.length > 0 ? (
+                  <div className="space-y-4">
+                    {contracts.map((c) => (
+                      <div key={c.id} className="rounded-lg border p-3 space-y-2">
+                        <p className="text-sm font-medium">{contractTypeLabel(c.contract_type)}</p>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-muted-foreground">Státusz:</span>
+                          <Badge variant="outline" className={contractStatusClasses(c.status)}>
+                            {contractStatusLabel(c.status)}
+                          </Badge>
+                        </div>
+                        {c.generated_at && (
+                          <p className="text-xs text-muted-foreground">Generálva: {formatDateTime(c.generated_at)}</p>
+                        )}
+                        <div className="flex flex-col gap-1">
+                          {c.generated_storage_path && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() =>
+                                handleOpenContractFile(c.generated_storage_bucket, c.generated_storage_path, "generált szerződés")
+                              }
+                            >
+                              <Eye className="h-3.5 w-3.5 mr-1" />
+                              Megnyitás
+                            </Button>
+                          )}
+                          {c.signed_storage_path && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() =>
+                                handleOpenContractFile(c.signed_storage_bucket, c.signed_storage_path, "aláírt szerződés")
+                              }
+                            >
+                              <Eye className="h-3.5 w-3.5 mr-1" />
+                              Aláírt megnyitása
+                            </Button>
+                          )}
+                        </div>
                       </div>
-                      {contract.generated_file_name && (
-                        <p className="text-xs text-muted-foreground">Fájl: {contract.generated_file_name}</p>
-                      )}
-                      {contract.generated_at && (
-                        <p className="text-xs text-muted-foreground">
-                          Generálva: {formatDateTime(contract.generated_at)}
-                        </p>
-                      )}
-                      {contract.signed_uploaded_at && (
-                        <p className="text-xs text-muted-foreground">
-                          Aláírt feltöltve: {formatDateTime(contract.signed_uploaded_at)}
-                        </p>
-                      )}
-                    </div>
-                    <div className="flex flex-col gap-2">
-                      {contract.generated_storage_path && (
-                        <Button variant="outline" size="sm" onClick={handleOpenContract}>
-                          <Eye className="h-3.5 w-3.5 mr-1" />
-                          Generált szerződés megnyitása
-                        </Button>
-                      )}
-                      {contract.signed_storage_path && (
-                        <Button variant="outline" size="sm" onClick={handleOpenSignedContract}>
-                          <Eye className="h-3.5 w-3.5 mr-1" />
-                          Aláírt szerződés megnyitása
-                        </Button>
-                      )}
-                    </div>
-                  </>
+                    ))}
+                  </div>
                 ) : (
                   <p className="text-sm text-muted-foreground">Még nincs generált szerződés.</p>
                 )}
@@ -823,6 +900,12 @@ export default function AdminCaseDetail() {
                 <CardTitle className="text-base">Ügy besorolása</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
+                <Textarea
+                  placeholder="Indoklás (ajánlott, de nem kötelező)"
+                  value={adminNote}
+                  onChange={(e) => setAdminNote(e.target.value)}
+                  rows={3}
+                />
                 <Button
                   className="w-full justify-start gap-2 bg-success hover:bg-success/90 text-success-foreground"
                   disabled={updatingClassification || caseData.classification === "green"}
@@ -847,6 +930,7 @@ export default function AdminCaseDetail() {
                   <ShieldX className="h-4 w-4" />
                   Piros
                 </Button>
+                <p className="text-xs text-muted-foreground">Az indoklás mező kitöltése ajánlott, de nem kötelező.</p>
               </CardContent>
             </Card>
 
