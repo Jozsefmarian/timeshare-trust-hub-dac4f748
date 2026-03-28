@@ -179,7 +179,7 @@ export default function LandingPage() {
                 </li>
                 <li>
                   <a href="#" className="hover:text-primary-foreground transition-colors">
-                    Karrier
+                    Impresszum
                   </a>
                 </li>
                 <li>
