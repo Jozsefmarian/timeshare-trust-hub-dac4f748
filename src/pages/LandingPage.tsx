@@ -83,7 +83,7 @@ export default function LandingPage() {
             <p className="text-lg md:text-xl text-primary-foreground/70 mb-10 max-w-2xl mx-auto">
               Jogi-technológiai platformunk kezeli a dokumentumok ellenőrzését, a szerződéskészítést és a biztonságos átruházást — Önnek nincs más dolga.
             </p>
-            <Link to="/auth">
+            <Link to="/auth?mode=register">
               <Button
                 size="lg"
                 className="bg-secondary text-secondary-foreground hover:bg-secondary/90 text-base px-8 py-6 rounded-xl shadow-lg"

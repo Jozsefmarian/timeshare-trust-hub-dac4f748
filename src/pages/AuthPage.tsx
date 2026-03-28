@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Mail, Lock, ArrowRight, User } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import tsrLogo from "@/assets/tsr-logo-white.png";
