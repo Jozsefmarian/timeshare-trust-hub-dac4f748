@@ -13,6 +13,7 @@ import NewCase from "./pages/NewCase";
 import SellerCaseContracts from "./pages/SellerCaseContracts";
 import SellerCasePayment from "./pages/SellerCasePayment";
 import SellerSupport from "./pages/SellerSupport";
+import SellerGuide from "./pages/SellerGuide";
 import SellerProfile from "./pages/SellerProfile";
 import AdminDashboard from "./pages/AdminDashboard";
 import AdminCases from "./pages/AdminCases";
