@@ -85,8 +85,8 @@ export default function AuthPage() {
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim() || !email.trim() || !password.trim() || !confirmPassword.trim()) {
-      toast({ title: "Hiányzó adatok", description: "Kérjük, töltse ki az összes mezőt.", variant: "destructive" });
+    if (!name.trim() || !email.trim() || !password.trim() || !confirmPassword.trim() || !privacyAccepted) {
+      toast({ title: "Hiányzó adatok", description: "Kérjük, töltse ki az összes mezőt és fogadja el az adatkezelési tájékoztatót.", variant: "destructive" });
       return;
     }
     if (password.length < 8) {
