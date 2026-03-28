@@ -54,15 +54,15 @@ export default function LandingPage() {
                 Bejelentkezés
               </Button>
             </Link>
-            <Link to="/auth">
+            <Link to="/auth?mode=register">
               <Button size="sm" className="bg-secondary text-secondary-foreground hover:bg-secondary/90">
-                Kezdés
+                Regisztráció
               </Button>
             </Link>
           </div>
-          <Link to="/auth" className="md:hidden">
+          <Link to="/auth?mode=register" className="md:hidden">
             <Button size="sm" className="bg-secondary text-secondary-foreground hover:bg-secondary/90">
-              Kezdés
+              Regisztráció
             </Button>
           </Link>
         </div>
