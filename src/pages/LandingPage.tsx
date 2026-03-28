@@ -147,7 +147,7 @@ export default function LandingPage() {
               <div className="flex items-center gap-2 mb-4">
                 <img src="/lovable-uploads/eb662a6e-1d6e-45a6-bc03-93ff4dabcdf3.png" alt="TSR Megoldások" className="h-10" />
               </div>
-              <p className="text-sm">Biztonságos üdülési jog átruházás jogi technológiával.</p>
+              <p className="text-sm">Biztonságos digitális platform üdülési jogok eladásához.</p>
             </div>
             <div>
               <h4 className="font-semibold text-primary-foreground mb-3 text-sm">Jogi</h4>
