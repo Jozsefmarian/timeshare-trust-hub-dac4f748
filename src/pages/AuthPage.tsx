@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Mail, Lock, ArrowRight, User } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
 import tsrLogo from "@/assets/tsr-logo-white.png";
 import tsrLogoDark from "@/assets/tsr-logo-dark.png";
 import { Button } from "@/components/ui/button";
@@ -19,6 +20,7 @@ export default function AuthPage() {
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [privacyAccepted, setPrivacyAccepted] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isCheckingSession, setIsCheckingSession] = useState(true);
 
@@ -83,8 +85,8 @@ export default function AuthPage() {
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim() || !email.trim() || !password.trim() || !confirmPassword.trim()) {
-      toast({ title: "Hiányzó adatok", description: "Kérjük, töltse ki az összes mezőt.", variant: "destructive" });
+    if (!name.trim() || !email.trim() || !password.trim() || !confirmPassword.trim() || !privacyAccepted) {
+      toast({ title: "Hiányzó adatok", description: "Kérjük, töltse ki az összes mezőt és fogadja el az adatkezelési tájékoztatót.", variant: "destructive" });
       return;
     }
     if (password.length < 8) {
@@ -97,17 +99,33 @@ export default function AuthPage() {
     }
     try {
       setIsLoading(true);
-      const { error } = await supabase.auth.signUp({
+      const { data, error } = await supabase.auth.signUp({
         email: email.trim(),
         password,
         options: { data: { full_name: name.trim() } },
       });
       if (error) throw error;
+
+      // Log privacy policy acceptance (silent fail)
+      if (data.user?.id) {
+        try {
+          await supabase.from("privacy_policy_acceptances").insert({
+            user_id: data.user.id,
+            policy_version: "2026-03-28",
+            user_agent: navigator.userAgent,
+            accepted_at: new Date().toISOString(),
+          });
+        } catch (e) {
+          console.error("Privacy policy acceptance insert failed:", e);
+        }
+      }
+
       toast({ title: "Regisztráció sikeres!", description: "Kérjük, erősítse meg e-mail címét a küldött levélben." });
       setIsRegister(false);
       setName("");
       setPassword("");
       setConfirmPassword("");
+      setPrivacyAccepted(false);
     } catch (error: any) {
       toast({ title: "Sikertelen regisztráció", description: error?.message || "Ismeretlen hiba történt.", variant: "destructive" });
     } finally {
@@ -221,7 +239,23 @@ export default function AuthPage() {
                 </div>
               </div>
 
-              <Button type="submit" className="w-full bg-secondary text-secondary-foreground hover:bg-secondary/90 py-5" disabled={isLoading}>
+              <div className="flex items-start space-x-2">
+                <Checkbox
+                  id="privacy"
+                  checked={privacyAccepted}
+                  onCheckedChange={(checked) => setPrivacyAccepted(checked === true)}
+                  disabled={isLoading}
+                />
+                <label htmlFor="privacy" className="text-sm text-muted-foreground leading-snug cursor-pointer">
+                  Kijelentem, hogy az{" "}
+                  <a href="/privacy" target="_blank" rel="noopener noreferrer" className="text-secondary font-medium hover:underline">
+                    adatkezelési tájékoztatót
+                  </a>{" "}
+                  elolvastam és az abban leírtakat elfogadom.
+                </label>
+              </div>
+
+              <Button type="submit" className="w-full bg-secondary text-secondary-foreground hover:bg-secondary/90 py-5" disabled={isLoading || !privacyAccepted}>
                 {isLoading ? "Regisztráció..." : "Regisztráció"}
                 <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
