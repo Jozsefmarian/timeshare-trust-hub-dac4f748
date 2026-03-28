@@ -183,8 +183,8 @@ export default function LandingPage() {
                   </a>
                 </li>
                 <li>
-                  <a href="#" className="hover:text-primary-foreground transition-colors">
-                    Blog
+                  <a href="" className="hover:text-primary-foreground transition-colors">
+                    ​
                   </a>
                 </li>
               </ul>
