@@ -1,8 +1,18 @@
 import { ReactNode, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
-  LayoutDashboard, FolderOpen, FileText, BookOpen, Building2,
-  Package, CreditCard, ClipboardList, Shield, LogOut, Menu, FileSignature,
+  LayoutDashboard,
+  FolderOpen,
+  FileText,
+  BookOpen,
+  Building2,
+  Package,
+  CreditCard,
+  ClipboardList,
+  Shield,
+  LogOut,
+  Menu,
+  FileSignature,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -14,7 +24,6 @@ import tsrLogo from "@/assets/tsr-logo-white.png";
 const adminNavItems = [
   { title: "Vezérlőpult", icon: LayoutDashboard, href: "/admin" },
   { title: "Ügyek", icon: FolderOpen, href: "/admin/cases" },
-  { title: "Dokumentumok", icon: FileText, href: "/admin/documents" },
   { title: "Szabályzatok", icon: BookOpen, href: "/admin/policies" },
   { title: "Üdülőhelyek", icon: Building2, href: "/admin/resorts" },
   { title: "Készlet", icon: Package, href: "/admin/inventory" },
@@ -44,11 +53,18 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
 
   return (
     <div className="min-h-screen bg-background flex">
-      <aside className={cn(
-        "fixed inset-y-0 left-0 z-40 flex flex-col bg-sidebar text-sidebar-foreground transition-all duration-300",
-        sidebarOpen ? "w-64" : "w-0 md:w-16"
-      )}>
-        <div className={cn("flex items-center gap-2 px-4 h-16 border-b border-sidebar-border", !sidebarOpen && "md:justify-center md:px-2")}>
+      <aside
+        className={cn(
+          "fixed inset-y-0 left-0 z-40 flex flex-col bg-sidebar text-sidebar-foreground transition-all duration-300",
+          sidebarOpen ? "w-64" : "w-0 md:w-16",
+        )}
+      >
+        <div
+          className={cn(
+            "flex items-center gap-2 px-4 h-16 border-b border-sidebar-border",
+            !sidebarOpen && "md:justify-center md:px-2",
+          )}
+        >
           {sidebarOpen ? (
             <img src={tsrLogo} alt="TSR Megoldások" className="h-8" />
           ) : (
@@ -65,7 +81,9 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
                 to={item.href}
                 className={cn(
                   "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors",
-                  active ? "bg-sidebar-accent text-sidebar-primary" : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+                  active
+                    ? "bg-sidebar-accent text-sidebar-primary"
+                    : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground",
                 )}
               >
                 <item.icon className="h-4 w-4 shrink-0" />
