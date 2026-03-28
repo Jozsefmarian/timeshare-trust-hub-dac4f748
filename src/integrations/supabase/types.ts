@@ -1175,6 +1175,47 @@ export type Database = {
           },
         ]
       }
+      privacy_policy_acceptances: {
+        Row: {
+          acceptance_hash: string | null
+          accepted_at: string
+          created_at: string
+          hash_algorithm: string | null
+          id: string
+          policy_version: string
+          user_agent: string | null
+          user_id: string
+        }
+        Insert: {
+          acceptance_hash?: string | null
+          accepted_at?: string
+          created_at?: string
+          hash_algorithm?: string | null
+          id?: string
+          policy_version: string
+          user_agent?: string | null
+          user_id: string
+        }
+        Update: {
+          acceptance_hash?: string | null
+          accepted_at?: string
+          created_at?: string
+          hash_algorithm?: string | null
+          id?: string
+          policy_version?: string
+          user_agent?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "privacy_policy_acceptances_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           created_at: string
