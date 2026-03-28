@@ -99,17 +99,33 @@ export default function AuthPage() {
     }
     try {
       setIsLoading(true);
-      const { error } = await supabase.auth.signUp({
+      const { data, error } = await supabase.auth.signUp({
         email: email.trim(),
         password,
         options: { data: { full_name: name.trim() } },
       });
       if (error) throw error;
+
+      // Log privacy policy acceptance (silent fail)
+      if (data.user?.id) {
+        try {
+          await supabase.from("privacy_policy_acceptances").insert({
+            user_id: data.user.id,
+            policy_version: "2026-03-28",
+            user_agent: navigator.userAgent,
+            accepted_at: new Date().toISOString(),
+          });
+        } catch (e) {
+          console.error("Privacy policy acceptance insert failed:", e);
+        }
+      }
+
       toast({ title: "Regisztráció sikeres!", description: "Kérjük, erősítse meg e-mail címét a küldött levélben." });
       setIsRegister(false);
       setName("");
       setPassword("");
       setConfirmPassword("");
+      setPrivacyAccepted(false);
     } catch (error: any) {
       toast({ title: "Sikertelen regisztráció", description: error?.message || "Ismeretlen hiba történt.", variant: "destructive" });
     } finally {
