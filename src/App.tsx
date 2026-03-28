@@ -42,6 +42,7 @@ const App = () => (
           {/* Public */}
           <Route path="/" element={<LandingPage />} />
           <Route path="/auth" element={<AuthPage />} />
+          <Route path="/privacy" element={<PrivacyPolicy />} />
 
           {/* Seller */}
           <Route

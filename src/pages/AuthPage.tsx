@@ -239,7 +239,23 @@ export default function AuthPage() {
                 </div>
               </div>
 
-              <Button type="submit" className="w-full bg-secondary text-secondary-foreground hover:bg-secondary/90 py-5" disabled={isLoading}>
+              <div className="flex items-start space-x-2">
+                <Checkbox
+                  id="privacy"
+                  checked={privacyAccepted}
+                  onCheckedChange={(checked) => setPrivacyAccepted(checked === true)}
+                  disabled={isLoading}
+                />
+                <label htmlFor="privacy" className="text-sm text-muted-foreground leading-snug cursor-pointer">
+                  Kijelentem, hogy az{" "}
+                  <a href="/privacy" target="_blank" rel="noopener noreferrer" className="text-secondary font-medium hover:underline">
+                    adatkezelési tájékoztatót
+                  </a>{" "}
+                  elolvastam és az abban leírtakat elfogadom.
+                </label>
+              </div>
+
+              <Button type="submit" className="w-full bg-secondary text-secondary-foreground hover:bg-secondary/90 py-5" disabled={isLoading || !privacyAccepted}>
                 {isLoading ? "Regisztráció..." : "Regisztráció"}
                 <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
