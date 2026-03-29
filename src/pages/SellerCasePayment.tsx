@@ -18,6 +18,14 @@ export default function SellerCasePayment() {
   const [isLoading, setIsLoading] = useState(true);
   const [isStarting, setIsStarting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [agreement, setAgreement] = useState<{ id: string; version: string; title: string; html_content: string } | null>(null);
+  const [existingAcceptance, setExistingAcceptance] = useState<{ id: string } | null>(null);
+  const [checkbox1, setCheckbox1] = useState(false);
+  const [checkbox2, setCheckbox2] = useState(false);
+  const [typedConfirmation, setTypedConfirmation] = useState("");
+  const [isAccepting, setIsAccepting] = useState(false);
+  const [acceptError, setAcceptError] = useState<string | null>(null);
+  const [acceptanceDone, setAcceptanceDone] = useState(false);
 
   useEffect(() => {
     const loadCase = async () => {
