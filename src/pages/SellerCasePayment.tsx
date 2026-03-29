@@ -8,6 +8,13 @@ import { supabase } from "@/integrations/supabase/client";
 
 const supabaseAny: any = supabase;
 
+interface Agreement {
+  id: string;
+  version: string;
+  title: string;
+  html_content: string;
+}
+
 export default function SellerCasePayment() {
   const { caseId } = useParams();
   const navigate = useNavigate();
@@ -18,7 +25,9 @@ export default function SellerCasePayment() {
   const [isLoading, setIsLoading] = useState(true);
   const [isStarting, setIsStarting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [agreement, setAgreement] = useState<{ id: string; version: string; title: string; html_content: string } | null>(null);
+
+  // Service agreement state
+  const [agreement, setAgreement] = useState<Agreement | null>(null);
   const [existingAcceptance, setExistingAcceptance] = useState<{ id: string } | null>(null);
   const [checkbox1, setCheckbox1] = useState(false);
   const [checkbox2, setCheckbox2] = useState(false);
@@ -34,6 +43,7 @@ export default function SellerCasePayment() {
         const { data } = await supabaseAny.from("cases").select("status").eq("id", caseId).maybeSingle();
         if (data) setCaseStatus(data.status);
 
+        // Active service agreement
         const { data: ag } = await supabaseAny
           .from("service_agreements")
           .select("id, version, title, html_content")
@@ -41,6 +51,7 @@ export default function SellerCasePayment() {
           .maybeSingle();
         setAgreement(ag ?? null);
 
+        // Existing acceptance for this case
         const { data: acc } = await supabaseAny
           .from("declaration_acceptances")
           .select("id")
@@ -87,17 +98,19 @@ export default function SellerCasePayment() {
       const { data, error: invokeError } = await supabase.functions.invoke("create-stripe-checkout", {
         body: { case_id: caseId },
       });
-
       if (invokeError) throw invokeError;
       if (!data?.checkout_url) throw new Error("Nem érkezett visszaátirányítási URL.");
-
-      // Átirányítás Stripe checkout oldalra
       window.location.href = data.checkout_url;
     } catch (err: any) {
       setError(err?.message || "A fizetés indítása nem sikerült.");
       setIsStarting(false);
     }
   };
+
+  const alreadyAccepted = !!existingAcceptance || acceptanceDone;
+  const showAgreementForm = caseStatus === "signed_contract_uploaded" && !alreadyAccepted;
+  const showPayment =
+    alreadyAccepted || caseStatus === "service_agreement_accepted" || caseStatus === "payment_pending";
 
   if (isLoading) {
     return (
@@ -122,10 +135,10 @@ export default function SellerCasePayment() {
 
         {/* Sikeres fizetés */}
         {paymentResult === "success" && (
-          <Card className="border-success/30 shadow-sm">
+          <Card className="border-green-200 shadow-sm">
             <CardContent className="pt-6">
               <div className="flex flex-col items-center gap-4 text-center py-4">
-                <CheckCircle2 className="h-12 w-12 text-success" />
+                <CheckCircle2 className="h-12 w-12 text-green-600" />
                 <div>
                   <h2 className="text-xl font-bold text-foreground">Fizetés sikeres!</h2>
                   <p className="text-muted-foreground mt-1">
@@ -140,10 +153,10 @@ export default function SellerCasePayment() {
 
         {/* Megszakított fizetés */}
         {paymentResult === "cancelled" && (
-          <Card className="border-warning/30 shadow-sm">
+          <Card className="border-yellow-200 shadow-sm">
             <CardContent className="pt-6">
               <div className="flex flex-col items-center gap-4 text-center py-4">
-                <XCircle className="h-12 w-12 text-warning" />
+                <XCircle className="h-12 w-12 text-yellow-500" />
                 <div>
                   <h2 className="text-xl font-bold text-foreground">Fizetés megszakítva</h2>
                   <p className="text-muted-foreground mt-1">A fizetési folyamat megszakadt. Bármikor újraindíthatja.</p>
@@ -155,10 +168,10 @@ export default function SellerCasePayment() {
 
         {/* Már fizetve */}
         {(caseStatus === "paid" || caseStatus === "closed") && (
-          <Card className="border-success/30 shadow-sm">
+          <Card className="border-green-200 shadow-sm">
             <CardContent className="pt-6">
-              <div className="flex items-center gap-4 p-4 rounded-xl bg-success/5 border border-success/20">
-                <CheckCircle2 className="h-8 w-8 text-success shrink-0" />
+              <div className="flex items-center gap-4 p-4 rounded-xl bg-green-50 border border-green-200">
+                <CheckCircle2 className="h-8 w-8 text-green-600 shrink-0" />
                 <div>
                   <p className="font-medium text-foreground">A fizetés már megtörtént.</p>
                   <p className="text-sm text-muted-foreground mt-0.5">
@@ -170,29 +183,34 @@ export default function SellerCasePayment() {
           </Card>
         )}
 
-        {/* Szolgáltatási szerződés — elfogadva banner */}
-        {(existingAcceptance || acceptanceDone) && caseStatus !== "paid" && caseStatus !== "closed" && (
+        {/* Elfogadva badge — ha már megtörtént, de fizetés még hátravan */}
+        {alreadyAccepted && caseStatus !== "paid" && caseStatus !== "closed" && (
           <div className="flex items-center gap-2 p-3 rounded-lg bg-green-50 border border-green-200 text-green-800 text-sm">
             <CheckCircle2 className="h-4 w-4 shrink-0" />
             Szolgáltatási szerződés elfogadva
           </div>
         )}
 
-        {/* Szolgáltatási szerződés — elfogadás */}
-        {caseStatus === "signed_contract_uploaded" && !existingAcceptance && !acceptanceDone && (
+        {/* SZEKCIÓ 1 — Szolgáltatási szerződés elfogadása */}
+        {showAgreementForm && (
           <Card className="shadow-sm">
             <CardHeader>
-              <CardTitle className="text-base">Szolgáltatási szerződés</CardTitle>
+              <CardTitle className="text-base flex items-center gap-2">
+                <FileText className="h-4 w-4" />
+                Szolgáltatási szerződés
+              </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
+              {/* Scrollozható szerződés szöveg */}
               <div
-                className="max-h-80 overflow-y-auto border rounded-lg p-4 bg-muted/30 text-sm prose prose-sm max-w-none"
-                dangerouslySetInnerHTML={{ __html: agreement?.html_content ?? "<p>A szerződés szövege betöltés alatt...</p>" }}
+                className="max-h-80 overflow-y-auto border rounded-lg p-4 bg-muted/30 text-sm"
+                dangerouslySetInnerHTML={{
+                  __html: agreement?.html_content ?? "<p>A szerződés szövege betöltés alatt...</p>",
+                }}
               />
-              <p className="text-xs text-muted-foreground">
-                Kérjük, olvassa el a teljes szerződést a folytatás előtt.
-              </p>
+              <p className="text-xs text-muted-foreground">Kérjük, olvassa el a teljes szerződést a folytatás előtt.</p>
 
+              {/* Két checkbox */}
               <div className="space-y-3">
                 <label className="flex items-start gap-3 cursor-pointer">
                   <input
@@ -214,6 +232,7 @@ export default function SellerCasePayment() {
                 </label>
               </div>
 
+              {/* Begépelt megerősítés */}
               <div className="space-y-1.5">
                 <label className="text-sm font-medium">A megerősítéshez írja be: ELFOGADOM</label>
                 <input
@@ -227,18 +246,19 @@ export default function SellerCasePayment() {
 
               {acceptError && <p className="text-sm text-destructive">{acceptError}</p>}
 
+              {/* Elfogadás gomb */}
               <Button
                 className="w-full"
                 disabled={
-                  !checkbox1 ||
-                  !checkbox2 ||
-                  typedConfirmation.trim().toUpperCase() !== "ELFOGADOM" ||
-                  isAccepting
+                  !checkbox1 || !checkbox2 || typedConfirmation.trim().toUpperCase() !== "ELFOGADOM" || isAccepting
                 }
                 onClick={handleAccept}
               >
                 {isAccepting ? (
-                  <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Elfogadás folyamatban...</>
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Elfogadás folyamatban...
+                  </>
                 ) : (
                   "Szerződés elfogadása és továbblépés"
                 )}
@@ -247,8 +267,8 @@ export default function SellerCasePayment() {
           </Card>
         )}
 
-        {/* Fizetésre vár */}
-        {caseStatus === "service_agreement_accepted" || caseStatus === "payment_pending" ? (
+        {/* SZEKCIÓ 2 — Fizetés */}
+        {showPayment && caseStatus !== "paid" && caseStatus !== "closed" && (
           <Card className="shadow-sm">
             <CardHeader>
               <CardTitle className="text-base flex items-center gap-2">
@@ -294,7 +314,7 @@ export default function SellerCasePayment() {
               </Button>
             </CardContent>
           </Card>
-        ) : null}
+        )}
       </div>
     </SellerLayout>
   );
