@@ -3,7 +3,7 @@ import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import SellerLayout from "@/components/SellerLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { CreditCard, CheckCircle2, XCircle, Loader2, ArrowLeft } from "lucide-react";
+import { CreditCard, CheckCircle2, XCircle, Loader2, ArrowLeft, FileText } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
 const supabaseAny: any = supabase;
