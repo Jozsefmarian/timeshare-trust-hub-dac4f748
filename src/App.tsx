@@ -39,175 +39,175 @@ const App = () => (
       <Toaster />
       <Sonner />
       <AuthProvider>
-      <BrowserRouter>
-        <Routes>
-          {/* Public */}
-          <Route path="/" element={<LandingPage />} />
-          <Route path="/auth" element={<AuthPage />} />
-          <Route path="/privacy" element={<PrivacyPolicy />} />
+        <BrowserRouter>
+          <Routes>
+            {/* Public */}
+            <Route path="/" element={<LandingPage />} />
+            <Route path="/auth" element={<AuthPage />} />
+            <Route path="/privacy" element={<PrivacyPolicy />} />
 
-          {/* Seller */}
-          <Route
-            path="/seller"
-            element={
-              <ProtectedRoute allowedRoles={["seller"]}>
-                <SellerDashboard />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/seller/cases"
-            element={
-              <ProtectedRoute allowedRoles={["seller"]}>
-                <SellerCases />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/seller/cases/:caseId"
-            element={
-              <ProtectedRoute allowedRoles={["seller"]}>
-                <CaseDetail />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/seller/new-case"
-            element={
-              <ProtectedRoute allowedRoles={["seller"]}>
-                <NewCase />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/seller/cases/:caseId/contracts"
-            element={
-              <ProtectedRoute allowedRoles={["seller"]}>
-                <SellerCaseContracts />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/seller/cases/:caseId/payment"
-            element={
-              <ProtectedRoute allowedRoles={["seller"]}>
-                <SellerCasePayment />
-              </ProtectedRoute>
-            }
-          />
+            {/* Seller */}
+            <Route
+              path="/seller"
+              element={
+                <ProtectedRoute allowedRoles={["seller"]}>
+                  <SellerDashboard />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/seller/cases"
+              element={
+                <ProtectedRoute allowedRoles={["seller"]}>
+                  <SellerCases />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/seller/cases/:caseId"
+              element={
+                <ProtectedRoute allowedRoles={["seller"]}>
+                  <CaseDetail />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/seller/new-case"
+              element={
+                <ProtectedRoute allowedRoles={["seller"]}>
+                  <NewCase />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/seller/cases/:caseId/contracts"
+              element={
+                <ProtectedRoute allowedRoles={["seller"]}>
+                  <SellerCaseContracts />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/seller/cases/:caseId/payment"
+              element={
+                <ProtectedRoute allowedRoles={["seller"]}>
+                  <SellerCasePayment />
+                </ProtectedRoute>
+              }
+            />
 
-          <Route
-            path="/seller/support"
-            element={
-              <ProtectedRoute allowedRoles={["seller"]}>
-                <SellerSupport />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/seller/guide"
-            element={
-              <ProtectedRoute allowedRoles={["seller"]}>
-                <SellerGuide />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/seller/profile"
-            element={
-              <ProtectedRoute allowedRoles={["seller"]}>
-                <SellerProfile />
-              </ProtectedRoute>
-            }
-          />
+            <Route
+              path="/seller/support"
+              element={
+                <ProtectedRoute allowedRoles={["seller"]}>
+                  <SellerSupport />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/seller/guide"
+              element={
+                <ProtectedRoute allowedRoles={["seller"]}>
+                  <SellerGuide />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/seller/profile"
+              element={
+                <ProtectedRoute allowedRoles={["seller"]}>
+                  <SellerProfile />
+                </ProtectedRoute>
+              }
+            />
 
-          {/* Admin */}
-          <Route
-            path="/admin"
-            element={
-              <ProtectedRoute allowedRoles={["admin"]}>
-                <AdminDashboard />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/admin/cases"
-            element={
-              <ProtectedRoute allowedRoles={["admin"]}>
-                <AdminCases />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/admin/cases/:caseId"
-            element={
-              <ProtectedRoute allowedRoles={["admin"]}>
-                <AdminCaseDetail />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/admin/policies"
-            element={
-              <ProtectedRoute allowedRoles={["admin"]}>
-                <AdminPolicies />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/admin/policies/:policyId"
-            element={
-              <ProtectedRoute allowedRoles={["admin"]}>
-                <AdminPolicyDetail />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/admin/inventory/:assetId"
-            element={
-              <ProtectedRoute allowedRoles={["admin"]}>
-                <AdminInventoryDetail />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/admin/resorts"
-            element={
-              <ProtectedRoute allowedRoles={["admin"]}>
-                <AdminResorts />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/admin/inventory"
-            element={
-              <ProtectedRoute allowedRoles={["admin"]}>
-                <AdminInventory />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/admin/contract-templates"
-            element={
-              <ProtectedRoute allowedRoles={["admin"]}>
-                <AdminContractTemplates />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/admin/payments"
-            element={
-              <ProtectedRoute allowedRoles={["admin"]}>
-                <AdminPayments />
-              </ProtectedRoute>
-            }
-          />
+            {/* Admin */}
+            <Route
+              path="/admin"
+              element={
+                <ProtectedRoute allowedRoles={["admin"]}>
+                  <AdminDashboard />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin/cases"
+              element={
+                <ProtectedRoute allowedRoles={["admin"]}>
+                  <AdminCases />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin/cases/:caseId"
+              element={
+                <ProtectedRoute allowedRoles={["admin"]}>
+                  <AdminCaseDetail />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin/policies"
+              element={
+                <ProtectedRoute allowedRoles={["admin"]}>
+                  <AdminPolicies />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin/policies/:policyId"
+              element={
+                <ProtectedRoute allowedRoles={["admin"]}>
+                  <AdminPolicyDetail />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin/inventory/:assetId"
+              element={
+                <ProtectedRoute allowedRoles={["admin"]}>
+                  <AdminInventoryDetail />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin/resorts"
+              element={
+                <ProtectedRoute allowedRoles={["admin"]}>
+                  <AdminResorts />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin/inventory"
+              element={
+                <ProtectedRoute allowedRoles={["admin"]}>
+                  <AdminInventory />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin/contract-templates"
+              element={
+                <ProtectedRoute allowedRoles={["admin"]}>
+                  <AdminContractTemplates />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin/payments"
+              element={
+                <ProtectedRoute allowedRoles={["admin"]}>
+                  <AdminPayments />
+                </ProtectedRoute>
+              }
+            />
 
-          {/* Catch-all */}
-          <Route path="*" element={<NotFound />} />
-        </Routes>
-      </BrowserRouter>
-      <CookieConsentBanner />
+            {/* Catch-all */}
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+          <CookieConsentBanner />
+        </BrowserRouter>
       </AuthProvider>
     </TooltipProvider>
   </QueryClientProvider>
