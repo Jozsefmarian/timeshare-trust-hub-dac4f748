@@ -56,6 +56,29 @@ export default function SellerCasePayment() {
     loadCase();
   }, [caseId]);
 
+  const handleAccept = async () => {
+    if (!caseId || !agreement) return;
+    setIsAccepting(true);
+    setAcceptError(null);
+    try {
+      const { data, error: invokeError } = await supabase.functions.invoke("accept-service-agreement", {
+        body: {
+          case_id: caseId,
+          typed_confirmation: typedConfirmation.trim(),
+          checkbox_checked: true,
+        },
+      });
+      if (invokeError) throw invokeError;
+      if (!data?.success) throw new Error("Az elfogadás nem sikerült.");
+      setAcceptanceDone(true);
+      setCaseStatus("service_agreement_accepted");
+    } catch (err: any) {
+      setAcceptError(err?.message || "Az elfogadás nem sikerült.");
+    } finally {
+      setIsAccepting(false);
+    }
+  };
+
   const handleStartPayment = async () => {
     if (!caseId) return;
     setIsStarting(true);
