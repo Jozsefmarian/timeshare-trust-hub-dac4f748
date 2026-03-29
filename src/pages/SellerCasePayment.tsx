@@ -170,6 +170,83 @@ export default function SellerCasePayment() {
           </Card>
         )}
 
+        {/* Szolgáltatási szerződés — elfogadva banner */}
+        {(existingAcceptance || acceptanceDone) && caseStatus !== "paid" && caseStatus !== "closed" && (
+          <div className="flex items-center gap-2 p-3 rounded-lg bg-green-50 border border-green-200 text-green-800 text-sm">
+            <CheckCircle2 className="h-4 w-4 shrink-0" />
+            Szolgáltatási szerződés elfogadva
+          </div>
+        )}
+
+        {/* Szolgáltatási szerződés — elfogadás */}
+        {caseStatus === "signed_contract_uploaded" && !existingAcceptance && !acceptanceDone && (
+          <Card className="shadow-sm">
+            <CardHeader>
+              <CardTitle className="text-base">Szolgáltatási szerződés</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div
+                className="max-h-80 overflow-y-auto border rounded-lg p-4 bg-muted/30 text-sm prose prose-sm max-w-none"
+                dangerouslySetInnerHTML={{ __html: agreement?.html_content ?? "<p>A szerződés szövege betöltés alatt...</p>" }}
+              />
+              <p className="text-xs text-muted-foreground">
+                Kérjük, olvassa el a teljes szerződést a folytatás előtt.
+              </p>
+
+              <div className="space-y-3">
+                <label className="flex items-start gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={checkbox1}
+                    onChange={(e) => setCheckbox1(e.target.checked)}
+                    className="mt-0.5 h-4 w-4 rounded border-gray-300"
+                  />
+                  <span className="text-sm">A szerződés teljes szövegét elolvastam és megértettem.</span>
+                </label>
+                <label className="flex items-start gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={checkbox2}
+                    onChange={(e) => setCheckbox2(e.target.checked)}
+                    className="mt-0.5 h-4 w-4 rounded border-gray-300"
+                  />
+                  <span className="text-sm">Elfogadom a szerződést és vállalom a szolgáltatási díj megfizetését.</span>
+                </label>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium">A megerősítéshez írja be: ELFOGADOM</label>
+                <input
+                  type="text"
+                  value={typedConfirmation}
+                  onChange={(e) => setTypedConfirmation(e.target.value)}
+                  placeholder="ELFOGADOM"
+                  className="w-full border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                />
+              </div>
+
+              {acceptError && <p className="text-sm text-destructive">{acceptError}</p>}
+
+              <Button
+                className="w-full"
+                disabled={
+                  !checkbox1 ||
+                  !checkbox2 ||
+                  typedConfirmation.trim().toUpperCase() !== "ELFOGADOM" ||
+                  isAccepting
+                }
+                onClick={handleAccept}
+              >
+                {isAccepting ? (
+                  <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Elfogadás folyamatban...</>
+                ) : (
+                  "Szerződés elfogadása és továbblépés"
+                )}
+              </Button>
+            </CardContent>
+          </Card>
+        )}
+
         {/* Fizetésre vár */}
         {caseStatus === "service_agreement_accepted" || caseStatus === "payment_pending" ? (
           <Card className="shadow-sm">
