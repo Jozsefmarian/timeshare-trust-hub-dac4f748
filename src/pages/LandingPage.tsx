@@ -201,8 +201,17 @@ export default function LandingPage() {
               </ul>
             </div>
           </div>
-          <div className="border-t border-primary-foreground/10 mt-8 pt-8 text-center text-sm">
-            © {new Date().getFullYear()} TimeshareRelease. Minden jog fenntartva.
+          <div className="border-t border-primary-foreground/10 mt-8 pt-8 text-center text-sm flex flex-col sm:flex-row items-center justify-center gap-2">
+            <span>© {new Date().getFullYear()} TimeshareRelease. Minden jog fenntartva.</span>
+            <button
+              onClick={() => {
+                localStorage.removeItem("tsr_cookie_consent");
+                window.location.reload();
+              }}
+              className="text-primary-foreground/50 hover:text-primary-foreground/80 transition-colors text-xs underline"
+            >
+              🍪 Süti-beállítások
+            </button>
           </div>
         </div>
       </footer>
