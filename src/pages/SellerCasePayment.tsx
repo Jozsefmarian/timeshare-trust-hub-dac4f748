@@ -33,6 +33,20 @@ export default function SellerCasePayment() {
       try {
         const { data } = await supabaseAny.from("cases").select("status").eq("id", caseId).maybeSingle();
         if (data) setCaseStatus(data.status);
+
+        const { data: ag } = await supabaseAny
+          .from("service_agreements")
+          .select("id, version, title, html_content")
+          .eq("is_active", true)
+          .maybeSingle();
+        setAgreement(ag ?? null);
+
+        const { data: acc } = await supabaseAny
+          .from("declaration_acceptances")
+          .select("id")
+          .eq("case_id", caseId)
+          .maybeSingle();
+        setExistingAcceptance(acc ?? null);
       } catch (err: any) {
         setError("Az ügy betöltése nem sikerült.");
       } finally {
