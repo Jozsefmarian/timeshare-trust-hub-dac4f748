@@ -203,6 +203,14 @@ const App = () => (
                 </ProtectedRoute>
               }
             />
+            <Route
+              path="/admin/audit-log"
+              element={
+                <ProtectedRoute allowedRoles={["admin"]}>
+                  <AdminAuditLog />
+                </ProtectedRoute>
+              }
+            />
 
             {/* Catch-all */}
             <Route path="*" element={<NotFound />} />

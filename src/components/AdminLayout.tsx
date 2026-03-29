@@ -29,7 +29,7 @@ const adminNavItems = [
   { title: "Készlet", icon: Package, href: "/admin/inventory" },
   { title: "Szerződéssablonok", icon: FileSignature, href: "/admin/contract-templates" },
   { title: "Fizetések", icon: CreditCard, href: "/admin/payments" },
-  { title: "Auditnapló", icon: ClipboardList, href: "/admin/audit" },
+  { title: "Auditnapló", icon: ClipboardList, href: "/admin/audit-log" },
 ];
 
 export default function AdminLayout({ children }: { children: ReactNode }) {
