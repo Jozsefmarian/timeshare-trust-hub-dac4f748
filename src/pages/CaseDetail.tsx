@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import SellerLayout from "@/components/SellerLayout";
 import { Card, CardContent } from "@/components/ui/card";
 import { ArrowLeft } from "lucide-react";
@@ -13,7 +13,7 @@ import ManualReviewPanel from "@/components/seller/panels/ManualReviewPanel";
 import RejectedPanel from "@/components/seller/panels/RejectedPanel";
 import CorrectionPanel from "@/components/seller/panels/CorrectionPanel";
 import ContractPanel from "@/components/seller/panels/ContractPanel";
-import ServiceAgreementPanel from "@/components/seller/panels/ServiceAgreementPanel";
+
 import PaymentPanel from "@/components/seller/panels/PaymentPanel";
 import SubmittedDocumentsPanel from "@/components/seller/panels/SubmittedDocumentsPanel";
 
@@ -133,6 +133,7 @@ function isAtOrPast(current: string, target: string): boolean {
 
 export default function CaseDetail() {
   const { caseId } = useParams();
+  const navigate = useNavigate();
   const [caseData, setCaseData] = useState<CaseRow | null>(null);
   const [weekOffer, setWeekOffer] = useState<WeekOffer | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -387,6 +388,9 @@ export default function CaseDetail() {
           }
         : prev,
     );
+    if (newStatus === "signed_contract_uploaded" && caseId) {
+      navigate(`/seller/cases/${caseId}/payment`);
+    }
   };
 
   // ---------- Render ----------
@@ -510,14 +514,6 @@ export default function CaseDetail() {
               />
             )}
 
-            {/* Service Agreement */}
-            {isAtOrPast(status, "signed_contract_uploaded") && !shouldHideForwardFlow && (
-              <ServiceAgreementPanel
-                caseId={caseId!}
-                caseStatus={status}
-                onAccepted={() => handleCaseStatusUpdate("service_agreement_accepted")}
-              />
-            )}
 
             {/* Payment */}
             {isAtOrPast(status, "service_agreement_accepted") && !shouldHideForwardFlow && (
