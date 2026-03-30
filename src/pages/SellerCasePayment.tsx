@@ -128,7 +128,7 @@ export default function SellerCasePayment() {
 
   return (
     <SellerLayout>
-      <div className="max-w-lg mx-auto space-y-6">
+      <div className="max-w-2xl mx-auto space-y-6">
         <button
           onClick={() => navigate(`/seller/cases/${caseId}`)}
           className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
@@ -136,6 +136,8 @@ export default function SellerCasePayment() {
           <ArrowLeft className="h-4 w-4" />
           Vissza az ügyhez
         </button>
+
+        <h1 className="text-xl font-semibold text-foreground">Szolgáltatási szerződés elfogadása</h1>
 
         {/* Sikeres fizetés */}
         {paymentResult === "success" && (
