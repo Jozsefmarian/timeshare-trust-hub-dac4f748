@@ -514,14 +514,6 @@ export default function CaseDetail() {
               />
             )}
 
-            {/* Service Agreement */}
-            {isAtOrPast(status, "signed_contract_uploaded") && !shouldHideForwardFlow && (
-              <ServiceAgreementPanel
-                caseId={caseId!}
-                caseStatus={status}
-                onAccepted={() => handleCaseStatusUpdate("service_agreement_accepted")}
-              />
-            )}
 
             {/* Payment */}
             {isAtOrPast(status, "service_agreement_accepted") && !shouldHideForwardFlow && (
