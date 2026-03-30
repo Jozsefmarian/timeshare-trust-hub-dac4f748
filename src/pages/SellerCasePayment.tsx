@@ -87,6 +87,7 @@ export default function SellerCasePayment() {
       if (!data?.success) throw new Error("Az elfogadás nem sikerült.");
       setAcceptanceDone(true);
       setCaseStatus("service_agreement_accepted");
+      setTimeout(() => navigate(`/seller/cases/${caseId}`), 1500);
     } catch (err: any) {
       setAcceptError(err?.message || "Az elfogadás nem sikerült.");
     } finally {
