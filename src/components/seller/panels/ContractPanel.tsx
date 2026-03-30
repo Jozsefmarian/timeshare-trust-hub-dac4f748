@@ -44,6 +44,7 @@ interface ContractPanelProps {
   caseStatus: string;
   onContractsUpdated: () => void;
   onCaseStatusUpdated: (newStatus: string) => void;
+  onAllContractsSigned: () => void;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────
@@ -276,6 +277,7 @@ export default function ContractPanel({
   caseStatus,
   onContractsUpdated,
   onCaseStatusUpdated,
+  onAllContractsSigned,
 }: ContractPanelProps) {
   const [signedFilesMap, setSignedFilesMap] = useState<Record<string, SignedFile[]>>({});
   const [loadingFiles, setLoadingFiles] = useState(true);
@@ -332,7 +334,7 @@ export default function ContractPanel({
         body: { document_id: contracts[0].id, is_signed_contract: true, case_id: caseId },
       });
       if (!recheckErr) {
-        onCaseStatusUpdated("signed_contract_uploaded");
+        onAllContractsSigned();
       }
     }
   };

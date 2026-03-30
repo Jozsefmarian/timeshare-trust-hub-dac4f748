@@ -388,9 +388,11 @@ export default function CaseDetail() {
           }
         : prev,
     );
-    if (newStatus === "signed_contract_uploaded" && caseId) {
-      navigate(`/seller/cases/${caseId}/payment`);
-    }
+  };
+
+  const handleAllContractsSigned = () => {
+    handleCaseStatusUpdate("signed_contract_uploaded");
+    navigate(`/seller/cases/${caseId}/payment`);
   };
 
   // ---------- Render ----------
@@ -511,6 +513,7 @@ export default function CaseDetail() {
                 caseStatus={status}
                 onContractsUpdated={loadContract}
                 onCaseStatusUpdated={handleCaseStatusUpdate}
+                onAllContractsSigned={handleAllContractsSigned}
               />
             )}
 
