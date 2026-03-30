@@ -277,6 +277,7 @@ export default function ContractPanel({
   caseStatus,
   onContractsUpdated,
   onCaseStatusUpdated,
+  onAllContractsSigned,
 }: ContractPanelProps) {
   const [signedFilesMap, setSignedFilesMap] = useState<Record<string, SignedFile[]>>({});
   const [loadingFiles, setLoadingFiles] = useState(true);
