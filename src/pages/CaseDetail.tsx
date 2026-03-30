@@ -388,6 +388,9 @@ export default function CaseDetail() {
           }
         : prev,
     );
+    if (newStatus === "signed_contract_uploaded" && caseId) {
+      navigate(`/seller/cases/${caseId}/payment`);
+    }
   };
 
   // ---------- Render ----------
