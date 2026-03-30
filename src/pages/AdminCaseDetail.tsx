@@ -780,12 +780,19 @@ export default function AdminCaseDetail() {
                 ) : (
                   <p className="text-sm text-muted-foreground">Még nincs generált szerződés.</p>
                 )}
-                <Button className="w-full" disabled={isGeneratingContract} onClick={handleGenerateContract}>
+                <Button
+                  className="w-full"
+                  variant={contracts.length > 0 ? "outline" : "default"}
+                  disabled={isGeneratingContract}
+                  onClick={handleGenerateContract}
+                >
                   {isGeneratingContract ? (
                     <>
                       <Loader2 className="h-4 w-4 animate-spin mr-2" />
                       Generálás...
                     </>
+                  ) : contracts.length > 0 ? (
+                    "Szerződések újragenerálása"
                   ) : (
                     "Adásvételi szerződés generálása"
                   )}
