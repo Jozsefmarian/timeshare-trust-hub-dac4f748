@@ -13,7 +13,7 @@ import ManualReviewPanel from "@/components/seller/panels/ManualReviewPanel";
 import RejectedPanel from "@/components/seller/panels/RejectedPanel";
 import CorrectionPanel from "@/components/seller/panels/CorrectionPanel";
 import ContractPanel from "@/components/seller/panels/ContractPanel";
-import ServiceAgreementPanel from "@/components/seller/panels/ServiceAgreementPanel";
+
 import PaymentPanel from "@/components/seller/panels/PaymentPanel";
 import SubmittedDocumentsPanel from "@/components/seller/panels/SubmittedDocumentsPanel";
 
