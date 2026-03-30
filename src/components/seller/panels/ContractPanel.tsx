@@ -44,6 +44,7 @@ interface ContractPanelProps {
   caseStatus: string;
   onContractsUpdated: () => void;
   onCaseStatusUpdated: (newStatus: string) => void;
+  onAllContractsSigned: () => void;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────
