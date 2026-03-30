@@ -334,7 +334,7 @@ export default function ContractPanel({
         body: { document_id: contracts[0].id, is_signed_contract: true, case_id: caseId },
       });
       if (!recheckErr) {
-        onCaseStatusUpdated("signed_contract_uploaded");
+        onAllContractsSigned();
       }
     }
   };

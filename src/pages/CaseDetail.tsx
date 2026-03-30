@@ -513,6 +513,7 @@ export default function CaseDetail() {
                 caseStatus={status}
                 onContractsUpdated={loadContract}
                 onCaseStatusUpdated={handleCaseStatusUpdate}
+                onAllContractsSigned={handleAllContractsSigned}
               />
             )}
 
