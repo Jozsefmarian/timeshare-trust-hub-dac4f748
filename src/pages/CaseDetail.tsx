@@ -133,6 +133,7 @@ function isAtOrPast(current: string, target: string): boolean {
 
 export default function CaseDetail() {
   const { caseId } = useParams();
+  const navigate = useNavigate();
   const [caseData, setCaseData] = useState<CaseRow | null>(null);
   const [weekOffer, setWeekOffer] = useState<WeekOffer | null>(null);
   const [isLoading, setIsLoading] = useState(true);
