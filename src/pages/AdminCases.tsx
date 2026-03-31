@@ -22,6 +22,8 @@ type CaseRow = {
   seller_name: string | null;
   resort_name: string | null;
   week_number: number | null;
+  recheck_count?: number;
+  is_fix_required?: boolean;
 };
 
 // ---------- Constants ----------
