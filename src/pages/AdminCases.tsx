@@ -341,9 +341,19 @@ export default function AdminCases() {
                       <TableCell className="max-w-[200px] truncate">{c.resort_name ?? "—"}</TableCell>
                       <TableCell className="text-center">{c.week_number ?? "—"}</TableCell>
                       <TableCell>
-                        <Badge variant="outline" className={getStatusBadgeClasses(c.status)}>
-                          {statusLabels[c.status] ?? c.status}
-                        </Badge>
+                        {c.status === 'yellow_review' && (c.recheck_count ?? 0) >= 3 ? (
+                          <Badge variant="outline" className="bg-orange-500/10 text-orange-600">
+                            Max. javítás elérve
+                          </Badge>
+                        ) : c.status === 'yellow_review' && c.is_fix_required !== true ? (
+                          <Badge variant="outline" className="bg-warning/10 text-warning">
+                            Manuális review
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline" className={getStatusBadgeClasses(c.status)}>
+                            {statusLabels[c.status] ?? c.status}
+                          </Badge>
+                        )}
                       </TableCell>
                       <TableCell>
                         {c.classification ? (
