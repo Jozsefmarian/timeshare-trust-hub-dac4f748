@@ -203,7 +203,7 @@ export default function AdminCases() {
     if (statusFilter !== "all" && c.status !== statusFilter) return false;
     if (classificationFilter !== "all" && c.classification !== classificationFilter) return false;
     return true;
-  });
+  }).filter(c => c.is_fix_required !== true);
 
   const hasFilters = search || statusFilter !== "all" || classificationFilter !== "all";
 
