@@ -22,6 +22,8 @@ type CaseRow = {
   seller_name: string | null;
   resort_name: string | null;
   week_number: number | null;
+  recheck_count?: number;
+  is_fix_required?: boolean;
 };
 
 // ---------- Constants ----------
@@ -115,6 +117,7 @@ export default function AdminCases() {
           classification,
           created_at,
           seller_user_id,
+          recheck_count,
           profiles!cases_seller_user_id_fkey ( full_name )
         `,
         )
@@ -141,6 +144,21 @@ export default function AdminCases() {
         }
       });
 
+      // Load correction check_results for yellow_review cases
+      const yellowCaseIds = (casesData ?? [])
+        .filter(c => c.status === 'yellow_review')
+        .map(c => c.id);
+
+      let correctionCaseIds = new Set<string>();
+      if (yellowCaseIds.length > 0) {
+        const { data: correctionResults } = await supabase
+          .from('check_results')
+          .select('case_id')
+          .in('case_id', yellowCaseIds)
+          .eq('result', 'correction_required');
+        correctionCaseIds = new Set((correctionResults ?? []).map(r => r.case_id));
+      }
+
       const rows: CaseRow[] = casesData.map((c) => {
         const offer = offerMap.get(c.id);
         const profile = c.profiles as unknown as { full_name: string | null } | null;
@@ -153,6 +171,10 @@ export default function AdminCases() {
           seller_name: profile?.full_name ?? null,
           resort_name: offer?.resort_name_raw ?? null,
           week_number: offer?.week_number ?? null,
+          recheck_count: c.recheck_count ?? 0,
+          is_fix_required: c.status === 'yellow_review'
+            && correctionCaseIds.has(c.id)
+            && (c.recheck_count ?? 0) < 3,
         };
       });
 
@@ -181,7 +203,7 @@ export default function AdminCases() {
     if (statusFilter !== "all" && c.status !== statusFilter) return false;
     if (classificationFilter !== "all" && c.classification !== classificationFilter) return false;
     return true;
-  });
+  }).filter(c => c.is_fix_required !== true);
 
   const hasFilters = search || statusFilter !== "all" || classificationFilter !== "all";
 
@@ -319,9 +341,19 @@ export default function AdminCases() {
                       <TableCell className="max-w-[200px] truncate">{c.resort_name ?? "—"}</TableCell>
                       <TableCell className="text-center">{c.week_number ?? "—"}</TableCell>
                       <TableCell>
-                        <Badge variant="outline" className={getStatusBadgeClasses(c.status)}>
-                          {statusLabels[c.status] ?? c.status}
-                        </Badge>
+                        {c.status === 'yellow_review' && (c.recheck_count ?? 0) >= 3 ? (
+                          <Badge variant="outline" className="bg-orange-500/10 text-orange-600">
+                            Max. javítás elérve
+                          </Badge>
+                        ) : c.status === 'yellow_review' && c.is_fix_required !== true ? (
+                          <Badge variant="outline" className="bg-warning/10 text-warning">
+                            Manuális review
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline" className={getStatusBadgeClasses(c.status)}>
+                            {statusLabels[c.status] ?? c.status}
+                          </Badge>
+                        )}
                       </TableCell>
                       <TableCell>
                         {c.classification ? (
