@@ -117,6 +117,7 @@ export default function AdminCases() {
           classification,
           created_at,
           seller_user_id,
+          recheck_count,
           profiles!cases_seller_user_id_fkey ( full_name )
         `,
         )
