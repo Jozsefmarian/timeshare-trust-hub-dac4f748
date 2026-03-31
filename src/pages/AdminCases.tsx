@@ -144,6 +144,21 @@ export default function AdminCases() {
         }
       });
 
+      // Load correction check_results for yellow_review cases
+      const yellowCaseIds = (casesData ?? [])
+        .filter(c => c.status === 'yellow_review')
+        .map(c => c.id);
+
+      let correctionCaseIds = new Set<string>();
+      if (yellowCaseIds.length > 0) {
+        const { data: correctionResults } = await supabase
+          .from('check_results')
+          .select('case_id')
+          .in('case_id', yellowCaseIds)
+          .eq('result', 'correction_required');
+        correctionCaseIds = new Set((correctionResults ?? []).map(r => r.case_id));
+      }
+
       const rows: CaseRow[] = casesData.map((c) => {
         const offer = offerMap.get(c.id);
         const profile = c.profiles as unknown as { full_name: string | null } | null;
@@ -156,6 +171,10 @@ export default function AdminCases() {
           seller_name: profile?.full_name ?? null,
           resort_name: offer?.resort_name_raw ?? null,
           week_number: offer?.week_number ?? null,
+          recheck_count: c.recheck_count ?? 0,
+          is_fix_required: c.status === 'yellow_review'
+            && correctionCaseIds.has(c.id)
+            && (c.recheck_count ?? 0) < 3,
         };
       });
 
