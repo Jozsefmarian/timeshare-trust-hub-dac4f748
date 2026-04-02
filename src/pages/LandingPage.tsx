@@ -43,8 +43,8 @@ const steps = [
 const trustItems = [
   { value: "20+ év", label: "Idegenforgalmi tapasztalat" },
   { value: "100%", label: "Egyedi konstrukció" },
-  { value: "Professzionális", label: "jogi és szakmai háttér" },
-  { value: "​Gyors", label: "ügyintézés" },
+  { value: "Professzionális", label: "Jogi és szakmai háttér" },
+  { value: "​Gyors", label: "Ügyintézés" },
 ];
 
 export default function LandingPage() {
