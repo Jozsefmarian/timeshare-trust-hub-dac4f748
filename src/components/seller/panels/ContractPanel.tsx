@@ -62,12 +62,18 @@ function contractTypeLabel(type: string): string {
 
 function contractStatusLabel(s: string): string {
   switch (s) {
-    case "pending_generation": return "Generálásra vár";
-    case "generated": return "Letölthető";
-    case "awaiting_signature": return "Aláírásra vár";
-    case "signed_uploaded": return "Aláírt példány feltöltve";
-    case "verified": return "Ellenőrizve";
-    default: return s;
+    case "pending_generation":
+      return "Generálásra vár";
+    case "generated":
+      return "Letölthető";
+    case "awaiting_signature":
+      return "Aláírásra vár";
+    case "signed_uploaded":
+      return "Aláírt példány feltöltve";
+    case "verified":
+      return "Ellenőrizve";
+    default:
+      return s;
   }
 }
 
@@ -76,8 +82,11 @@ function formatDateTime(value?: string | null) {
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return "—";
   return d.toLocaleString("hu-HU", {
-    year: "numeric", month: "long", day: "numeric",
-    hour: "2-digit", minute: "2-digit",
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
   });
 }
 
@@ -95,7 +104,10 @@ function SingleContractCard({ contract, caseId, signedFiles, onUploaded }: Singl
   const fileRef = useRef<HTMLInputElement>(null);
 
   const hasSigned = signedFiles.length > 0;
-  const canUpload = contract.status === "generated" || contract.status === "awaiting_signature" || contract.status === "signed_uploaded";
+  const canUpload =
+    contract.status === "generated" ||
+    contract.status === "awaiting_signature" ||
+    contract.status === "signed_uploaded";
 
   const handleDownload = async () => {
     if (!contract.generated_storage_bucket || !contract.generated_storage_path) return;
@@ -112,9 +124,7 @@ function SingleContractCard({ contract, caseId, signedFiles, onUploaded }: Singl
 
   const handleOpenSignedFile = async (file: SignedFile) => {
     try {
-      const { data, error } = await supabase.storage
-        .from(file.storage_bucket)
-        .createSignedUrl(file.storage_path, 60);
+      const { data, error } = await supabase.storage.from(file.storage_bucket).createSignedUrl(file.storage_path, 60);
       if (error) throw error;
       if (data?.signedUrl) window.open(data.signedUrl, "_blank", "noopener,noreferrer");
     } catch {
@@ -128,34 +138,32 @@ function SingleContractCard({ contract, caseId, signedFiles, onUploaded }: Singl
 
     setIsUploading(true);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
       const uploadedBy = user?.id ?? null;
 
       for (const file of Array.from(files)) {
         const ts = Date.now();
         const storagePath = `cases/${caseId}/contracts/signed/${contract.id}/${ts}-${file.name}`;
 
-        const { error: uploadErr } = await supabase.storage
-          .from("signed-contracts")
-          .upload(storagePath, file, {
-            contentType: file.type || "application/octet-stream",
-            upsert: false,
-          });
+        const { error: uploadErr } = await supabase.storage.from("signed-contracts").upload(storagePath, file, {
+          contentType: file.type || "application/octet-stream",
+          upsert: false,
+        });
         if (uploadErr) throw uploadErr;
 
-        const { error: insertErr } = await supabase
-          .from("signed_contract_files")
-          .insert({
-            contract_id: contract.id,
-            case_id: caseId,
-            storage_bucket: "signed-contracts",
-            storage_path: storagePath,
-            file_name: file.name,
-            file_size: file.size,
-            mime_type: file.type || "application/octet-stream",
-            uploaded_by: uploadedBy,
-            sort_order: 0,
-          });
+        const { error: insertErr } = await supabase.from("signed_contract_files").insert({
+          contract_id: contract.id,
+          case_id: caseId,
+          storage_bucket: "signed-contracts",
+          storage_path: storagePath,
+          file_name: file.name,
+          file_size: file.size,
+          mime_type: file.type || "application/octet-stream",
+          uploaded_by: uploadedBy,
+          sort_order: 0,
+        });
         if (insertErr) throw insertErr;
       }
 
@@ -209,7 +217,10 @@ function SingleContractCard({ contract, caseId, signedFiles, onUploaded }: Singl
           <div className="space-y-2">
             <p className="text-xs font-medium text-foreground">Feltöltött aláírt fájlok ({signedFiles.length})</p>
             {signedFiles.map((sf) => (
-              <div key={sf.id} className="flex items-center justify-between gap-2 p-2 rounded-md bg-muted/30 border border-border">
+              <div
+                key={sf.id}
+                className="flex items-center justify-between gap-2 p-2 rounded-md bg-muted/30 border border-border"
+              >
                 <div className="min-w-0 flex-1">
                   <p className="text-xs font-medium text-foreground truncate">{sf.file_name}</p>
                   <p className="text-xs text-muted-foreground">{formatDateTime(sf.uploaded_at)}</p>
@@ -229,7 +240,8 @@ function SingleContractCard({ contract, caseId, signedFiles, onUploaded }: Singl
         <>
           <Separator />
           <p className="text-xs text-muted-foreground">
-            Töltse le, nyomtassa ki, írja alá, majd töltse vissza az aláírt példányt. Egyszerre több fájl is kiválasztható.
+            Töltse le, nyomtassa ki, írja alá, majd töltse vissza az aláírt példányt. Egyszerre több fájl is
+            kiválasztható.
           </p>
           <input
             ref={fileRef}
@@ -248,11 +260,20 @@ function SingleContractCard({ contract, caseId, signedFiles, onUploaded }: Singl
             onClick={() => fileRef.current?.click()}
           >
             {isUploading ? (
-              <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Feltöltés...</>
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Feltöltés...
+              </>
             ) : hasSigned ? (
-              <><Plus className="h-4 w-4 mr-2" />További fájlok hozzáadása</>
+              <>
+                <Plus className="h-4 w-4 mr-2" />
+                További fájlok hozzáadása
+              </>
             ) : (
-              <><Upload className="h-4 w-4 mr-2" />Aláírt példány feltöltése</>
+              <>
+                <Upload className="h-4 w-4 mr-2" />
+                Aláírt példány feltöltése
+              </>
             )}
           </Button>
         </>
@@ -331,10 +352,12 @@ export default function ContractPanel({
 
     if (nowAllSigned) {
       const { error: recheckErr } = await supabase.functions.invoke("confirm-document-upload", {
-        body: { document_id: contracts[0].id, is_signed_contract: true, case_id: caseId },
+        body: { is_signed_contract: true, case_id: caseId },
       });
       if (!recheckErr) {
         onAllContractsSigned();
+      } else {
+        console.error("confirm-document-upload error:", recheckErr);
       }
     }
   };
