@@ -160,11 +160,7 @@ export default function LandingPage() {
           <div className="grid md:grid-cols-4 gap-8">
             <div>
               <div className="flex items-center gap-2 mb-4">
-                <img
-                  src="/lovable-uploads/eb662a6e-1d6e-45a6-bc03-93ff4dabcdf3.png"
-                  alt="TSR Megoldások"
-                  className="h-10"
-                />
+                <img src={tsrLogo} alt="TSR Megoldások" className="h-10" />
               </div>
               <p className="text-sm">Biztonságos digitális platform üdülési jogok eladásához.</p>
             </div>
