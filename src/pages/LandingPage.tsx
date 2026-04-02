@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import tsrLogo from "@/assets/tsr-logo.png";
+import tsrLogo from "@/assets/tsr-logo-white.png";
 
 const steps = [
   {
@@ -160,7 +161,7 @@ export default function LandingPage() {
           <div className="grid md:grid-cols-4 gap-8">
             <div>
               <div className="flex items-center gap-2 mb-4">
-                <img src={tsrLogo} alt="TSR Megoldások" className="h-10" />
+                <img src={tsrLogoWhite} alt="TSR Megoldások" className="h-10" />
               </div>
               <p className="text-sm">Biztonságos digitális platform üdülési jogok eladásához.</p>
             </div>
