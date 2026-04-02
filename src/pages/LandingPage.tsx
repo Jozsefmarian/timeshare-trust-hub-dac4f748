@@ -6,31 +6,31 @@ import tsrLogo from "@/assets/tsr-logo.png";
 const steps = [
   {
     icon: FileCheck,
-    title: "Üdülési jog adatainak megadása",
-    description: "Adja meg üdülési hetének, üdülőhelyének és tulajdonjogának adatait.",
+    title: "Üdülési jog regisztrálása",
+    description: "Adja meg üdülőhelyének, üdülési hetének, és az átruházáshoz szükséges egyéb adatait.",
   },
   {
     icon: Shield,
     title: "Dokumentumok ellenőrzése",
-    description: "Ellenőrizzük tulajdonjogi dokumentumait és előkészítjük az átruházást.",
+    description: "Ellenőrizzük a jogosultságra vonatkozó dokumentumait és előkészítjük az átruházást.",
   },
   {
     icon: FileSignature,
     title: "Adásvételi szerződés",
-    description: "A rendszer elkészíti az adásvételi szerződést az Ön által megadott adatok alapján.",
+    description: "Az Ön által megadott adatok alapján a rendszerünk elkészíti az adásvételhez szükséges dokumentumokat.",
   },
   {
     icon: CreditCard,
-    title: "Szolgáltatási szerződés és fizetés",
-    description: "Az adásvételi szerződés aláírása után a szolgáltatási díj megfizetésével lezárjuk az ügyet.",
+    title: "Átruházással kapcsolatos ügyintézés",
+    description: "Szolgáltatási szerződés alapján elvégezzük az átruházás teljes adminisztrációját, az ezzel kapcsolatos ügyintézést, hogy Önnek ne kelljen. ",
   },
 ];
 
 const trustItems = [
-  { value: "2 500+", label: "Befejezett átruházás" },
-  { value: "98%", label: "Ügyfél-elégedettség" },
-  { value: "Engedélyes", label: "Jogi szakemberek" },
-  { value: "Biztonságos", label: "Letéti fizetések" },
+  { value: "20+ év", label: "Idegenforgalmi tapasztalat" },
+  { value: "100%", label: "Egyedi konstrukció" },
+  { value: "Professzionális", label: "jogi és szakmai háttér" },
+  { value: "​Gyors", label: "ügyintézés" },
 ];
 
 export default function LandingPage() {
@@ -114,7 +114,7 @@ export default function LandingPage() {
       <section id="how-it-works" className="py-20 md:py-28">
         <div className="container mx-auto px-4">
           <div className="text-center mb-16">
-            <h2 className="text-3xl md:text-4xl font-bold text-primary mb-4">Hogyan működik</h2>
+            <h2 className="text-3xl md:text-4xl font-bold text-primary mb-4">Hogyan működik?</h2>
             <p className="text-muted-foreground text-lg max-w-xl mx-auto">
               Négy egyszerű lépésben ruházhatja át üdülési jogát biztonságosan és jogilag szabályosan.
             </p>
