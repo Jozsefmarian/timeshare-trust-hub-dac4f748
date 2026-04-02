@@ -22,24 +22,26 @@ interface DocumentType {
   label: string;
 }
 
-function reviewBadge(s: string) {
-  switch (s) {
-    case "approved":
-      return {
-        label: "Jóváhagyva",
-        className: "border-success/40 text-success",
-      };
-    case "rejected":
-      return {
-        label: "Elutasítva",
-        className: "border-destructive/40 text-destructive",
-      };
-    default:
-      return {
-        label: "Ellenőrzés alatt",
-        className: "border-muted-foreground/30 text-muted-foreground",
-      };
+function reviewBadge(reviewStatus: string, aiStatus: string) {
+  if (reviewStatus === "approved") {
+    return { label: "Jóváhagyva", className: "border-success/40 text-success" };
   }
+  if (reviewStatus === "rejected") {
+    return { label: "Elutasítva", className: "border-destructive/40 text-destructive" };
+  }
+  if (reviewStatus === "needs_reupload") {
+    return { label: "Újrafeltöltés szükséges", className: "border-warning/40 text-warning" };
+  }
+  if (aiStatus === "completed") {
+    return { label: "Feldolgozva", className: "border-secondary/40 text-secondary" };
+  }
+  if (aiStatus === "processing" || aiStatus === "queued") {
+    return { label: "Feldolgozás alatt", className: "border-muted-foreground/30 text-muted-foreground" };
+  }
+  if (aiStatus === "failed") {
+    return { label: "Feldolgozás sikertelen", className: "border-destructive/40 text-destructive" };
+  }
+  return { label: "Ellenőrzés alatt", className: "border-muted-foreground/30 text-muted-foreground" };
 }
 
 function formatDateTime(value?: string | null) {
@@ -92,7 +94,7 @@ export default function SubmittedDocumentsPanel({ documents, documentTypes }: Su
       </CardHeader>
       <CardContent className="space-y-3">
         {documents.map((doc) => {
-          const review = reviewBadge(doc.review_status);
+          const review = reviewBadge(doc.review_status, doc.ai_status);
           return (
             <div key={doc.id} className="flex items-center justify-between p-3 rounded-lg border border-border">
               <div className="min-w-0 flex-1 space-y-0.5">
