@@ -118,8 +118,6 @@ type ContractRow = {
 
 // ---------- Helpers ----------
 
-
-
 async function updateCaseInternalNote(caseId: string, note: string) {
   const { error } = await supabase
     .from("cases")
@@ -132,39 +130,57 @@ async function updateCaseInternalNote(caseId: string, note: string) {
 
 function reviewStatusLabel(s: string): string {
   switch (s) {
-    case "pending": return "Függőben";
-    case "approved": return "Jóváhagyva";
-    case "rejected": return "Elutasítva";
-    case "needs_reupload": return "Újrafeltöltés szükséges";
-    default: return s;
+    case "pending":
+      return "Függőben";
+    case "approved":
+      return "Jóváhagyva";
+    case "rejected":
+      return "Elutasítva";
+    case "needs_reupload":
+      return "Újrafeltöltés szükséges";
+    default:
+      return s;
   }
 }
 
 function reviewStatusClasses(s: string): string {
   switch (s) {
-    case "pending": return "bg-muted text-muted-foreground";
-    case "approved": return "bg-success/10 text-success";
-    case "rejected": return "bg-destructive/10 text-destructive";
-    case "needs_reupload": return "bg-warning/10 text-warning";
-    default: return "bg-muted text-muted-foreground";
+    case "pending":
+      return "bg-muted text-muted-foreground";
+    case "approved":
+      return "bg-success/10 text-success";
+    case "rejected":
+      return "bg-destructive/10 text-destructive";
+    case "needs_reupload":
+      return "bg-warning/10 text-warning";
+    default:
+      return "bg-muted text-muted-foreground";
   }
 }
 
 function classificationLabel(c: string | null): string {
   switch (c) {
-    case "green": return "Zöld";
-    case "yellow": return "Sárga";
-    case "red": return "Piros";
-    default: return "Nincs besorolva";
+    case "green":
+      return "Zöld";
+    case "yellow":
+      return "Sárga";
+    case "red":
+      return "Piros";
+    default:
+      return "Nincs besorolva";
   }
 }
 
 function classificationClasses(c: string | null): string {
   switch (c) {
-    case "green": return "bg-success/10 text-success";
-    case "yellow": return "bg-warning/10 text-warning";
-    case "red": return "bg-destructive/10 text-destructive";
-    default: return "bg-muted text-muted-foreground";
+    case "green":
+      return "bg-success/10 text-success";
+    case "yellow":
+      return "bg-warning/10 text-warning";
+    case "red":
+      return "bg-destructive/10 text-destructive";
+    default:
+      return "bg-muted text-muted-foreground";
   }
 }
 
@@ -190,49 +206,72 @@ function formatDateTime(value?: string | null) {
 
 function contractTypeLabel(t: string): string {
   switch (t) {
-    case "timeshare_transfer": return "Üdülőhasználati átadási szerződés";
-    case "power_of_attorney": return "Meghatalmazás";
-    case "share_transfer": return "Részvény adásvételi szerződés";
-    case "securities_transfer": return "Értékpapír transzfer nyilatkozat";
-    default: return t;
+    case "timeshare_transfer":
+      return "Üdülőhasználati átadási szerződés";
+    case "power_of_attorney":
+      return "Meghatalmazás";
+    case "share_transfer":
+      return "Részvény adásvételi szerződés";
+    case "securities_transfer":
+      return "Értékpapír transzfer nyilatkozat";
+    default:
+      return t;
   }
 }
 
 function contractStatusLabel(s: string): string {
   switch (s) {
-    case "pending_generation": return "Generálásra vár";
-    case "generated": return "Generálva";
-    case "awaiting_signature": return "Aláírásra vár";
-    case "signed_uploaded": return "Aláírt példány feltöltve";
-    case "verified": return "Ellenőrizve";
-    default: return s;
+    case "pending_generation":
+      return "Generálásra vár";
+    case "generated":
+      return "Generálva";
+    case "awaiting_signature":
+      return "Aláírásra vár";
+    case "signed_uploaded":
+      return "Aláírt példány feltöltve";
+    case "verified":
+      return "Ellenőrizve";
+    default:
+      return s;
   }
 }
 
 function contractStatusClasses(s: string): string {
   switch (s) {
-    case "generated": return "bg-primary/10 text-primary";
-    case "awaiting_signature": return "bg-warning/10 text-warning";
-    case "signed_uploaded": return "bg-success/10 text-success";
-    case "verified": return "bg-success/10 text-success";
-    default: return "bg-muted text-muted-foreground";
+    case "generated":
+      return "bg-primary/10 text-primary";
+    case "awaiting_signature":
+      return "bg-warning/10 text-warning";
+    case "signed_uploaded":
+      return "bg-success/10 text-success";
+    case "verified":
+      return "bg-success/10 text-success";
+    default:
+      return "bg-muted text-muted-foreground";
   }
 }
 
 function usageFrequencyLabel(f: string | null): string {
   switch (f) {
-    case "annual": return "Minden évben";
-    case "biennial": return "Minden második évben";
-    default: return f || "—";
+    case "annual":
+      return "Minden évben";
+    case "biennial":
+      return "Minden második évben";
+    default:
+      return f || "—";
   }
 }
 
 function checkResultBadgeClass(result: string): string {
   switch (result) {
-    case "pass": return "bg-success/10 text-success";
-    case "warning": return "bg-warning/10 text-warning";
-    case "fail": return "bg-destructive/10 text-destructive";
-    default: return "bg-muted text-muted-foreground";
+    case "pass":
+      return "bg-success/10 text-success";
+    case "warning":
+      return "bg-warning/10 text-warning";
+    case "fail":
+      return "bg-destructive/10 text-destructive";
+    default:
+      return "bg-muted text-muted-foreground";
   }
 }
 
@@ -256,7 +295,7 @@ export default function AdminCaseDetail() {
   const [comment, setComment] = useState("");
   const [adminNote, setAdminNote] = useState("");
   const [isSavingNote, setIsSavingNote] = useState(false);
-  
+
   const [updatingClassification, setUpdatingClassification] = useState(false);
   const [previewLoadingId, setPreviewLoadingId] = useState<string | null>(null);
 
@@ -307,6 +346,7 @@ export default function AdminCaseDetail() {
         "id, original_file_name, file_name, document_type, document_type_id, upload_status, review_status, ai_status, uploaded_at, storage_bucket, storage_path",
       )
       .eq("case_id", caseId)
+      .eq("upload_status", "uploaded")
       .order("created_at", { ascending: false });
 
     if (data) setDocuments(data as CaseDocument[]);
@@ -343,7 +383,9 @@ export default function AdminCaseDetail() {
     if (!caseId) return;
     const { data } = await supabase
       .from("week_offers")
-      .select("resort_name_raw, week_number, unit_type, season_label, rights_start_year, rights_end_year, usage_frequency")
+      .select(
+        "resort_name_raw, week_number, unit_type, season_label, rights_start_year, rights_end_year, usage_frequency",
+      )
       .eq("case_id", caseId)
       .maybeSingle();
     setWeekOffer(data as WeekOfferRow | null);
@@ -378,8 +420,16 @@ export default function AdminCaseDetail() {
       loadWeekOffer();
       loadAiResults();
     }
-  }, [caseId, loadCase, loadDocuments, loadDocumentTypes, loadValidationResults, loadContracts, loadWeekOffer, loadAiResults]);
-
+  }, [
+    caseId,
+    loadCase,
+    loadDocuments,
+    loadDocumentTypes,
+    loadValidationResults,
+    loadContracts,
+    loadWeekOffer,
+    loadAiResults,
+  ]);
 
   const handleClassification = async (classification: string) => {
     if (!caseId) return;
@@ -682,9 +732,7 @@ export default function AdminCaseDetail() {
                             return (
                               <div key={check.id} className="px-4 py-3 space-y-2">
                                 <div className="flex items-center gap-2 flex-wrap">
-                                  <Badge className={checkResultBadgeClass(check.result)}>
-                                    {check.result}
-                                  </Badge>
+                                  <Badge className={checkResultBadgeClass(check.result)}>{check.result}</Badge>
                                   <span className="text-sm font-medium">{check.check_type}</span>
                                   {check.severity && <Badge variant="outline">{check.severity}</Badge>}
                                 </div>
@@ -754,7 +802,11 @@ export default function AdminCaseDetail() {
                               variant="outline"
                               size="sm"
                               onClick={() =>
-                                handleOpenContractFile(c.generated_storage_bucket, c.generated_storage_path, "generált szerződés")
+                                handleOpenContractFile(
+                                  c.generated_storage_bucket,
+                                  c.generated_storage_path,
+                                  "generált szerződés",
+                                )
                               }
                             >
                               <Eye className="h-3.5 w-3.5 mr-1" />
@@ -766,7 +818,11 @@ export default function AdminCaseDetail() {
                               variant="outline"
                               size="sm"
                               onClick={() =>
-                                handleOpenContractFile(c.signed_storage_bucket, c.signed_storage_path, "aláírt szerződés")
+                                handleOpenContractFile(
+                                  c.signed_storage_bucket,
+                                  c.signed_storage_path,
+                                  "aláírt szerződés",
+                                )
                               }
                             >
                               <Eye className="h-3.5 w-3.5 mr-1" />
@@ -796,7 +852,12 @@ export default function AdminCaseDetail() {
                   </div>
                 )}
                 {contracts.length > 0 && (
-                  <Button className="w-full" variant="outline" disabled={isGeneratingContract} onClick={handleGenerateContract}>
+                  <Button
+                    className="w-full"
+                    variant="outline"
+                    disabled={isGeneratingContract}
+                    onClick={handleGenerateContract}
+                  >
                     {isGeneratingContract ? (
                       <>
                         <Loader2 className="h-4 w-4 animate-spin mr-2" />
