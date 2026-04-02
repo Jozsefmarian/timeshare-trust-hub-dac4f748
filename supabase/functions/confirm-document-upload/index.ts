@@ -74,8 +74,51 @@ Deno.serve(async (req) => {
 
     // 2. Input
     const body = await req.json();
-    const { document_id } = body;
+    const { document_id, is_signed_contract, case_id: body_case_id } = body;
 
+    // ── Aláírt szerződések kezelése ─────────────────────────────────────────────
+    if (is_signed_contract && body_case_id) {
+      const { data: contracts } = await serviceClient
+        .from("contracts")
+        .select("id")
+        .eq("case_id", body_case_id)
+        .in("contract_type", ["timeshare_transfer", "power_of_attorney", "share_transfer", "securities_transfer"]);
+
+      const contractIds = (contracts ?? []).map((c: any) => c.id);
+
+      if (contractIds.length === 0) {
+        return new Response(JSON.stringify({ error: "No contracts found for case" }), {
+          status: 404,
+          headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
+        });
+      }
+
+      const { data: signedFiles } = await serviceClient
+        .from("signed_contract_files")
+        .select("contract_id")
+        .in("contract_id", contractIds);
+
+      const signedIds = new Set((signedFiles ?? []).map((f: any) => f.contract_id));
+      const allSigned = contractIds.every((id: string) => signedIds.has(id));
+
+      if (allSigned) {
+        await serviceClient
+          .from("cases")
+          .update({ status: "signed_contract_uploaded", updated_at: new Date().toISOString() })
+          .eq("id", body_case_id);
+        return new Response(JSON.stringify({ success: true, case_status: "signed_contract_uploaded" }), {
+          status: 200,
+          headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
+        });
+      }
+
+      return new Response(JSON.stringify({ success: true, case_status: "awaiting_signed_contract" }), {
+        status: 200,
+        headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
+      });
+    }
+
+    // ── Normál dokumentum feltöltés ─────────────────────────────────────────────
     if (!document_id) {
       return new Response(JSON.stringify({ error: "Missing required field: document_id" }), {
         status: 400,
