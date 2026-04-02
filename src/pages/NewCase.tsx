@@ -15,8 +15,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { uploadCaseDocument } from "@/lib/documentUpload";
 import { submitCase } from "@/integrations/supabase/api";
 
-
-
 const STEPS = ["Tulajdonos adatai", "Üdülési jog adatai", "Nyilatkozatok", "Dokumentum feltöltés"];
 
 const DOC_CATEGORIES = {
@@ -317,7 +315,7 @@ export default function NewCase() {
     async (newStep: number) => {
       if (newStep === 3) {
         ensureDocTypesLoaded();
-        ensureDraftCase();
+        await ensureDraftCase();
       }
       setStep(newStep);
     },
@@ -339,19 +337,27 @@ export default function NewCase() {
   // Immediate upload of a single file
   const uploadFileImmediately = useCallback(
     async (tracked: TrackedFile) => {
-      const caseId = createdCaseRef.current;
+      let caseId = createdCaseRef.current;
       if (!caseId) {
-        // Try to ensure draft case exists
-        const id = await ensureDraftCase();
-        if (!id) {
-          setFiles((prev) =>
-            prev.map((f) =>
-              f.id === tracked.id
-                ? { ...f, status: "failed" as UploadStatus, error: "Piszkozat ügy létrehozása sikertelen." }
-                : f,
-            ),
-          );
-          return;
+        // Várjuk meg amíg a case létrejön (max 10s)
+        let waited = 0;
+        while (!createdCaseRef.current && waited < 10000) {
+          await new Promise((r) => setTimeout(r, 200));
+          waited += 200;
+        }
+        caseId = createdCaseRef.current;
+        if (!caseId) {
+          const id = await ensureDraftCase();
+          if (!id) {
+            setFiles((prev) =>
+              prev.map((f) =>
+                f.id === tracked.id
+                  ? { ...f, status: "failed" as UploadStatus, error: "Piszkozat ügy létrehozása sikertelen." }
+                  : f,
+              ),
+            );
+            return;
+          }
         }
       }
 
@@ -470,7 +476,14 @@ export default function NewCase() {
           !!originalContractNumber &&
           !!annualFee &&
           (usageFrequency === "annual" || (usageFrequency === "biennial" && !!usageParity)) &&
-          (hasShares !== "yes" || (!!issuerName && !!clientNumber && !!shareSeries && !!nominalValue && !!isin && !!securitiesAccountProvider && !!securitiesAccountId))
+          (hasShares !== "yes" ||
+            (!!issuerName &&
+              !!clientNumber &&
+              !!shareSeries &&
+              !!nominalValue &&
+              !!isin &&
+              !!securitiesAccountProvider &&
+              !!securitiesAccountId))
         );
       case 2:
         return decl1 && decl2 && decl3;
