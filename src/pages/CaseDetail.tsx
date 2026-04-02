@@ -212,6 +212,7 @@ export default function CaseDetail() {
         "id, original_file_name, upload_status, review_status, ai_status, uploaded_at, document_type_id, storage_bucket, storage_path",
       )
       .eq("case_id", caseId)
+      .eq("upload_status", "uploaded")
       .order("created_at", { ascending: false });
     if (data) setUploadedDocuments(data as UploadedDocument[]);
   }, [caseId]);
@@ -516,7 +517,6 @@ export default function CaseDetail() {
                 onAllContractsSigned={handleAllContractsSigned}
               />
             )}
-
 
             {/* Payment */}
             {isAtOrPast(status, "service_agreement_accepted") && !shouldHideForwardFlow && (
