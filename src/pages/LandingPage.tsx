@@ -1,5 +1,17 @@
 import { Link } from "react-router-dom";
-import { Shield, FileCheck, ArrowRight, CheckCircle, Clock, Users, Building2, Mail, Phone, FileSignature, CreditCard } from "lucide-react";
+import {
+  Shield,
+  FileCheck,
+  ArrowRight,
+  CheckCircle,
+  Clock,
+  Users,
+  Building2,
+  Mail,
+  Phone,
+  FileSignature,
+  CreditCard,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import tsrLogo from "@/assets/tsr-logo.png";
 
@@ -17,12 +29,14 @@ const steps = [
   {
     icon: FileSignature,
     title: "Adásvételi szerződés",
-    description: "Az Ön által megadott adatok alapján a rendszerünk elkészíti az adásvételhez szükséges dokumentumokat.",
+    description:
+      "Az Ön által megadott adatok alapján a rendszerünk elkészíti az adásvételhez szükséges dokumentumokat.",
   },
   {
     icon: CreditCard,
     title: "Átruházással kapcsolatos ügyintézés",
-    description: "Szolgáltatási szerződés alapján elvégezzük az átruházás teljes adminisztrációját, az ezzel kapcsolatos ügyintézést, hogy Önnek ne kelljen. ",
+    description:
+      "Szolgáltatási szerződés alapján elvégezzük az átruházás teljes adminisztrációját, az ezzel kapcsolatos ügyintézést, hogy Önnek ne kelljen. ",
   },
 ];
 
@@ -81,7 +95,8 @@ export default function LandingPage() {
               Eladná üdülési hetét? Mi megvásároljuk.
             </h1>
             <p className="text-lg md:text-xl text-primary-foreground/70 mb-10 max-w-2xl mx-auto">
-              Jogi-technológiai platformunk kezeli a dokumentumok ellenőrzését, a szerződéskészítést és a biztonságos átruházást — Önnek nincs más dolga.
+              Jogi-technológiai platformunk kezeli a dokumentumok ellenőrzését, a szerződéskészítést és a biztonságos
+              átruházást — Önnek nincs más dolga.
             </p>
             <Link to="/auth?mode=register">
               <Button
@@ -145,7 +160,11 @@ export default function LandingPage() {
           <div className="grid md:grid-cols-4 gap-8">
             <div>
               <div className="flex items-center gap-2 mb-4">
-                <img src="/lovable-uploads/eb662a6e-1d6e-45a6-bc03-93ff4dabcdf3.png" alt="TSR Megoldások" className="h-10" />
+                <img
+                  src="/lovable-uploads/eb662a6e-1d6e-45a6-bc03-93ff4dabcdf3.png"
+                  alt="TSR Megoldások"
+                  className="h-10"
+                />
               </div>
               <p className="text-sm">Biztonságos digitális platform üdülési jogok eladásához.</p>
             </div>
@@ -193,7 +212,7 @@ export default function LandingPage() {
               <h4 className="font-semibold text-primary-foreground mb-3 text-sm">Kapcsolat</h4>
               <ul className="space-y-2 text-sm">
                 <li className="flex items-center gap-2">
-                  <Mail className="h-4 w-4" /> support@timesharerelease.com
+                  <Mail className="h-4 w-4" /> kapcsolat@tsrmegoldasok.hu
                 </li>
                 <li className="flex items-center gap-2">
                   <Phone className="h-4 w-4" /> +36 1 234 5678
@@ -202,7 +221,7 @@ export default function LandingPage() {
             </div>
           </div>
           <div className="border-t border-primary-foreground/10 mt-8 pt-8 text-center text-sm flex flex-col sm:flex-row items-center justify-center gap-2">
-            <span>© {new Date().getFullYear()} TimeshareRelease. Minden jog fenntartva.</span>
+            <span>© {new Date().getFullYear()} TSR Megoldások. Minden jog fenntartva.</span>
             <button
               onClick={() => {
                 localStorage.removeItem("tsr_cookie_consent");
