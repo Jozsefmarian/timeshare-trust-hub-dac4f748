@@ -13,7 +13,7 @@ import {
   CreditCard,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import tsrLogo from "@/assets/tsr-logo.png";
+import tsrLogoDark from "@/assets/tsr-logo-dark.png";
 import tsrLogo from "@/assets/tsr-logo-white.png";
 
 const steps = [
@@ -55,7 +55,7 @@ export default function LandingPage() {
       <nav className="border-b border-border bg-card/80 backdrop-blur-sm sticky top-0 z-50">
         <div className="container mx-auto flex items-center justify-between h-16 px-4">
           <div className="flex items-center gap-2">
-            <img src={tsrLogo} alt="TSR Megoldások" className="h-10" />
+            <img src={tsrLogoDark} alt="TSR Megoldások" className="h-10" />
           </div>
           <div className="hidden md:flex items-center gap-8 text-sm font-medium text-muted-foreground">
             <a href="#how-it-works" className="hover:text-foreground transition-colors">
@@ -161,7 +161,7 @@ export default function LandingPage() {
           <div className="grid md:grid-cols-4 gap-8">
             <div>
               <div className="flex items-center gap-2 mb-4">
-                <img src={tsrLogoWhite} alt="TSR Megoldások" className="h-10" />
+                <img src={tsrLogo} alt="TSR Megoldások" className="h-10" />
               </div>
               <p className="text-sm">Biztonságos digitális platform üdülési jogok eladásához.</p>
             </div>
