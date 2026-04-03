@@ -145,7 +145,7 @@ function SingleContractCard({ contract, caseId, signedFiles, onUploaded }: Singl
 
       for (const file of Array.from(files)) {
         const ts = Date.now();
-        const storagePath = `cases/${caseId}/contracts/signed/${contract.id}/${ts}-${file.name}`;
+        const storagePath = `cases/${caseId}/contracts/signed/${contract.id}/${ts}-${sanitizeFilename(file.name)}`;
 
         const { error: uploadErr } = await supabase.storage.from("signed-contracts").upload(storagePath, file, {
           contentType: file.type || "application/octet-stream",
