@@ -54,10 +54,11 @@ Deno.serve(async (req) => {
     }
 
     const authClient = createClient(supabaseUrl, anonKey, {
-      global: {
-        headers: { Authorization: authHeader },
-      },
+      global: { headers: { Authorization: authHeader } },
     });
+
+    // serviceClient itt van definiálva, az is_signed_contract ág előtt
+    const serviceClient = createClient(supabaseUrl, serviceRoleKey);
 
     const token = authHeader.replace("Bearer ", "");
     const {
@@ -125,9 +126,6 @@ Deno.serve(async (req) => {
         headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
       });
     }
-
-    // 3. Clients
-    const serviceClient = createClient(supabaseUrl, serviceRoleKey);
 
     // 4. Load document through auth client (seller can only confirm own doc)
     const { data: doc, error: docError } = await authClient
