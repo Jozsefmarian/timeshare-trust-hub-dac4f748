@@ -294,9 +294,9 @@ Deno.serve(async (req) => {
 
     let newStatus = caseData.status;
     if (allowedStatuses.includes(caseData.status)) {
-      const { error: updateError } = await supabase
+      const { error: updateError } = await serviceClient
         .from("cases")
-        .update({ status: "service_agreement_accepted" })
+        .update({ status: "service_agreement_accepted", updated_at: new Date().toISOString() })
         .eq("id", case_id);
 
       if (updateError) {
