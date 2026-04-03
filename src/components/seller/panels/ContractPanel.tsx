@@ -90,6 +90,15 @@ function formatDateTime(value?: string | null) {
   });
 }
 
+function sanitizeFilename(name: string): string {
+  return name
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-zA-Z0-9._-]/g, "_")
+    .replace(/_{2,}/g, "_")
+    .substring(0, 200);
+}
+
 // ── SingleContractCard ───────────────────────────────────────────────────
 
 interface SingleContractCardProps {
