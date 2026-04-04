@@ -338,17 +338,30 @@ export default function CorrectionPanel({
       setIsRechecking(true);
       setPanelMessage(null);
 
-      await onRecheckRequested();
+      const result = await onRecheckRequested();
 
-      setPanelMessage({
-        type: "success",
-        text: "Az újraellenőrzés elindult.",
-      });
+      if (result?.recheck_limit_reached) {
+        setRecheckLimitReached(true);
+        setPanelMessage(null);
+      } else {
+        setPanelMessage({
+          type: "success",
+          text: "Az újraellenőrzés elindult.",
+        });
+      }
     } catch (err: any) {
-      setPanelMessage({
-        type: "error",
-        text: err?.message || "Az újraellenőrzés indítása sikertelen.",
-      });
+      const status = err?.status ?? err?.code;
+      if (status === 401 || err?.message?.includes("401")) {
+        setPanelMessage({
+          type: "error",
+          text: "A munkamenet lejárt. Kérjük, frissítse az oldalt és próbálja újra.",
+        });
+      } else {
+        setPanelMessage({
+          type: "error",
+          text: "Technikai hiba lépett fel. Kérjük, próbálja újra néhány perc múlva.",
+        });
+      }
     } finally {
       setIsRechecking(false);
     }
