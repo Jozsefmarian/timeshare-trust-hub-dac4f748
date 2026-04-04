@@ -20,11 +20,15 @@ interface CorrectionRequirement {
   expected_value?: string | number | null;
 }
 
+export interface RecheckResult {
+  recheck_limit_reached?: boolean;
+}
+
 interface CorrectionPanelProps {
   caseId: string;
   corrections: CorrectionRequirement[];
   onCorrectionCompleted: () => void;
-  onRecheckRequested?: () => Promise<void> | void;
+  onRecheckRequested?: () => Promise<RecheckResult>;
 }
 
 type MessageState = {
