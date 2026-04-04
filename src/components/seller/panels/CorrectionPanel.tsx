@@ -68,6 +68,7 @@ export default function CorrectionPanel({
   const [uploadingIdx, setUploadingIdx] = useState<number | null>(null);
   const [savingIdx, setSavingIdx] = useState<number | null>(null);
   const [isRechecking, setIsRechecking] = useState(false);
+  const [recheckLimitReached, setRecheckLimitReached] = useState(false);
   const [panelMessage, setPanelMessage] = useState<MessageState | null>(null);
   const [messages, setMessages] = useState<Record<number, MessageState>>({});
   const [fieldValues, setFieldValues] = useState<Record<number, string>>({});
