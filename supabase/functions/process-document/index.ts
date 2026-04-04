@@ -7,6 +7,9 @@ const ALLOWED_ORIGINS = [
   "http://localhost:3000",
 ];
 
+// OpenAI timeout limit
+const OPENAI_TIMEOUT_MS = 30_000;
+
 function getCorsHeaders(req: Request): Record<string, string> {
   const origin = req.headers.get("Origin") ?? "";
   const allowedOrigin = ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0];
@@ -66,11 +69,17 @@ function normalizeText(value: string | null | undefined): string {
     .trim();
 }
 
-// ── OCR / szöveg kinyerése ────────────────────────────────────────────────
+// Fetch wrapper 30 masodperces timeout-tal
+async function fetchWithTimeout(url: string, options: RequestInit, timeoutMs = OPENAI_TIMEOUT_MS): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
-/**
- * Uint8Array → base64 string (Deno-kompatibilis, nagy fájlokra is biztonságos)
- */
 function uint8ToBase64(bytes: Uint8Array): string {
   let binary = "";
   const chunkSize = 8192;
@@ -81,103 +90,104 @@ function uint8ToBase64(bytes: Uint8Array): string {
   return btoa(binary);
 }
 
-/**
- * Kép küldése az OpenAI Vision API-nak szövegkinyerésre.
- */
 async function callOpenAIVision(base64: string, mimeType: string, openAiKey: string): Promise<string> {
-  const response = await fetch("https://api.openai.com/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${openAiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: "gpt-5.4-nano",
-      messages: [
-        {
-          role: "user",
-          content: [
-            {
-              type: "image_url",
-              image_url: {
-                url: `data:${mimeType};base64,${base64}`,
-                detail: "high",
+  try {
+    const response = await fetchWithTimeout("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${openAiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "gpt-4o-mini",
+        messages: [
+          {
+            role: "user",
+            content: [
+              {
+                type: "image_url",
+                image_url: {
+                  url: `data:${mimeType};base64,${base64}`,
+                  detail: "high",
+                },
               },
-            },
-            {
-              type: "text",
-              text: "Extract all text from this document image. Return only the extracted text content, preserving the original structure as much as possible. Do not add any commentary or explanation.",
-            },
-          ],
-        },
-      ],
-      max_completion_tokens: 4000,
-    }),
-  });
+              {
+                type: "text",
+                text: "Extract all text from this document image. Return only the extracted text content, preserving the original structure as much as possible. Do not add any commentary or explanation.",
+              },
+            ],
+          },
+        ],
+        max_tokens: 4000,
+      }),
+    });
 
-  if (!response.ok) {
-    const err = await response.text();
-    console.error("OpenAI Vision API error:", response.status, err);
+    if (!response.ok) {
+      const err = await response.text();
+      console.error("OpenAI Vision API error:", response.status, err);
+      return "";
+    }
+    const data = await response.json();
+    return (data.choices?.[0]?.message?.content ?? "") as string;
+  } catch (err: unknown) {
+    if (err instanceof Error && err.name === "AbortError") {
+      console.error("OpenAI Vision timeout after", OPENAI_TIMEOUT_MS, "ms");
+    } else {
+      console.error("OpenAI Vision call failed:", err);
+    }
     return "";
   }
-
-  const data = await response.json();
-  return (data.choices?.[0]?.message?.content ?? "") as string;
 }
 
-/**
- * PDF küldése az OpenAI API-nak szövegkinyerésre (gpt-5.4-nano file input).
- */
 async function callOpenAIPDF(base64: string, fileName: string, openAiKey: string): Promise<string> {
-  const response = await fetch("https://api.openai.com/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${openAiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: "gpt-5.4-nano",
-      messages: [
-        {
-          role: "user",
-          content: [
-            {
-              type: "file",
-              file: {
-                filename: fileName,
-                file_data: `data:application/pdf;base64,${base64}`,
+  try {
+    const response = await fetchWithTimeout("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${openAiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "gpt-4o-mini",
+        messages: [
+          {
+            role: "user",
+            content: [
+              {
+                type: "file",
+                file: {
+                  filename: fileName,
+                  file_data: `data:application/pdf;base64,${base64}`,
+                },
               },
-            },
-            {
-              type: "text",
-              text: "Extract all text from this PDF document. Return only the extracted text content, preserving the original structure as much as possible. Do not add any commentary or explanation.",
-            },
-          ],
-        },
-      ],
-      max_completion_tokens: 4000,
-    }),
-  });
+              {
+                type: "text",
+                text: "Extract all text from this PDF document. Return only the extracted text content, preserving the original structure as much as possible. Do not add any commentary or explanation.",
+              },
+            ],
+          },
+        ],
+        max_tokens: 4000,
+      }),
+    });
 
-  if (!response.ok) {
-    const err = await response.text();
-    console.error("OpenAI PDF API error:", response.status, err);
+    if (!response.ok) {
+      const err = await response.text();
+      console.error("OpenAI PDF API error:", response.status, err);
+      return "";
+    }
+    const data = await response.json();
+    return (data.choices?.[0]?.message?.content ?? "") as string;
+  } catch (err: unknown) {
+    if (err instanceof Error && err.name === "AbortError") {
+      console.error("OpenAI PDF timeout after", OPENAI_TIMEOUT_MS, "ms");
+    } else {
+      console.error("OpenAI PDF call failed:", err);
+    }
     return "";
   }
-
-  const data = await response.json();
-  return (data.choices?.[0]?.message?.content ?? "") as string;
 }
 
-/**
- * Fő szövegkinyerő függvény — MIME type alapján ágazik szét.
- *
- * - text/*        → közvetlen szövegolvasás
- * - image/*       → OpenAI Vision API
- * - application/pdf → először próbál szöveget kiolvasni;
- *                     ha kevés szöveget kap (szkennelt PDF), OpenAI PDF API-ra vált
- * - egyéb         → fallback: fileData.text()
- */
 async function extractTextFromFile(
   fileData: Blob,
   mimeType: string | null,
@@ -186,7 +196,6 @@ async function extractTextFromFile(
 ): Promise<{ text: string; method: string }> {
   const effectiveMime = (mimeType ?? "").toLowerCase();
 
-  // Sima szövegfájl
   if (effectiveMime.startsWith("text/") || effectiveMime === "application/json") {
     try {
       const text = await fileData.text();
@@ -196,9 +205,7 @@ async function extractTextFromFile(
     }
   }
 
-  // Ha nincs API kulcs, fallback szövegolvasásra
   if (!openAiKey) {
-    console.warn("OPENAI_API_KEY not set, falling back to fileData.text()");
     try {
       const text = await fileData.text();
       return { text, method: "stub_no_key" };
@@ -207,23 +214,17 @@ async function extractTextFromFile(
     }
   }
 
-  // Base64 konverzió (kép és PDF mindkettőhöz kell)
   const buffer = await fileData.arrayBuffer();
   const base64 = uint8ToBase64(new Uint8Array(buffer));
 
-  // Kép → Vision API
   if (effectiveMime.startsWith("image/")) {
     const text = await callOpenAIVision(base64, effectiveMime, openAiKey);
     return { text, method: "openai_vision" };
   }
 
-  // PDF
   if (effectiveMime === "application/pdf" || effectiveMime === "application/x-pdf") {
-    // Próbáljuk meg szövegként kiolvasni (digitálisan létrehozott PDF)
     try {
       const textAttempt = await fileData.text();
-      // Ha értelmes mennyiségű szöveget kaptunk (nem csak bináris szemét),
-      // akkor digitális PDF → nem kell OCR
       const cleanText = textAttempt.replace(/[^\x20-\x7E\n\r\t\u00C0-\u024F]/g, "").trim();
       if (cleanText.length > 100) {
         return { text: cleanText, method: "pdf_text_extraction" };
@@ -231,13 +232,10 @@ async function extractTextFromFile(
     } catch {
       // fall through to OpenAI
     }
-
-    // Szkennelt PDF → OpenAI PDF API
     const text = await callOpenAIPDF(base64, fileName ?? "document.pdf", openAiKey);
     return { text, method: "openai_pdf" };
   }
 
-  // Minden más → fallback
   try {
     const text = await fileData.text();
     return { text, method: "fallback_text" };
@@ -246,95 +244,73 @@ async function extractTextFromFile(
   }
 }
 
-// ── Dokumentumtípus felismerés ────────────────────────────────────────────
-
 function detectDocumentType(documentType: string | null, fileName: string | null): string {
   const source = normalizeText(`${documentType ?? ""} ${fileName ?? ""}`);
-
   if (source.includes("timeshare") || source.includes("szerzodes") || source.includes("contract"))
     return "timeshare_contract";
   if (source.includes("share") || source.includes("reszveny")) return "share_statement";
   if (source.includes("szemelyi") || source.includes("id") || source.includes("passport")) return "id_document";
   if (source.includes("fee") || source.includes("dij") || source.includes("szamla")) return "annual_fee_invoice";
-
   return "other";
 }
 
-// ── Mező kinyerés a szövegből ────────────────────────────────────────────
-
 function extractFieldsFromText(text: string, detectedType: string) {
   const normalized = text.replace(/\r/g, "");
-  const result: Record<string, unknown> = {
-    detected_document_type: detectedType,
-  };
+  const result: Record<string, unknown> = { detected_document_type: detectedType };
 
-  const weekMatch = normalized.match(/(?:het(?:e|ében|eben)?|week)\s*[:\-]?\s*(\d{1,2})/i);
+  const weekMatch = normalized.match(/(?:het(?:e|\u00e9ben|eben)?|week)\s*[:\-]?\s*(\d{1,2})/i);
   if (weekMatch) result.week_number = Number(weekMatch[1]);
 
   const contractMatch = normalized.match(
-    /(?:szerz[őo]d[ée]s(?:sz[aá]m)?|contract(?: number)?)\s*[:\-]?\s*([A-Z0-9\-\/]+)/i,
+    /(?:szerz[\u0151o]d[\u00e9e]s(?:sz[a\u00e1]m)?|contract(?: number)?)\s*[:\-]?\s*([A-Z0-9\-\/]+)/i,
   );
   if (contractMatch) result.contract_number = contractMatch[1];
 
-  const endYearMatch = normalized.match(/(?:lej[aá]rat|end year|v[eé]g(?:e)?)\s*[:\-]?\s*(20\d{2})/i);
-  if (endYearMatch) result.end_year = Number(endYearMatch[1]);
-
-  const shareCountMatch = normalized.match(/(?:r[eé]szv[eé]ny(?:ek)?\s*sz[aá]ma|share count)\s*[:\-]?\s*(\d+)/i);
+  const shareCountMatch = normalized.match(
+    /(?:r[e\u00e9]szv[e\u00e9]ny(?:ek)?\s*sz[a\u00e1]ma|share count)\s*[:\-]?\s*(\d+)/i,
+  );
   if (shareCountMatch) result.share_count = Number(shareCountMatch[1]);
 
-  const annualFeeMatch = normalized.match(/(?:fenntart[aá]si d[ií]j|annual fee)\s*[:\-]?\s*([\d\s.,]+)\s*(?:ft|huf)?/i);
+  const annualFeeMatch = normalized.match(
+    /(?:fenntart[a\u00e1]si d[i\u00ed]j|annual fee)\s*[:\-]?\s*([\d\s.,]+)\s*(?:ft|huf)?/i,
+  );
   if (annualFeeMatch) result.annual_fee = annualFeeMatch[1].trim();
 
-  const ownerLineMatch = normalized.match(/(?:jogosult|tulajdonos|owner|n[eé]v)\s*[:\-]?\s*([^\n]+)/i);
+  const ownerLineMatch = normalized.match(/(?:jogosult|tulajdonos|owner|n[e\u00e9]v)\s*[:\-]?\s*([^\n]+)/i);
   if (ownerLineMatch) result.owner_name = ownerLineMatch[1].trim();
 
-  const resortLineMatch = normalized.match(/(?:üdül[őo]ingatlan|resort|hotel|club)\s*[:\-]?\s*([^\n]+)/i);
+  const resortLineMatch = normalized.match(
+    /(?:\u00fcd\u00fcl[\u0151o]ingatlan|resort|hotel|club)\s*[:\-]?\s*([^\n]+)/i,
+  );
   if (resortLineMatch) result.resort_name = resortLineMatch[1].trim();
 
   return result;
 }
 
-// ── Strukturált mező kinyerés OpenAI-jal ─────────────────────────────────
-
 async function extractFieldsWithAI(text: string, openAiKey: string): Promise<Record<string, unknown>> {
-  if (!text || text.length < 50 || !openAiKey) {
-    return {};
-  }
+  if (!text || text.length < 50 || !openAiKey) return {};
 
   try {
-    const response = await fetch("https://api.openai.com/v1/chat/completions", {
+    const response = await fetchWithTimeout("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${openAiKey}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "gpt-5.4-nano",
+        model: "gpt-4o-mini",
         messages: [
           {
             role: "system",
-            content: `Te egy magyar üdülési szerződéseket elemző asszisztens vagy. 
-A megadott szerződés szövegéből nyerd ki a következő mezőket JSON formátumban.
-Csak valóban megtalált adatokat adj vissza, ne találj ki semmit.
-Ha egy mező nem található, hagyd ki a JSON-ból.
-
-Keresendő mezők:
-- resort_name: az üdülőhely/hotel neve (pl. "Abbázia Club Hotel Keszthely")
-- week_number: a hét száma számként (1-53 közötti egész)
-- owner_name: a tulajdonos/jogosult neve
-- contract_number: a szerződés száma/azonosítója
-- annual_fee: az éves fenntartási díj számként (csak a szám, pl. 150000)
-- share_count: részvény darabszám számként
-- unit_type: apartman típus (pl. "Studio", "2 hálós")
-
-Válaszolj KIZÁRÓLAG valid JSON objektummal, semmi mással.`,
+            content:
+              "Te egy magyar udulesi szerzodoseket elemzo asszisztens vagy. A megadott szerzodes szovegebol nyerd ki a kovetkezo mezokat JSON formatumban. Csak valodi adatokat adj vissza, ne talalj ki semmit. Ha egy mezo nem talalhato, hagyd ki. Keresendo mezok: resort_name (udulohely neve), week_number (het szama egesz szamkent), owner_name (tulajdonos neve), contract_number (szerzodes szama), annual_fee (eves fenntartasi dij szamkent pl. 150000), share_count (reszvenyek darabszama), unit_type (apartman tipusa). Valaszolj KIZAROLAG valid JSON objektummal, semmi massal.",
           },
           {
             role: "user",
             content: text.substring(0, 6000),
           },
         ],
-        max_completion_tokens: 500,
+        max_tokens: 500,
       }),
     });
 
@@ -342,19 +318,19 @@ Válaszolj KIZÁRÓLAG valid JSON objektummal, semmi mással.`,
       console.error("OpenAI field extraction error:", response.status);
       return {};
     }
-
     const data = await response.json();
     const content = data.choices?.[0]?.message?.content ?? "{}";
-
     const cleaned = content.replace(/```json|```/g, "").trim();
     return JSON.parse(cleaned);
-  } catch (err) {
-    console.error("Field extraction AI error:", err);
+  } catch (err: unknown) {
+    if (err instanceof Error && err.name === "AbortError") {
+      console.error("Field extraction timeout after", OPENAI_TIMEOUT_MS, "ms");
+    } else {
+      console.error("Field extraction AI error:", err);
+    }
     return {};
   }
 }
-
-// ── Tiltó klauzulák keresése ─────────────────────────────────────────────
 
 function buildRestrictionHits(text: string) {
   const hits: Array<{
@@ -365,28 +341,11 @@ function buildRestrictionHits(text: string) {
   }> = [];
 
   const lowered = normalizeText(text);
-
   const rules = [
-    {
-      pattern: "nem ruhazhato at",
-      severity: "confirmed" as const,
-      action: "auto_reject" as const,
-    },
-    {
-      pattern: "elidegenitesi tilalom",
-      severity: "confirmed" as const,
-      action: "auto_reject" as const,
-    },
-    {
-      pattern: "hozzajarulasa szukseges",
-      severity: "suspected" as const,
-      action: "flag_manual_legal" as const,
-    },
-    {
-      pattern: "elo vasarlasi jog",
-      severity: "suspected" as const,
-      action: "allow_but_yellow" as const,
-    },
+    { pattern: "nem ruhazhato at", severity: "confirmed" as const, action: "auto_reject" as const },
+    { pattern: "elidegenitesi tilalom", severity: "confirmed" as const, action: "auto_reject" as const },
+    { pattern: "hozzajarulasa szukseges", severity: "suspected" as const, action: "flag_manual_legal" as const },
+    { pattern: "elo vasarlasi jog", severity: "suspected" as const, action: "allow_but_yellow" as const },
   ];
 
   for (const rule of rules) {
@@ -399,11 +358,8 @@ function buildRestrictionHits(text: string) {
       });
     }
   }
-
   return hits;
 }
-
-// ── Form vs. dokumentum összehasonlítás (mismatch motor) ─────────────────
 
 type WeekOfferRow = {
   resort_name_raw: string | null;
@@ -421,65 +377,51 @@ type MismatchResult = {
   is_mismatch: boolean;
 };
 
-/**
- * Szöveg hasonlóság: normalizált szövegek részleges egyezésvizsgálata.
- * Visszaad true-t ha elég hasonlóak (nem kell tökéletes egyezés).
- */
 function textSimilar(a: string, b: string): boolean {
   const na = normalizeText(a);
   const nb = normalizeText(b);
   if (na === nb) return true;
-  // Részleges egyezés: az egyik tartalmazza a másikat
   if (na.length > 3 && nb.includes(na)) return true;
   if (nb.length > 3 && na.includes(nb)) return true;
-  // Első szó egyezés (resort nevek csonkolva is elfogadhatók)
   const aFirst = na.split(" ")[0];
   const bFirst = nb.split(" ")[0];
   if (aFirst.length > 4 && aFirst === bFirst) return true;
   return false;
 }
 
-/**
- * Összehasonlítja a kinyert dokumentummezőket a seller form adataival.
- * Csak akkor jelez eltérést, ha MINDKÉT oldalon van adat.
- */
 function compareWithWeekOffer(extractedFields: Record<string, unknown>, weekOffer: WeekOfferRow): MismatchResult[] {
   const results: MismatchResult[] = [];
 
-  // 1. Resort neve
   const docResort = extractedFields.resort_name as string | null | undefined;
   const formResort = weekOffer.resort_name_raw;
   if (docResort && formResort) {
-    const match = textSimilar(docResort, formResort);
     results.push({
       field_name: "resort_name_raw",
-      field_label: "Üdülőhely neve",
+      field_label: "Udulohely neve",
       form_value: formResort,
       doc_value: docResort,
-      is_mismatch: !match,
+      is_mismatch: !textSimilar(docResort, formResort),
     });
   }
 
-  // 2. Hét száma
   const docWeek = extractedFields.week_number as number | null | undefined;
   const formWeek = weekOffer.week_number;
   if (docWeek != null && formWeek != null) {
     results.push({
       field_name: "week_number",
-      field_label: "Hét száma",
+      field_label: "Het szama",
       form_value: formWeek,
       doc_value: docWeek,
       is_mismatch: Number(docWeek) !== Number(formWeek),
     });
   }
 
-  // 3. Apartman típus
   const docUnit = extractedFields.unit_type as string | null | undefined;
   const formUnit = weekOffer.unit_type;
   if (docUnit && formUnit) {
     results.push({
       field_name: "unit_type",
-      field_label: "Apartman típus",
+      field_label: "Apartman tipus",
       form_value: formUnit,
       doc_value: docUnit,
       is_mismatch: !textSimilar(docUnit, formUnit),
@@ -488,8 +430,6 @@ function compareWithWeekOffer(extractedFields: Record<string, unknown>, weekOffe
 
   return results;
 }
-
-// ── check_results mentése ────────────────────────────────────────────────
 
 async function saveCheckResults(
   serviceClient: ReturnType<typeof createClient>,
@@ -511,37 +451,19 @@ async function saveCheckResults(
     "annual_fee",
     "share_count",
   ];
-
   for (const fieldKey of fieldKeys) {
     const extractedValue = extractedFields[fieldKey];
-
+    const hasValue = extractedValue !== undefined && extractedValue !== null && extractedValue !== "";
     rows.push({
       case_id: caseId,
       document_id: documentId,
       check_type: `field_presence:${fieldKey}`,
-      result: extractedValue !== undefined && extractedValue !== null && extractedValue !== "" ? "pass" : "warning",
-      severity: extractedValue !== undefined && extractedValue !== null && extractedValue !== "" ? "info" : "medium",
-      message:
-        extractedValue !== undefined && extractedValue !== null && extractedValue !== ""
-          ? `Field extracted: ${fieldKey}`
-          : `Field missing: ${fieldKey}`,
-      details: {
-        field_key: fieldKey,
-        extracted_value: extractedValue ?? null,
-        source: "process_document",
-      },
+      result: hasValue ? "pass" : "warning",
+      severity: hasValue ? "info" : "medium",
+      message: hasValue ? `Field extracted: ${fieldKey}` : `Field missing: ${fieldKey}`,
+      details: { field_key: fieldKey, extracted_value: extractedValue ?? null, source: "process_document" },
     });
   }
-
-  rows.push({
-    case_id: caseId,
-    document_id: documentId,
-    check_type: "policy_version_linked",
-    result: policyVersionId ? "pass" : "warning",
-    severity: policyVersionId ? "info" : "medium",
-    message: policyVersionId ? "Policy version linked to AI job." : "No policy version linked to AI job.",
-    details: { policy_version_id: policyVersionId },
-  });
 
   rows.push({
     case_id: caseId,
@@ -554,9 +476,7 @@ async function saveCheckResults(
     details: { restriction_hits_count: restrictionHits.length },
   });
 
-  const hasConfirmedRestriction = restrictionHits.some((hit) => hit.severity === "confirmed");
-
-  if (hasConfirmedRestriction) {
+  if (restrictionHits.some((hit) => hit.severity === "confirmed")) {
     rows.push({
       case_id: caseId,
       document_id: documentId,
@@ -568,7 +488,6 @@ async function saveCheckResults(
     });
   }
 
-  // Mismatch sorok hozzáadása
   for (const m of mismatchResults) {
     if (m.is_mismatch) {
       rows.push({
@@ -577,7 +496,7 @@ async function saveCheckResults(
         check_type: "field_match",
         result: "correction_required",
         severity: "correction",
-        message: `${m.field_label}: az űrlap adata eltér a dokumentumban szereplőtől.`,
+        message: `${m.field_label}: az urlap adata elter a dokumentumban szereplotol.`,
         details: {
           field_name: m.field_name,
           field_label: m.field_label,
@@ -608,8 +527,6 @@ async function saveCheckResults(
   if (error) throw error;
 }
 
-// ── case_restriction_hits mentése ────────────────────────────────────────
-
 async function saveRestrictionHits(
   serviceClient: ReturnType<typeof createClient>,
   caseId: string,
@@ -618,7 +535,6 @@ async function saveRestrictionHits(
   restrictionHits: ReturnType<typeof buildRestrictionHits>,
 ) {
   if (restrictionHits.length === 0) return;
-
   const rows = restrictionHits.map((hit) => ({
     case_id: caseId,
     document_id: documentId,
@@ -631,13 +547,48 @@ async function saveRestrictionHits(
     page_number: null,
     details: hit.details,
   }));
-
   const { error } = await serviceClient.from("case_restriction_hits").insert(rows);
   if (error) throw error;
 }
 
-// ── Fő handler ────────────────────────────────────────────────────────────
+// Hibas job es dokumentum cleanup
+async function markJobAndDocFailed(
+  serviceClient: ReturnType<typeof createClient>,
+  jobId: string,
+  errorMessage: string,
+) {
+  try {
+    await serviceClient
+      .from("ai_validation_jobs")
+      .update({
+        status: "failed",
+        completed_at: new Date().toISOString(),
+        error_message: errorMessage,
+      })
+      .eq("id", jobId);
 
+    const { data: failedJob } = await serviceClient
+      .from("ai_validation_jobs")
+      .select("document_id, case_id")
+      .eq("id", jobId)
+      .maybeSingle();
+
+    // Dokumentum is failed-re kerul (nem marad stuck "processing"-ben)
+    if (failedJob?.document_id) {
+      await serviceClient
+        .from("documents")
+        .update({ ai_status: "failed", ocr_status: "failed", parse_status: "failed" })
+        .eq("id", failedJob.document_id);
+    }
+    if (failedJob?.case_id) {
+      await serviceClient.from("cases").update({ ai_pipeline_status: "failed" }).eq("id", failedJob.case_id);
+    }
+  } catch (cleanupErr) {
+    console.error("markJobAndDocFailed cleanup error:", cleanupErr);
+  }
+}
+
+// Fo handler
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: getCorsHeaders(req) });
@@ -646,6 +597,8 @@ Deno.serve(async (req) => {
   if (req.method !== "POST") {
     return jsonResponse({ error: "Method not allowed" }, 405);
   }
+
+  let jobIdForCleanup: string | null = null;
 
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
@@ -668,7 +621,9 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: "Missing required field: job_id" }, 400);
     }
 
-    // 1. Job betöltése
+    jobIdForCleanup = job_id;
+
+    // 1. Job betoltese
     const { data: job, error: jobLoadError } = await serviceClient
       .from("ai_validation_jobs")
       .select("id, case_id, document_id, policy_version_id, job_type, status, attempt_count, input_payload")
@@ -679,11 +634,22 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: "AI validation job not found", detail: jobLoadError?.message ?? null }, 404);
     }
 
+    // Duplikat feldolgozas vedelem: terminalis statusban levo jobot nem futtatjuk ujra
+    if (job.status === "completed" || job.status === "failed" || job.status === "cancelled") {
+      console.log(`Job ${job_id} already in terminal state: ${job.status}, skipping.`);
+      return jsonResponse({
+        success: true,
+        skipped: true,
+        reason: `Job already ${job.status}`,
+        job_id: job.id,
+      });
+    }
+
     if (!job.document_id) {
       return jsonResponse({ error: "Job has no document_id" }, 400);
     }
 
-    // 2. Job → processing
+    // 2. Job -> processing
     await serviceClient
       .from("ai_validation_jobs")
       .update({
@@ -693,7 +659,7 @@ Deno.serve(async (req) => {
       })
       .eq("id", job.id);
 
-    // 3. Dokumentum betöltése
+    // 3. Dokumentum betoltese
     const { data: doc, error: docLoadError } = await serviceClient
       .from("documents")
       .select(
@@ -711,7 +677,7 @@ Deno.serve(async (req) => {
       throw new Error(`Document upload_status must be 'uploaded', got '${doc.upload_status}'`);
     }
 
-    // 4. Dokumentum → processing
+    // 4. Dokumentum -> processing
     await serviceClient
       .from("documents")
       .update({
@@ -722,7 +688,7 @@ Deno.serve(async (req) => {
       })
       .eq("id", doc.id);
 
-    // 5. Fájl letöltése storage-ból
+    // 5. Fajl letoltese storage-bol
     const { data: fileData, error: downloadError } = await serviceClient.storage
       .from(doc.storage_bucket)
       .download(doc.storage_path);
@@ -731,7 +697,7 @@ Deno.serve(async (req) => {
       throw new Error(`Failed to download file from storage: ${downloadError?.message ?? "unknown error"}`);
     }
 
-    // 6. OCR / szöveg kinyerése
+    // 6. OCR / szoveg kinyerese (30s timeout)
     const openAiKey = Deno.env.get("OPENAI_API_KEY") ?? "";
     let extractedTextRaw = "";
     let ocrMethod = "unknown";
@@ -742,15 +708,14 @@ Deno.serve(async (req) => {
       ocrMethod = method;
       console.log(`OCR completed: method=${method}, chars=${text.length}`);
     } catch (ocrErr) {
-      console.error("Text extraction error:", ocrErr);
-      extractedTextRaw = "";
+      console.error("Text extraction error (non-fatal, continuing with empty text):", ocrErr);
       ocrMethod = "error";
     }
 
-    // 7. Dokumentumtípus felismerés
+    // 7. Dokumentumtipus felismeres
     const detectedType = detectDocumentType(doc.document_type, doc.original_file_name);
 
-    // 8. Mező kinyerés — regex alapú alap + AI strukturált kinyerés
+    // 8. Mezo kinyeres (30s timeout)
     const regexFields = extractFieldsFromText(extractedTextRaw, detectedType);
     let aiFields: Record<string, unknown> = {};
 
@@ -760,10 +725,9 @@ Deno.serve(async (req) => {
       console.log("AI extracted fields:", JSON.stringify(aiFields));
     }
 
-    // AI mezők felülírják a regex eredményeket (AI pontosabb)
     const extractedFields = { ...regexFields, ...aiFields };
 
-    // 9. Form vs. dokumentum összehasonlítás (mismatch motor)
+    // 9. Form vs. dokumentum osszehasonlitas
     let mismatchResults: MismatchResult[] = [];
     try {
       const { data: weekOffer } = await serviceClient
@@ -774,18 +738,17 @@ Deno.serve(async (req) => {
 
       if (weekOffer) {
         mismatchResults = compareWithWeekOffer(extractedFields, weekOffer as WeekOfferRow);
-        const mismatchCount = mismatchResults.filter((m) => m.is_mismatch).length;
-        console.log(`Mismatch check: ${mismatchCount} eltérés találva`);
+        console.log(`Mismatch check: ${mismatchResults.filter((m) => m.is_mismatch).length} elteres talaltva`);
       }
     } catch (mismatchErr) {
       console.error("Mismatch comparison error (non-blocking):", mismatchErr);
     }
 
-    // 10. Tiltó klauzula keresés
+    // 10. Tilto klauzula kereses
     const restrictionHits = buildRestrictionHits(extractedTextRaw);
     await saveRestrictionHits(serviceClient, doc.case_id, doc.id, job.policy_version_id, restrictionHits);
 
-    // 11. check_results mentése (mező jelenlét + mismatch + restriction összefoglaló)
+    // 11. check_results mentese
     await saveCheckResults(
       serviceClient,
       doc.case_id,
@@ -796,7 +759,7 @@ Deno.serve(async (req) => {
       mismatchResults,
     );
 
-    // 11. Dokumentum lezárása
+    // 12. Dokumentum lezarasa
     const hasConfirmedRestriction = restrictionHits.some((hit) => hit.severity === "confirmed");
     const validationStatus = hasConfirmedRestriction ? "restriction_confirmed" : "match_ok";
 
@@ -817,7 +780,7 @@ Deno.serve(async (req) => {
       })
       .eq("id", doc.id);
 
-    // 12. Job lezárása
+    // 13. Job lezarasa
     await serviceClient
       .from("ai_validation_jobs")
       .update({
@@ -833,7 +796,7 @@ Deno.serve(async (req) => {
       })
       .eq("id", job.id);
 
-    // 13. classify-case meghívása
+    // 14. classify-case meghivasa
     try {
       const classifyResponse = await fetch(`${supabaseUrl}/functions/v1/classify-case`, {
         method: "POST",
@@ -871,41 +834,17 @@ Deno.serve(async (req) => {
   } catch (err) {
     console.error("process-document unhandled error:", err);
 
-    try {
+    // Cleanup: job + document -> failed (ne maradjanak stuck processing-ben)
+    if (jobIdForCleanup) {
       const supabaseUrl = Deno.env.get("SUPABASE_URL");
       const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-
       if (supabaseUrl && serviceRoleKey) {
-        const serviceClient = createClient(supabaseUrl, serviceRoleKey);
-        const body = await req
-          .clone()
-          .json()
-          .catch(() => ({}));
-        const jobId = body?.job_id;
-
-        if (jobId) {
-          await serviceClient
-            .from("ai_validation_jobs")
-            .update({
-              status: "failed",
-              completed_at: new Date().toISOString(),
-              error_message: err instanceof Error ? err.message : "Unknown error",
-            })
-            .eq("id", jobId);
-
-          const { data: failedJob } = await serviceClient
-            .from("ai_validation_jobs")
-            .select("document_id, case_id")
-            .eq("id", jobId)
-            .maybeSingle();
-
-          if (failedJob?.case_id) {
-            await serviceClient.from("cases").update({ ai_pipeline_status: "failed" }).eq("id", failedJob.case_id);
-          }
-        }
+        await markJobAndDocFailed(
+          createClient(supabaseUrl, serviceRoleKey),
+          jobIdForCleanup,
+          err instanceof Error ? err.message : "Unknown error",
+        );
       }
-    } catch (innerErr) {
-      console.error("process-document failure handling error:", innerErr);
     }
 
     return jsonResponse(
