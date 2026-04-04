@@ -40,7 +40,6 @@ Deno.serve(async (req) => {
   }
 
   try {
-    // 1. Auth ellenőrzés
     const authHeader = req.headers.get("Authorization");
     if (!authHeader?.startsWith("Bearer ")) {
       return jsonResponse({ error: "Unauthorized" }, 401);
@@ -57,7 +56,6 @@ Deno.serve(async (req) => {
     const authClient = createClient(supabaseUrl, anonKey, {
       global: { headers: { Authorization: authHeader } },
     });
-
     const serviceClient = createClient(supabaseUrl, serviceRoleKey);
 
     const token = authHeader.replace("Bearer ", "");
@@ -65,101 +63,65 @@ Deno.serve(async (req) => {
       data: { user },
       error: userError,
     } = await authClient.auth.getUser(token);
-
     if (userError || !user) {
       return jsonResponse({ error: "Unauthorized" }, 401);
     }
 
-    // 2. Body kiolvasása
     const body = await req.json();
     const { case_id } = body;
-
     if (!case_id || typeof case_id !== "string") {
       return jsonResponse({ error: "Missing required field: case_id" }, 400);
     }
 
-    // 3. Case betöltése és jogosultság ellenőrzés
+    // Case betoltese + jogosultsag
     const { data: caseRow, error: caseError } = await authClient
       .from("cases")
       .select("id, status, seller_user_id, ai_pipeline_status, recheck_count")
       .eq("id", case_id)
       .maybeSingle();
 
-    if (caseError) {
-      return jsonResponse({ error: "Failed to load case", detail: caseError.message }, 500);
-    }
+    if (caseError) return jsonResponse({ error: "Failed to load case", detail: caseError.message }, 500);
+    if (!caseRow) return jsonResponse({ error: "Case not found or access denied" }, 404);
+    if (caseRow.seller_user_id !== user.id) return jsonResponse({ error: "Forbidden" }, 403);
 
-    if (!caseRow) {
-      return jsonResponse({ error: "Case not found or access denied" }, 404);
-    }
-
-    if (caseRow.seller_user_id !== user.id) {
-      return jsonResponse({ error: "Forbidden" }, 403);
-    }
-
-    // Csak fix_required sárga státuszból indítható újraellenőrzés
-    // (manual_review-ból nem, mert ott nincs mit javítani)
     const allowedStatuses = ["docs_uploaded", "submitted"];
-    // yellow_review csak akkor engedett, ha még van recheck quota
     const currentRecheckCount = (caseRow as any).recheck_count ?? 0;
     const MAX_RECHECK = 3;
 
     if (caseRow.status === "yellow_review") {
-      // Ha már yellow_review-ban van és elfogytak a próbák → nem engedélyezett
       if (currentRecheckCount >= MAX_RECHECK) {
         return jsonResponse(
-          {
-            error: "Maximum recheck attempts reached",
-            detail: `Recheck count: ${currentRecheckCount}/${MAX_RECHECK}`,
-          },
+          { error: "Maximum recheck attempts reached", detail: `Recheck count: ${currentRecheckCount}/${MAX_RECHECK}` },
           409,
         );
       }
     } else if (!allowedStatuses.includes(caseRow.status)) {
       return jsonResponse(
-        {
-          error: "Recheck not allowed from current status",
-          detail: `Current status: ${caseRow.status}`,
-        },
+        { error: "Recheck not allowed from current status", detail: `Current status: ${caseRow.status}` },
         409,
       );
     }
 
-    // 4. Régi AI eredmények törlése (invalidálás)
-
-    // 4. Régi AI eredmények törlése (invalidálás)
-
-    // check_results törlése
+    // Regi AI eredmenyek torlese
     const { error: checkDeleteError } = await serviceClient.from("check_results").delete().eq("case_id", case_id);
-
     if (checkDeleteError) {
-      console.error("Failed to delete check_results:", checkDeleteError);
       return jsonResponse({ error: "Failed to invalidate old check results", detail: checkDeleteError.message }, 500);
     }
 
-    // case_restriction_hits törlése
     const { error: hitsDeleteError } = await serviceClient
       .from("case_restriction_hits")
       .delete()
       .eq("case_id", case_id);
-
     if (hitsDeleteError) {
-      console.error("Failed to delete case_restriction_hits:", hitsDeleteError);
       return jsonResponse({ error: "Failed to invalidate old restriction hits", detail: hitsDeleteError.message }, 500);
     }
 
-    // Régi classifications archiválása (created_by = 'system' marad, de feljegyezzük hogy superseded)
-    // Nem töröljük, mert audit trail szempontból fontos — de az újabb mindig a legfrissebb lesz
-    // A classify-case mindig a legutóbbi classifications rekordot veszi figyelembe
-    // Ezért töröljük és újat hozunk létre
     const { error: classDeleteError } = await serviceClient.from("classifications").delete().eq("case_id", case_id);
-
     if (classDeleteError) {
-      console.error("Failed to delete classifications:", classDeleteError);
       return jsonResponse({ error: "Failed to invalidate old classifications", detail: classDeleteError.message }, 500);
     }
 
-    // 5. Case AI státusz visszaállítása
+    // Case AI status visszaallitasa
     const newRecheckCount = currentRecheckCount + 1;
     const reachedLimit = newRecheckCount >= MAX_RECHECK;
 
@@ -177,34 +139,24 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: "Failed to reset case AI status", detail: caseResetError.message }, 500);
     }
 
-    // 6. Összes feltöltött dokumentum lekérése
+    // Dokumentumok lekerdezese
     const { data: docs, error: docsError } = await serviceClient
       .from("documents")
       .select("id")
       .eq("case_id", case_id)
       .eq("upload_status", "uploaded");
 
-    if (docsError) {
-      return jsonResponse({ error: "Failed to load documents", detail: docsError.message }, 500);
-    }
+    if (docsError) return jsonResponse({ error: "Failed to load documents", detail: docsError.message }, 500);
+    if (!docs || docs.length === 0) return jsonResponse({ error: "No uploaded documents found for recheck" }, 400);
 
-    if (!docs || docs.length === 0) {
-      return jsonResponse({ error: "No uploaded documents found for recheck" }, 400);
-    }
-
-    // 7. Dokumentumok AI státuszának visszaállítása
+    // Dokumentumok AI statusanak visszaallitasa
     await serviceClient
       .from("documents")
-      .update({
-        ai_status: "queued",
-        ocr_status: "pending",
-        parse_status: "pending",
-        validation_status: "pending",
-      })
+      .update({ ai_status: "queued", ocr_status: "pending", parse_status: "pending", validation_status: "pending" })
       .eq("case_id", case_id)
       .eq("upload_status", "uploaded");
 
-    // 8. Aktív policy verzió lekérése
+    // Aktiv policy verzio
     const { data: publishedPolicy } = await serviceClient
       .from("policy_versions")
       .select("id")
@@ -213,12 +165,10 @@ Deno.serve(async (req) => {
       .limit(1)
       .maybeSingle();
 
-    // 9. Új AI validation job létrehozása minden dokumentumhoz
-    //    és process-document meghívása
+    // Job letrehozas es fire-and-forget process-document inditas
     const jobResults: Array<{ doc_id: string; job_id: string; status: string }> = [];
 
     for (const doc of docs) {
-      // Új job rekord
       const { data: newJob, error: jobError } = await serviceClient
         .from("ai_validation_jobs")
         .insert({
@@ -227,11 +177,7 @@ Deno.serve(async (req) => {
           policy_version_id: publishedPolicy?.id ?? null,
           job_type: "process_document",
           status: "queued",
-          input_payload: {
-            trigger: "recheck_case",
-            document_id: doc.id,
-            case_id,
-          },
+          input_payload: { trigger: "recheck_case", document_id: doc.id, case_id },
         })
         .select("id")
         .single();
@@ -242,62 +188,41 @@ Deno.serve(async (req) => {
         continue;
       }
 
-      // last_ai_job_id frissítése a dokumentumon
       await serviceClient.from("documents").update({ last_ai_job_id: newJob.id }).eq("id", doc.id);
 
-      // process-document meghívása
-      try {
-        const processResponse = await fetch(`${supabaseUrl}/functions/v1/process-document`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            apikey: serviceRoleKey,
-          },
-          body: JSON.stringify({ job_id: newJob.id }),
-        });
+      // FIRE AND FORGET: nem varjuk meg a process-document veget,
+      // azonnal visszaterunk a sellernek. A pipeline a hatterben fut.
+      fetch(`${supabaseUrl}/functions/v1/process-document`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", apikey: serviceRoleKey },
+        body: JSON.stringify({ job_id: newJob.id }),
+      }).catch((err) => {
+        console.error("process-document fire-and-forget error for job:", newJob.id, err);
+      });
 
-        if (!processResponse.ok) {
-          const text = await processResponse.text();
-          console.error("process-document failed for job:", newJob.id, text);
-          jobResults.push({ doc_id: doc.id, job_id: newJob.id, status: "process_failed" });
-        } else {
-          jobResults.push({ doc_id: doc.id, job_id: newJob.id, status: "started" });
-        }
-      } catch (invokeErr) {
-        console.error("process-document invoke error:", invokeErr);
-        jobResults.push({ doc_id: doc.id, job_id: newJob.id, status: "invoke_error" });
-      }
+      jobResults.push({ doc_id: doc.id, job_id: newJob.id, status: "queued" });
     }
 
-    // 10. Audit log
+    // Audit log
     await serviceClient.from("audit_logs").insert({
       entity_type: "cases",
       entity_id: case_id,
       action: "recheck_requested",
       performed_by_user_id: user.id,
       source: "edge_function",
-      new_data: {
-        document_count: docs.length,
-        job_results: jobResults,
-      },
+      new_data: { document_count: docs.length, job_results: jobResults },
     });
 
-    // Ha elérte a limitet → yellow_review státusz (manuális review)
+    // Ha elerte a limitet -> yellow_review (manualis review)
     if (reachedLimit) {
       await serviceClient.from("cases").update({ status: "yellow_review" }).eq("id", case_id);
-
-      // Audit log a limit eléréséről
       await serviceClient.from("audit_logs").insert({
         entity_type: "cases",
         entity_id: case_id,
         action: "recheck_limit_reached",
         performed_by_user_id: user.id,
         source: "edge_function",
-        new_data: {
-          recheck_count: newRecheckCount,
-          max_recheck: MAX_RECHECK,
-          auto_escalated_to: "yellow_review",
-        },
+        new_data: { recheck_count: newRecheckCount, max_recheck: MAX_RECHECK, auto_escalated_to: "yellow_review" },
       });
     }
 
@@ -310,10 +235,7 @@ Deno.serve(async (req) => {
   } catch (err) {
     console.error("recheck-case unhandled error:", err);
     return jsonResponse(
-      {
-        error: "Internal server error",
-        detail: err instanceof Error ? err.message : "Unknown error",
-      },
+      { error: "Internal server error", detail: err instanceof Error ? err.message : "Unknown error" },
       500,
     );
   }
