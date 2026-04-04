@@ -94,7 +94,11 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: "Forbidden" }, 403, req);
     }
 
-    if (caseRow.status !== "service_agreement_accepted") {
+    // A1: Engedélyezett státuszok: service_agreement_accepted VAGY payment_pending
+    // Ha payment_pending, ellenőrizzük hogy van-e declaration_acceptances rekord
+    // (Ez azt jelenti, hogy az előző Stripe session elveszett, de az elfogadás megtörtént)
+    const allowedStatuses = ["service_agreement_accepted", "payment_pending"];
+    if (!allowedStatuses.includes(caseRow.status)) {
       return jsonResponse(
         {
           error: "Payment can only be initiated after service agreement acceptance",
@@ -103,6 +107,27 @@ Deno.serve(async (req) => {
         409,
         req,
       );
+    }
+
+    if (caseRow.status === "payment_pending") {
+      // Ellenőrizzük, hogy tényleg elfogadta-e a szolgáltatási szerződést
+      const { data: existingAcceptance } = await serviceClient
+        .from("declaration_acceptances")
+        .select("id")
+        .eq("case_id", case_id)
+        .maybeSingle();
+
+      if (!existingAcceptance) {
+        return jsonResponse(
+          {
+            error: "Payment can only be initiated after service agreement acceptance",
+            detail: "No service agreement acceptance found",
+          },
+          409,
+          req,
+        );
+      }
+      console.log(`Case ${case_id} is payment_pending but has acceptance record — allowing new Stripe session`);
     }
 
     // 4. Seller adatok betöltése
@@ -117,10 +142,10 @@ Deno.serve(async (req) => {
       apiVersion: "2024-04-10",
     });
 
-    // Visszairányítási URL-ek
+    // A2: Visszairányítási URL-ek — payment oldalra irányít vissza, nem case detail-re
     const origin = req.headers.get("Origin") ?? "https://timeshareease.hu";
-    const successUrl = `${origin}/seller/cases/${case_id}?payment=success`;
-    const cancelUrl = `${origin}/seller/cases/${case_id}?payment=cancelled`;
+    const successUrl = `${origin}/seller/cases/${case_id}/payment?payment=success`;
+    const cancelUrl = `${origin}/seller/cases/${case_id}/payment?payment=cancelled`;
 
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
@@ -147,22 +172,29 @@ Deno.serve(async (req) => {
       cancel_url: cancelUrl,
     });
 
-    // 6. Payments rekord létrehozása
-    const { error: paymentInsertError } = await serviceClient.from("payments").insert({
-      case_id,
-      payment_type: "service_fee",
-      stripe_checkout_session_id: session.id,
-      amount: 99000,
-      currency: "HUF",
-      status: "pending",
-    });
+    // 6. Payments rekord létrehozása (upsert: ha már létezik session, ne duplikáljon)
+    const { error: paymentInsertError } = await serviceClient.from("payments").upsert(
+      {
+        case_id,
+        payment_type: "service_fee",
+        stripe_checkout_session_id: session.id,
+        amount: 99000,
+        currency: "HUF",
+        status: "pending",
+      },
+      { onConflict: "case_id" },
+    );
 
     if (paymentInsertError) {
-      console.error("Failed to insert payment record:", paymentInsertError);
+      console.error("Failed to upsert payment record:", paymentInsertError);
+      // Nem álljuk meg itt — a Stripe session már létrejött, adjuk vissza az URL-t
     }
 
-    // 7. Case státusz frissítése
-    await serviceClient.from("cases").update({ status: "payment_pending" }).eq("id", case_id);
+    // 7. Case státusz frissítése payment_pending-re (ha még nem az)
+    await serviceClient
+      .from("cases")
+      .update({ status: "payment_pending", updated_at: new Date().toISOString() })
+      .eq("id", case_id);
 
     // 8. Audit log
     await serviceClient.from("audit_logs").insert({
@@ -175,6 +207,7 @@ Deno.serve(async (req) => {
         stripe_session_id: session.id,
         amount: 99000,
         currency: "HUF",
+        previous_status: caseRow.status,
       },
     });
 
