@@ -478,26 +478,37 @@ export default function CorrectionPanel({
           </div>
         ))}
         <div className="border-t pt-4 space-y-3">
-          <div className="text-sm text-muted-foreground">
-            Ha minden szükséges adatot javított és a dokumentumokat is frissítette, indítsa el újra az ellenőrzést.
-          </div>
-
-          <Button type="button" onClick={requestRecheck} disabled={isRechecking || !onRecheckRequested}>
-            {isRechecking ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Újraellenőrzés indul...
-              </>
-            ) : (
-              "Újraellenőrzés kérése"
-            )}
-          </Button>
-
-          {panelMessage && (
-            <div className={`text-sm ${panelMessage.type === "success" ? "text-green-600" : "text-destructive"}`}>
-              {panelMessage.text}
+        {recheckLimitReached ? (
+          <Alert className="border-warning/50 bg-warning/10">
+            <AlertTriangle className="h-4 w-4 text-warning" />
+            <AlertDescription className="text-sm">
+              Sajnos a javítás sikertelen volt, így az ügyét átirányítottuk munkatársunkhoz ellenőrzésre. A manuális ellenőrzést legfeljebb 24 órán belül elvégezzük. Az eredményről azonnal értesítést küldünk Önnek e-mailben és folytathatja az adásvételi folyamatot.
+            </AlertDescription>
+          </Alert>
+        ) : (
+          <>
+            <div className="text-sm text-muted-foreground">
+              Ha minden szükséges adatot javított és a dokumentumokat is frissítette, indítsa el újra az ellenőrzést.
             </div>
-          )}
+
+            <Button type="button" onClick={requestRecheck} disabled={isRechecking || !onRecheckRequested}>
+              {isRechecking ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Újraellenőrzés indul...
+                </>
+              ) : (
+                "Újraellenőrzés kérése"
+              )}
+            </Button>
+
+            {panelMessage && (
+              <div className={`text-sm ${panelMessage.type === "success" ? "text-green-600" : "text-destructive"}`}>
+                {panelMessage.text}
+              </div>
+            )}
+          </>
+        )}
         </div>
       </CardContent>
     </Card>
