@@ -358,14 +358,29 @@ export default function CaseDetail() {
   const handleRecheckRequested = useCallback(async () => {
     if (!caseId) throw new Error("Hiányzó ügyazonosító.");
 
-    const { error } = await supabase.functions.invoke("recheck-case", {
+    const { data, error } = await supabase.functions.invoke("recheck-case", {
       body: { case_id: caseId },
     });
 
-    if (error) throw error;
+    // Handle 409 (limit reached) — supabase client wraps non-2xx as error
+    if (error) {
+      // Check if the error response body contains recheck_limit_reached
+      const errorBody = typeof error === "object" && error !== null ? (error as any) : null;
+      const contextData = errorBody?.context?.body ? (() => { try { return JSON.parse(errorBody.context.body); } catch { return null; } })() : null;
+      if (contextData?.recheck_limit_reached) {
+        return { recheck_limit_reached: true };
+      }
+      throw error;
+    }
 
-    // UI frissítés
-    await Promise.all([loadCheckResults(), loadClassification(), loadUploadedDocuments()]);
+    if (data?.recheck_limit_reached) {
+      return { recheck_limit_reached: true };
+    }
+
+    // Normal success — refresh UI after delay
+    setTimeout(async () => {
+      await Promise.all([loadCheckResults(), loadClassification(), loadUploadedDocuments()]);
+    }, 3000);
 
     setCaseData((prev) =>
       prev
@@ -377,6 +392,8 @@ export default function CaseDetail() {
           }
         : prev,
     );
+
+    return { recheck_limit_reached: false };
   }, [caseId, loadCheckResults, loadClassification, loadUploadedDocuments]);
 
   const handleCaseStatusUpdate = (newStatus: string) => {
