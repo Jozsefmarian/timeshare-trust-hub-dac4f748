@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertTriangle, Upload, Loader2, Save } from "lucide-react";
 import { uploadCaseDocument } from "@/lib/documentUpload";
 import { supabase } from "@/integrations/supabase/client";
@@ -19,11 +20,15 @@ interface CorrectionRequirement {
   expected_value?: string | number | null;
 }
 
+export interface RecheckResult {
+  recheck_limit_reached?: boolean;
+}
+
 interface CorrectionPanelProps {
   caseId: string;
   corrections: CorrectionRequirement[];
   onCorrectionCompleted: () => void;
-  onRecheckRequested?: () => Promise<void> | void;
+  onRecheckRequested?: () => Promise<RecheckResult>;
 }
 
 type MessageState = {
@@ -63,6 +68,7 @@ export default function CorrectionPanel({
   const [uploadingIdx, setUploadingIdx] = useState<number | null>(null);
   const [savingIdx, setSavingIdx] = useState<number | null>(null);
   const [isRechecking, setIsRechecking] = useState(false);
+  const [recheckLimitReached, setRecheckLimitReached] = useState(false);
   const [panelMessage, setPanelMessage] = useState<MessageState | null>(null);
   const [messages, setMessages] = useState<Record<number, MessageState>>({});
   const [fieldValues, setFieldValues] = useState<Record<number, string>>({});
@@ -332,17 +338,30 @@ export default function CorrectionPanel({
       setIsRechecking(true);
       setPanelMessage(null);
 
-      await onRecheckRequested();
+      const result = await onRecheckRequested();
 
-      setPanelMessage({
-        type: "success",
-        text: "Az újraellenőrzés elindult.",
-      });
+      if (result?.recheck_limit_reached) {
+        setRecheckLimitReached(true);
+        setPanelMessage(null);
+      } else {
+        setPanelMessage({
+          type: "success",
+          text: "Az újraellenőrzés elindult.",
+        });
+      }
     } catch (err: any) {
-      setPanelMessage({
-        type: "error",
-        text: err?.message || "Az újraellenőrzés indítása sikertelen.",
-      });
+      const status = err?.status ?? err?.code;
+      if (status === 401 || err?.message?.includes("401")) {
+        setPanelMessage({
+          type: "error",
+          text: "A munkamenet lejárt. Kérjük, frissítse az oldalt és próbálja újra.",
+        });
+      } else {
+        setPanelMessage({
+          type: "error",
+          text: "Technikai hiba lépett fel. Kérjük, próbálja újra néhány perc múlva.",
+        });
+      }
     } finally {
       setIsRechecking(false);
     }
@@ -459,26 +478,37 @@ export default function CorrectionPanel({
           </div>
         ))}
         <div className="border-t pt-4 space-y-3">
-          <div className="text-sm text-muted-foreground">
-            Ha minden szükséges adatot javított és a dokumentumokat is frissítette, indítsa el újra az ellenőrzést.
-          </div>
-
-          <Button type="button" onClick={requestRecheck} disabled={isRechecking || !onRecheckRequested}>
-            {isRechecking ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Újraellenőrzés indul...
-              </>
-            ) : (
-              "Újraellenőrzés kérése"
-            )}
-          </Button>
-
-          {panelMessage && (
-            <div className={`text-sm ${panelMessage.type === "success" ? "text-green-600" : "text-destructive"}`}>
-              {panelMessage.text}
+        {recheckLimitReached ? (
+          <Alert className="border-warning/50 bg-warning/10">
+            <AlertTriangle className="h-4 w-4 text-warning" />
+            <AlertDescription className="text-sm">
+              Sajnos a javítás sikertelen volt, így az ügyét átirányítottuk munkatársunkhoz ellenőrzésre. A manuális ellenőrzést legfeljebb 24 órán belül elvégezzük. Az eredményről azonnal értesítést küldünk Önnek e-mailben és folytathatja az adásvételi folyamatot.
+            </AlertDescription>
+          </Alert>
+        ) : (
+          <>
+            <div className="text-sm text-muted-foreground">
+              Ha minden szükséges adatot javított és a dokumentumokat is frissítette, indítsa el újra az ellenőrzést.
             </div>
-          )}
+
+            <Button type="button" onClick={requestRecheck} disabled={isRechecking || !onRecheckRequested}>
+              {isRechecking ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Újraellenőrzés indul...
+                </>
+              ) : (
+                "Újraellenőrzés kérése"
+              )}
+            </Button>
+
+            {panelMessage && (
+              <div className={`text-sm ${panelMessage.type === "success" ? "text-green-600" : "text-destructive"}`}>
+                {panelMessage.text}
+              </div>
+            )}
+          </>
+        )}
         </div>
       </CardContent>
     </Card>
