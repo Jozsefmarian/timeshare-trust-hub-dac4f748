@@ -33,7 +33,8 @@ const CONTRACT_TYPES = [
   { type: "securities_transfer", label: "Értékpapír transzfer nyilatkozat" },
 ] as const;
 
-const AVAILABLE_VARIABLES = "{{buyer_name}}, {{buyer_address}}, {{buyer_company_number}}, {{buyer_tax_number}}, {{buyer_representative}}, {{seller_name}}, {{seller_address}}, {{seller_birth_date}}, {{seller_birth_place}}, {{seller_birth_name}}, {{seller_mother_name}}, {{seller_id_number}}, {{seller_tax_id}}, {{resort_name}}, {{week_number}}, {{unit_type}}, {{unit_number}}, {{season_label}}, {{rights_start_year}}, {{rights_end_year}}, {{original_contract_number}}, {{annual_fee}}, {{share_count}}, {{share_series}}, {{nominal_value}}, {{isin}}, {{securities_account_provider}}, {{securities_account_id}}, {{issuer_name}}, {{client_number}}, {{case_number}}, {{generation_date}}";
+const AVAILABLE_VARIABLES =
+  "{{buyer_name}}, {{buyer_address}}, {{buyer_company_number}}, {{buyer_tax_number}}, {{buyer_representative}}, {{seller_name}}, {{seller_address}}, {{seller_birth_date}}, {{seller_birth_place}}, {{seller_birth_name}}, {{seller_mother_name}}, {{seller_id_number}}, {{seller_tax_id}}, {{resort_name}}, {{week_number}}, {{unit_type}}, {{unit_number}}, {{season_label}}, {{rights_start_year}}, {{rights_end_year}}, {{original_contract_number}}, {{annual_fee}}, {{share_count}}, {{share_series}}, {{nominal_value}}, {{isin}}, {{securities_account_provider}}, {{securities_account_id}}, {{issuer_name}}, {{client_number}}, {{case_number}}, {{generation_date}}, {{capacity}}";
 
 function TemplateSection({ type, label }: { type: string; label: string }) {
   const [active, setActive] = useState<ContractTemplate | null>(null);
@@ -55,7 +56,9 @@ function TemplateSection({ type, label }: { type: string; label: string }) {
     debounceRef.current = setTimeout(() => {
       setPreviewHtml(htmlContent);
     }, 500);
-    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
   }, [htmlContent]);
 
   useEffect(() => {
@@ -73,18 +76,27 @@ function TemplateSection({ type, label }: { type: string; label: string }) {
     setLoading(true);
     const [activeRes, historyRes] = await Promise.all([
       supabase.from("contract_templates").select("*").eq("contract_type", type).eq("is_active", true).maybeSingle(),
-      supabase.from("contract_templates").select("*").eq("contract_type", type).order("created_at", { ascending: false }),
+      supabase
+        .from("contract_templates")
+        .select("*")
+        .eq("contract_type", type)
+        .order("created_at", { ascending: false }),
     ]);
     setActive(activeRes.data as ContractTemplate | null);
     setHistory((historyRes.data as ContractTemplate[] | null) ?? []);
     setLoading(false);
   }, [type]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    load();
+  }, [load]);
 
   const handlePreview = () => {
     const w = window.open("", "_blank");
-    if (w) { w.document.write(htmlContent); w.document.close(); }
+    if (w) {
+      w.document.write(htmlContent);
+      w.document.close();
+    }
   };
 
   const handleSave = async (activate: boolean) => {
@@ -94,11 +106,20 @@ function TemplateSection({ type, label }: { type: string; label: string }) {
     }
     setSaving(true);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) { toast.error("Nincs bejelentkezve."); return; }
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (!session) {
+        toast.error("Nincs bejelentkezve.");
+        return;
+      }
 
       if (activate) {
-        await supabase.from("contract_templates").update({ is_active: false } as never).eq("contract_type", type).eq("is_active", true);
+        await supabase
+          .from("contract_templates")
+          .update({ is_active: false } as never)
+          .eq("contract_type", type)
+          .eq("is_active", true);
       }
 
       const { error } = await supabase.from("contract_templates").insert({
@@ -113,7 +134,9 @@ function TemplateSection({ type, label }: { type: string; label: string }) {
 
       toast.success(activate ? "Sablon mentve és aktiválva." : "Piszkozat mentve.");
       setShowEditor(false);
-      setTitle(""); setVersion(""); setHtmlContent("");
+      setTitle("");
+      setVersion("");
+      setHtmlContent("");
       await load();
     } catch (e: any) {
       toast.error("Hiba: " + (e.message || "Ismeretlen hiba"));
@@ -125,8 +148,14 @@ function TemplateSection({ type, label }: { type: string; label: string }) {
   const handleActivate = async (id: string) => {
     setSaving(true);
     try {
-      await supabase.from("contract_templates").update({ is_active: false } as never).eq("contract_type", type);
-      const { error } = await supabase.from("contract_templates").update({ is_active: true } as never).eq("id", id);
+      await supabase
+        .from("contract_templates")
+        .update({ is_active: false } as never)
+        .eq("contract_type", type);
+      const { error } = await supabase
+        .from("contract_templates")
+        .update({ is_active: true } as never)
+        .eq("id", id);
       if (error) throw error;
       toast.success("Sablon aktiválva.");
       await load();
@@ -152,9 +181,16 @@ function TemplateSection({ type, label }: { type: string; label: string }) {
       <CardContent className="space-y-4">
         {active && (
           <div className="text-sm space-y-1 text-muted-foreground">
-            <p><span className="font-medium text-foreground">Sablon neve:</span> {active.title}</p>
-            <p><span className="font-medium text-foreground">Verzió:</span> {active.version}</p>
-            <p><span className="font-medium text-foreground">Létrehozva:</span> {format(new Date(active.created_at), "yyyy. MMMM d. HH:mm", { locale: hu })}</p>
+            <p>
+              <span className="font-medium text-foreground">Sablon neve:</span> {active.title}
+            </p>
+            <p>
+              <span className="font-medium text-foreground">Verzió:</span> {active.version}
+            </p>
+            <p>
+              <span className="font-medium text-foreground">Létrehozva:</span>{" "}
+              {format(new Date(active.created_at), "yyyy. MMMM d. HH:mm", { locale: hu })}
+            </p>
           </div>
         )}
 
@@ -167,7 +203,11 @@ function TemplateSection({ type, label }: { type: string; label: string }) {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <label className="text-sm font-medium">Sablon neve</label>
-                <Input placeholder='pl. "v1.0 - 2026 március"' value={title} onChange={(e) => setTitle(e.target.value)} />
+                <Input
+                  placeholder='pl. "v1.0 - 2026 március"'
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                />
               </div>
               <div className="space-y-1.5">
                 <label className="text-sm font-medium">Verzió</label>
@@ -181,7 +221,10 @@ function TemplateSection({ type, label }: { type: string; label: string }) {
 
             <div className="rounded-md bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 p-3 text-xs text-blue-800 dark:text-blue-300 flex items-start gap-2">
               <Info className="h-4 w-4 mt-0.5 shrink-0" />
-              <span>Ide HTML forráskódot kell beilleszteni. Konvertált .html fájlt Notepad++ vagy VS Code szerkesztővel nyiss meg, és onnan másold ide a forráskódot.</span>
+              <span>
+                Ide HTML forráskódot kell beilleszteni. Konvertált .html fájlt Notepad++ vagy VS Code szerkesztővel
+                nyiss meg, és onnan másold ide a forráskódot.
+              </span>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -211,7 +254,9 @@ function TemplateSection({ type, label }: { type: string; label: string }) {
               <Button size="sm" onClick={() => handleSave(true)} disabled={saving}>
                 <Check className="h-4 w-4 mr-1" /> Mentés és aktiválás
               </Button>
-              <Button variant="ghost" size="sm" onClick={() => setShowEditor(false)}>Mégse</Button>
+              <Button variant="ghost" size="sm" onClick={() => setShowEditor(false)}>
+                Mégse
+              </Button>
             </div>
           </div>
         )}
@@ -236,7 +281,9 @@ function TemplateSection({ type, label }: { type: string; label: string }) {
                       <span className="text-muted-foreground text-xs">
                         {format(new Date(t.created_at), "yyyy.MM.dd HH:mm")}
                       </span>
-                      {t.is_active && <Badge className="bg-green-600 hover:bg-green-600 text-white text-xs">Aktív</Badge>}
+                      {t.is_active && (
+                        <Badge className="bg-green-600 hover:bg-green-600 text-white text-xs">Aktív</Badge>
+                      )}
                     </div>
                     {!t.is_active && (
                       <Button variant="outline" size="sm" onClick={() => handleActivate(t.id)} disabled={saving}>
