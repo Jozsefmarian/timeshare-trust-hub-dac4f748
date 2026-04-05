@@ -42,6 +42,8 @@ function normalizeFieldName(fieldName?: string) {
       return "season_label";
     case "apartment_type":
       return "unit_type";
+    case "capacity":
+      return "capacity";
     default:
       return fieldName;
   }
@@ -142,7 +144,7 @@ export default function CorrectionPanel({
       return;
     }
 
-    if (["week_number", "usage_frequency", "share_count"].includes(normalizedField) && rawValue === "") {
+    if (["week_number", "usage_frequency", "share_count", "capacity"].includes(normalizedField) && rawValue === "") {
       setMessage(idx, {
         type: "error",
         text: "Ez a mező nem maradhat üresen.",
@@ -193,6 +195,16 @@ export default function CorrectionPanel({
 
           if (!Number.isInteger(parsed) || parsed < 1 || parsed > 53) {
             throw new Error("A hét száma 1 és 53 közötti egész szám lehet.");
+          }
+
+          valueToSave = parsed;
+        }
+
+        if (normalizedField === "capacity") {
+          const parsed = Number(rawValue);
+
+          if (!Number.isInteger(parsed) || parsed < 1 || parsed > 20) {
+            throw new Error("A személyek száma 1 és 20 közötti egész szám lehet.");
           }
 
           valueToSave = parsed;
@@ -311,6 +323,23 @@ export default function CorrectionPanel({
       );
     }
 
+    if (normalizedField === "capacity") {
+      return (
+        <div className="space-y-2">
+          <Label>Új érték</Label>
+          <Input
+            type="number"
+            min={1}
+            max={20}
+            step={1}
+            value={value}
+            onChange={(e) => handleFieldValueChange(idx, e.target.value)}
+            disabled={savingIdx === idx}
+          />
+        </div>
+      );
+    }
+
     if (normalizedField === "unit_type" || normalizedField === "season_label") {
       return (
         <div className="space-y-2">
@@ -370,7 +399,7 @@ export default function CorrectionPanel({
   const isSupportedField = (fieldName?: string) => {
     const normalizedField = normalizeFieldName(fieldName);
 
-    return ["week_number", "usage_frequency", "usage_parity", "unit_type", "season_label", "share_count"].includes(
+    return ["week_number", "usage_frequency", "usage_parity", "unit_type", "season_label", "share_count", "capacity"].includes(
       normalizedField || "",
     );
   };

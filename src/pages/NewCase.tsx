@@ -92,6 +92,7 @@ export default function NewCase() {
   const [resort, setResort] = useState("");
   const [weekNumber, setWeekNumber] = useState("");
   const [apartmentType, setApartmentType] = useState("");
+  const [capacity, setCapacity] = useState("");
   const [seasonName, setSeasonName] = useState("");
   const [rightsStart, setRightsStart] = useState("");
   const [rightsEnd, setRightsEnd] = useState("");
@@ -233,6 +234,7 @@ export default function NewCase() {
         resort_name_raw: resort.trim(),
         week_number: Number(weekNumber),
         unit_type: apartmentType.trim(),
+        capacity: capacity ? Number(capacity) : null,
         season_label: seasonName.trim(),
         rights_start_year: Number(rightsStart),
         rights_end_year: Number(rightsEnd),
@@ -291,6 +293,7 @@ export default function NewCase() {
     resort,
     weekNumber,
     apartmentType,
+    capacity,
     seasonName,
     rightsStart,
     rightsEnd,
@@ -468,6 +471,7 @@ export default function NewCase() {
           !!resort &&
           !!weekNumber &&
           !!apartmentType &&
+          !!capacity &&
           !!unitNumber &&
           !!seasonName &&
           !!rightsStart &&
@@ -770,6 +774,18 @@ export default function NewCase() {
                       placeholder="pl. Studio, 1 hálós"
                       value={apartmentType}
                       onChange={(e) => setApartmentType(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="capacity">Személyek száma (max. elhelyezhető fő) *</Label>
+                    <Input
+                      id="capacity"
+                      type="number"
+                      min={1}
+                      max={20}
+                      placeholder="pl. 2"
+                      value={capacity}
+                      onChange={(e) => setCapacity(e.target.value)}
                     />
                   </div>
                   <div className="space-y-1.5">
