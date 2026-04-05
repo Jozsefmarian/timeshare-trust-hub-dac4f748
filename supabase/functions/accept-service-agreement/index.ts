@@ -44,8 +44,19 @@ function formatDateHu(dateStr: string): string {
 }
 
 // ── Resend email küldés ───────────────────────────────────────────────────────
-
+// MEGJEGYZÉS: Az email küldés jelenleg ki van kapcsolva, mert a tsrmegoldasok.hu
+// domain nincs verifikálva a Resend-en. Élesítés előtt:
+// 1. Verifikáld a domaint a Resend dashboardon (resend.com/domains)
+// 2. Állítsd vissza a from mezőt: "TSR Megoldások <kapcsolat@tsrmegoldasok.hu>"
+// 3. Távolítsd el az EMAIL_ENABLED = false feltételt
 async function sendEmail(params: { to: string; subject: string; html: string; resendApiKey: string }): Promise<void> {
+  // IDEIGLENES: email küldés ki van kapcsolva fejlesztés alatt (domain nem verifikált)
+  const EMAIL_ENABLED = false;
+  if (!EMAIL_ENABLED) {
+    console.log("Email küldés kikapcsolva fejlesztési módban. Célcím lenne:", params.to);
+    return;
+  }
+
   const res = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: {
@@ -139,14 +150,14 @@ Deno.serve(async (req) => {
   }
 
   if (req.method !== "POST") {
-    return jsonResponse({ error: "Method not allowed" }, 405);
+    return jsonResponse({ error: "Method not allowed" }, 405, req);
   }
 
   try {
     // 1. Auth
     const authHeader = req.headers.get("Authorization");
     if (!authHeader?.startsWith("Bearer ")) {
-      return jsonResponse({ error: "Unauthorized" }, 401);
+      return jsonResponse({ error: "Unauthorized" }, 401, req);
     }
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
@@ -162,7 +173,7 @@ Deno.serve(async (req) => {
     const token = authHeader.replace("Bearer ", "");
     const { data: userData, error: userError } = await supabase.auth.getUser(token);
     if (userError || !userData?.user) {
-      return jsonResponse({ error: "Unauthorized" }, 401);
+      return jsonResponse({ error: "Unauthorized" }, 401, req);
     }
 
     const userId = userData.user.id;
@@ -172,16 +183,16 @@ Deno.serve(async (req) => {
     const { case_id, typed_confirmation, checkbox_checked } = body;
 
     if (!case_id) {
-      return jsonResponse({ error: "Missing required field: case_id" }, 400);
+      return jsonResponse({ error: "Missing required field: case_id" }, 400, req);
     }
     if (checkbox_checked !== true) {
-      return jsonResponse({ error: "checkbox_checked must be true" }, 400);
+      return jsonResponse({ error: "checkbox_checked must be true" }, 400, req);
     }
     if (!typed_confirmation || typeof typed_confirmation !== "string" || !typed_confirmation.trim()) {
-      return jsonResponse({ error: "typed_confirmation must not be empty" }, 400);
+      return jsonResponse({ error: "typed_confirmation must not be empty" }, 400, req);
     }
     if (typed_confirmation.trim().toUpperCase() !== "ELFOGADOM") {
-      return jsonResponse({ error: "typed_confirmation must be ELFOGADOM" }, 400);
+      return jsonResponse({ error: "typed_confirmation must be ELFOGADOM" }, 400, req);
     }
 
     // 3. Case ellenőrzés
@@ -192,21 +203,27 @@ Deno.serve(async (req) => {
       .maybeSingle();
 
     if (caseError) {
-      return jsonResponse({ error: "Failed to fetch case" }, 500);
+      return jsonResponse({ error: "Failed to fetch case" }, 500, req);
     }
     if (!caseData) {
-      return jsonResponse({ error: "Case not found or access denied" }, 404);
+      return jsonResponse({ error: "Case not found or access denied" }, 404, req);
     }
     if (caseData.seller_user_id !== userId) {
-      return jsonResponse({ error: "Forbidden" }, 403);
+      return jsonResponse({ error: "Forbidden" }, 403, req);
     }
 
-    // 4. Seller adatok (emailhez)
+    // 4. Seller adatok — a profiles.email a helyes forrás
+    //    (a seller_profiles.notes csak contact infót tartalmaz szöveges formában,
+    //     a tényleges auth email a profiles táblán van)
     const { data: sellerProfile } = await serviceClient
       .from("profiles")
       .select("full_name, email")
       .eq("id", userId)
       .maybeSingle();
+
+    // A seller email a profiles.email mezőből jön
+    const sellerEmail = sellerProfile?.email ?? null;
+    const sellerName = sellerProfile?.full_name ?? "Tisztelt Ügyfelünk";
 
     // 5. Aktív szolgáltatási szerződés
     const { data: agreement, error: agError } = await supabase
@@ -216,13 +233,40 @@ Deno.serve(async (req) => {
       .maybeSingle();
 
     if (agError) {
-      return jsonResponse({ error: "Failed to load service agreement" }, 500);
+      return jsonResponse({ error: "Failed to load service agreement" }, 500, req);
     }
     if (!agreement) {
-      return jsonResponse({ error: "No active service agreement found" }, 404);
+      return jsonResponse({ error: "No active service agreement found" }, 404, req);
     }
 
-    // 6. Contact email a policy_settings-ből
+    // 6. Már elfogadta-e? Ha igen, sikert adunk vissza (idempotens)
+    const { data: existingAcceptance } = await serviceClient
+      .from("declaration_acceptances")
+      .select("id")
+      .eq("case_id", case_id)
+      .eq("user_id", userId)
+      .maybeSingle();
+
+    if (existingAcceptance) {
+      console.log("Már van elfogadás rekord, idempotens visszatérés:", existingAcceptance.id);
+      // Case státusz biztosan service_agreement_accepted
+      await serviceClient
+        .from("cases")
+        .update({ status: "service_agreement_accepted", updated_at: new Date().toISOString() })
+        .eq("id", case_id);
+      return jsonResponse(
+        {
+          success: true,
+          acceptance_id: existingAcceptance.id,
+          case_status: "service_agreement_accepted",
+          already_accepted: true,
+        },
+        200,
+        req,
+      );
+    }
+
+    // 7. Contact email a policy_settings-ből
     let contactEmail = "kapcsolat@tsrmegoldasok.hu";
     const { data: publishedPolicy } = await serviceClient
       .from("policy_versions")
@@ -246,7 +290,7 @@ Deno.serve(async (req) => {
       }
     }
 
-    // 7. Acceptance hash generálás
+    // 8. Acceptance hash generálás
     const acceptedAt = new Date().toISOString();
     const hashInput = `${case_id}|${agreement.version}|${acceptedAt}|${typed_confirmation.trim()}`;
     const encoder = new TextEncoder();
@@ -255,12 +299,12 @@ Deno.serve(async (req) => {
       .map((b) => b.toString(16).padStart(2, "0"))
       .join("");
 
-    // 8. IP és User-Agent
+    // 9. IP és User-Agent
     const ipAddress = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || req.headers.get("x-real-ip") || null;
     const userAgent = req.headers.get("user-agent") || null;
 
-    // 9. declaration_acceptances INSERT
-    const { data: acceptance, error: insertError } = await supabase
+    // 10. declaration_acceptances INSERT
+    const { data: acceptance, error: insertError } = await serviceClient
       .from("declaration_acceptances")
       .insert({
         case_id,
@@ -279,10 +323,10 @@ Deno.serve(async (req) => {
 
     if (insertError) {
       console.error("Insert error:", insertError);
-      return jsonResponse({ error: "Failed to record acceptance", detail: insertError.message }, 500);
+      return jsonResponse({ error: "Failed to record acceptance", detail: insertError.message }, 500, req);
     }
 
-    // 10. Case státusz frissítése
+    // 11. Case státusz frissítése → service_agreement_accepted
     const allowedStatuses = [
       "contract_preparing",
       "contract_generated",
@@ -306,7 +350,7 @@ Deno.serve(async (req) => {
       }
     }
 
-    // 11. confirmation_sent_at frissítése + audit log
+    // 12. confirmation_sent_at frissítése + audit log
     const confirmationSentAt = new Date().toISOString();
 
     await serviceClient
@@ -326,17 +370,21 @@ Deno.serve(async (req) => {
         service_agreement_version: agreement.version,
         acceptance_hash: acceptanceHash,
         ip_address: ipAddress,
+        seller_email: sellerEmail,
       },
     });
 
-    // 12. Visszaigazoló email küldése (Resend)
-    if (sellerProfile?.email && resendApiKey) {
+    // 13. Visszaigazoló email küldése (Resend)
+    // FONTOS: Az email küldés jelenleg ki van kapcsolva, mert a tsrmegoldasok.hu domain
+    // nincs verifikálva a Resend-en. A sendEmail() függvényen belül van az EMAIL_ENABLED flag.
+    // Élesítés előtt: domain verifikálás Resend-en, majd EMAIL_ENABLED = true.
+    if (sellerEmail && resendApiKey) {
       try {
         await sendEmail({
-          to: sellerProfile.email,
+          to: sellerEmail,
           subject: `📄 Szolgáltatási szerződés visszaigazolása – ${caseData.case_number}`,
           html: buildConfirmationEmailHtml({
-            sellerName: sellerProfile.full_name ?? "Tisztelt Ügyfelünk",
+            sellerName,
             caseNumber: caseData.case_number,
             acceptedAt,
             ipAddress,
@@ -348,7 +396,7 @@ Deno.serve(async (req) => {
         });
       } catch (emailErr) {
         console.error("Confirmation email send error:", emailErr);
-        // Nem blokkoló hiba
+        // Nem blokkoló hiba — az elfogadás sikeres, email küldés opcionális
       }
     }
 
@@ -360,9 +408,11 @@ Deno.serve(async (req) => {
         service_agreement_version: agreement.version,
       },
       200,
+      req,
     );
   } catch (err) {
     console.error("Unhandled error:", err);
-    return jsonResponse({ error: "Internal server error" }, 500);
+    return jsonResponse({ error: "Internal server error", detail: err instanceof Error ? err.message : "Unknown" }, 500, req);
   }
 });
+
