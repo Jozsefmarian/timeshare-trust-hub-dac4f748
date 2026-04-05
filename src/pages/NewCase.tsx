@@ -31,7 +31,7 @@ const DOC_CATEGORIES = {
     alwaysVisible: true,
   },
   maintenance_fee_invoice: {
-    label: "Maintenance fee invoice",
+    label: "Fenntartási díj bizonylat",
     backendCode: "maintenance_fee_invoice",
     required: true,
     alwaysVisible: true,
