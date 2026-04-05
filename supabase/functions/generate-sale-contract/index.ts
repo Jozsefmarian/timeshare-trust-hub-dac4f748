@@ -172,7 +172,7 @@ function fallbackHtml(contractType: string, vars: Record<string, string>): strin
     <dt>Hu00e9t szu00e1ma:</dt><dd>${escapeHtml(vars.week_number)}. hu00e9t</dd>
     <dt>Apartman tu00edpus:</dt><dd>${escapeHtml(vars.unit_type)}</dd>
     <dt>Apartman/egysu00e9g szu00e1ma:</dt><dd>${escapeHtml(vars.unit_number)}</dd>
-    <dt>Férőhely (max. fő):</dt><dd>${escapeHtml(vars.capacity)} fő</dd>
+    <dt>Fu00e9ru0151helyek szu00e1ma:</dt><dd>${escapeHtml(vars.capacity)} fu0151</dd>
     <dt>Szezon:</dt><dd>${escapeHtml(vars.season_label)}</dd>
     <dt>Jogosultsu00e1g idu0151szaka:</dt><dd>${escapeHtml(vars.rights_start_year)} u2013 ${escapeHtml(vars.rights_end_year)}</dd>
     <dt>Eredeti szerz. sorzu00e1ma:</dt><dd>${escapeHtml(vars.original_contract_number)}</dd>
@@ -338,7 +338,7 @@ Deno.serve(async (req) => {
       week_number: String(weekOffer?.week_number ?? "u2014"),
       unit_type: weekOffer?.unit_type ?? "u2014",
       unit_number: (weekOffer as any)?.unit_number ?? "u2014",
-      capacity: weekOffer?.capacity != null ? String(weekOffer.capacity) : "—",
+      capacity: weekOffer?.capacity != null ? String(weekOffer.capacity) : "u2014",
       season_label: weekOffer?.season_label ?? "u2014",
       rights_start_year: String(weekOffer?.rights_start_year ?? "u2014"),
       rights_end_year: String(weekOffer?.rights_end_year ?? "u2014"),
@@ -481,4 +481,11 @@ Deno.serve(async (req) => {
     );
   }
 });
-
+",
+      "name": "generate-sale-contract/index.ts"
+    }
+  ],
+  "name": "generate-sale-contract",
+  "project_id": "nowfrwpknymkzujijgsz",
+  "verify_jwt": false
+}
