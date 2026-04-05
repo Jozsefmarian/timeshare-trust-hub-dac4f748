@@ -25,7 +25,7 @@ const DOC_CATEGORIES = {
     alwaysVisible: true,
   },
   standard_information_form: {
-    label: "Standard Information Form",
+    label: "Tájékoztató/Klubrend",
     backendCode: "standard_information_form",
     required: true,
     alwaysVisible: true,
