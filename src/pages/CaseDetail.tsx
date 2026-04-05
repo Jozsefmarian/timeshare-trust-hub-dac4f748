@@ -323,12 +323,13 @@ export default function CaseDetail() {
     return checkResults
       .filter(
         (cr) =>
-          cr.result === "correction_required" ||
-          cr.result === "fail" ||
-          cr.result === "warning" ||
-          cr.severity === "correction" ||
-          cr.severity === "medium" ||
-          cr.severity === "high",
+          (cr.check_type === "field_match" || cr.check_type === "document_check") &&
+          (cr.result === "correction_required" ||
+            cr.result === "fail" ||
+            cr.result === "warning" ||
+            cr.severity === "correction" ||
+            cr.severity === "medium" ||
+            cr.severity === "high"),
       )
       .map((cr) => {
         const details = cr.details ?? {};
@@ -366,7 +367,15 @@ export default function CaseDetail() {
     if (error) {
       // Check if the error response body contains recheck_limit_reached
       const errorBody = typeof error === "object" && error !== null ? (error as any) : null;
-      const contextData = errorBody?.context?.body ? (() => { try { return JSON.parse(errorBody.context.body); } catch { return null; } })() : null;
+      const contextData = errorBody?.context?.body
+        ? (() => {
+            try {
+              return JSON.parse(errorBody.context.body);
+            } catch {
+              return null;
+            }
+          })()
+        : null;
       if (contextData?.recheck_limit_reached) {
         return { recheck_limit_reached: true };
       }
