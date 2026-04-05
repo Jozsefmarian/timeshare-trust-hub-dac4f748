@@ -1575,6 +1575,7 @@ export type Database = {
       week_offers: {
         Row: {
           annual_fee: number | null
+          capacity: number | null
           case_id: string
           created_at: string
           currency: string | null
@@ -1599,6 +1600,7 @@ export type Database = {
         }
         Insert: {
           annual_fee?: number | null
+          capacity?: number | null
           case_id: string
           created_at?: string
           currency?: string | null
@@ -1623,6 +1625,7 @@ export type Database = {
         }
         Update: {
           annual_fee?: number | null
+          capacity?: number | null
           case_id?: string
           created_at?: string
           currency?: string | null

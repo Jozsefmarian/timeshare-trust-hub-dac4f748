@@ -76,6 +76,7 @@ type WeekOfferRow = {
   resort_name_raw: string | null;
   week_number: number | null;
   unit_type: string | null;
+  capacity: number | null;
   season_label: string | null;
   rights_start_year: number | null;
   rights_end_year: number | null;
@@ -384,7 +385,7 @@ export default function AdminCaseDetail() {
     const { data } = await supabase
       .from("week_offers")
       .select(
-        "resort_name_raw, week_number, unit_type, season_label, rights_start_year, rights_end_year, usage_frequency",
+        "resort_name_raw, week_number, unit_type, capacity, season_label, rights_start_year, rights_end_year, usage_frequency",
       )
       .eq("case_id", caseId)
       .maybeSingle();
@@ -666,6 +667,7 @@ export default function AdminCaseDetail() {
                     <InfoRow label="Üdülőhely" value={weekOffer.resort_name_raw || "—"} />
                     <InfoRow label="Hét száma" value={weekOffer.week_number ? `${weekOffer.week_number}. hét` : "—"} />
                     <InfoRow label="Apartman típus" value={weekOffer.unit_type || "—"} />
+                    <InfoRow label="Személyek száma" value={weekOffer.capacity ? `${weekOffer.capacity} fő` : "—"} />
                     <InfoRow label="Szezon" value={weekOffer.season_label || "—"} />
                     <InfoRow
                       label="Jogosultság időszaka"
