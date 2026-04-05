@@ -7,7 +7,6 @@ const ALLOWED_ORIGINS = [
   "http://localhost:3000",
 ];
 
-// OpenAI timeout limit
 const OPENAI_TIMEOUT_MS = 30_000;
 
 function getCorsHeaders(req: Request): Record<string, string> {
@@ -63,13 +62,12 @@ function isInternalRequest(req: Request, serviceRoleKey: string) {
 function normalizeText(value: string | null | undefined): string {
   return (value ?? "")
     .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[u0300-u036f]/g, "")
     .toLowerCase()
-    .replace(/\s+/g, " ")
+    .replace(/s+/g, " ")
     .trim();
 }
 
-// Fetch wrapper 30 masodperces timeout-tal
 async function fetchWithTimeout(url: string, options: RequestInit, timeoutMs = OPENAI_TIMEOUT_MS): Promise<Response> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -225,7 +223,8 @@ async function extractTextFromFile(
   if (effectiveMime === "application/pdf" || effectiveMime === "application/x-pdf") {
     try {
       const textAttempt = await fileData.text();
-      const cleanText = textAttempt.replace(/[^\x20-\x7E\n\r\t\u00C0-\u024F]/g, "").trim();
+      const cleanText = textAttempt.replace(/[^x20-x7E
+r	u00C0-u024F]/g, "").trim();
       if (cleanText.length > 100) {
         return { text: cleanText, method: "pdf_text_extraction" };
       }
@@ -255,34 +254,52 @@ function detectDocumentType(documentType: string | null, fileName: string | null
 }
 
 function extractFieldsFromText(text: string, detectedType: string) {
-  const normalized = text.replace(/\r/g, "");
+  const normalized = text.replace(/r/g, "");
   const result: Record<string, unknown> = { detected_document_type: detectedType };
 
-  const weekMatch = normalized.match(/(?:het(?:e|\u00e9ben|eben)?|week)\s*[:\-]?\s*(\d{1,2})/i);
+  const weekMatch = normalized.match(/(?:het(?:e|u00e9ben|eben)?|week)s*[:-]?s*(d{1,2})/i);
   if (weekMatch) result.week_number = Number(weekMatch[1]);
 
   const contractMatch = normalized.match(
-    /(?:szerz[\u0151o]d[\u00e9e]s(?:sz[a\u00e1]m)?|contract(?: number)?)\s*[:\-]?\s*([A-Z0-9\-\/]+)/i,
+    /(?:szerz[u0151o]d[u00e9e]s(?:sz[au00e1]m)?|contract(?: number)?)s*[:-]?s*([A-Z0-9-/]+)/i,
   );
   if (contractMatch) result.contract_number = contractMatch[1];
 
   const shareCountMatch = normalized.match(
-    /(?:r[e\u00e9]szv[e\u00e9]ny(?:ek)?\s*sz[a\u00e1]ma|share count)\s*[:\-]?\s*(\d+)/i,
+    /(?:r[eu00e9]szv[eu00e9]ny(?:ek)?s*sz[au00e1]ma|share count)s*[:-]?s*(d+)/i,
   );
   if (shareCountMatch) result.share_count = Number(shareCountMatch[1]);
 
   const annualFeeMatch = normalized.match(
-    /(?:fenntart[a\u00e1]si d[i\u00ed]j|annual fee)\s*[:\-]?\s*([\d\s.,]+)\s*(?:ft|huf)?/i,
+    /(?:fenntart[au00e1]si d[iu00ed]j|annual fee)s*[:-]?s*([ds.,]+)s*(?:ft|huf)?/i,
   );
   if (annualFeeMatch) result.annual_fee = annualFeeMatch[1].trim();
 
-  const ownerLineMatch = normalized.match(/(?:jogosult|tulajdonos|owner|n[e\u00e9]v)\s*[:\-]?\s*([^\n]+)/i);
+  const ownerLineMatch = normalized.match(/(?:jogosult|tulajdonos|owner|n[eu00e9]v)s*[:-]?s*([^
+]+)/i);
   if (ownerLineMatch) result.owner_name = ownerLineMatch[1].trim();
 
   const resortLineMatch = normalized.match(
-    /(?:\u00fcd\u00fcl[\u0151o]ingatlan|resort|hotel|club)\s*[:\-]?\s*([^\n]+)/i,
+    /(?:u00fcdu00fcl[u0151o]ingatlan|resort|hotel|club)s*[:-]?s*([^
+]+)/i,
   );
   if (resortLineMatch) result.resort_name = resortLineMatch[1].trim();
+
+  // Egységszám / apartman szám kinyerése
+  const unitNumberMatch = normalized.match(
+    /(?:egys[eu00e9]g(?:sz[au00e1]m)?|apartmans*sz[au00e1]m|unit(?:s*number)?|apart(?:ment)?s*no)s*[:-]?s*([A-Z0-9-/]+)/i,
+  );
+  if (unitNumberMatch) result.unit_number = unitNumberMatch[1].trim();
+
+  // Férőhelyek száma / személyek száma kinyerése
+  // Minta: "2 fő részére", "4 fő", "capacity: 4", "2 személyes"
+  const capacityMatch = normalized.match(
+    /(?:(d+)s*f[ou0151]s*(?:r[eu00e9]sz[eu00e9]re|sz[au00e1]m[au00e1]ra|r[eu00e9]sz[eu00e9]n)?|(d+)s*szem[eu00e9]lyes|capacitys*[:-]?s*(d+))/i,
+  );
+  if (capacityMatch) {
+    const cap = Number(capacityMatch[1] ?? capacityMatch[2] ?? capacityMatch[3]);
+    if (cap > 0 && cap <= 20) result.capacity = cap;
+  }
 
   return result;
 }
@@ -303,7 +320,7 @@ async function extractFieldsWithAI(text: string, openAiKey: string): Promise<Rec
           {
             role: "system",
             content:
-              "Te egy magyar udulesi szerzodoseket elemzo asszisztens vagy. A megadott szerzodes szovegebol nyerd ki a kovetkezo mezokat JSON formatumban. Csak valodi adatokat adj vissza, ne talalj ki semmit. Ha egy mezo nem talalhato, hagyd ki. Keresendo mezok: resort_name (udulohely neve), week_number (het szama egesz szamkent), owner_name (tulajdonos neve), contract_number (szerzodes szama), annual_fee (eves fenntartasi dij szamkent pl. 150000), share_count (reszvenyek darabszama), unit_type (apartman tipusa). Valaszolj KIZAROLAG valid JSON objektummal, semmi massal.",
+              "Te egy magyar udulesi szerzodoseket elemzo asszisztens vagy. A megadott szerzodes szovegebol nyerd ki a kovetkezo mezokat JSON formatumban. Csak valodi adatokat adj vissza, ne talalj ki semmit. Ha egy mezo nem talalhato, hagyd ki. Keresendo mezok: resort_name (udulohely neve), week_number (het szama egesz szamkent), owner_name (tulajdonos neve), contract_number (szerzodes szama), annual_fee (eves fenntartasi dij szamkent pl. 150000), share_count (reszvenyek darabszama), unit_type (apartman tipusa pl. studio, 1 haloszobas), unit_number (egyseg/apartman azonositoja pl. A-12 vagy 304), capacity (max elhelyezheto fo szama egesz szamkent - keress 'X fo reszere' vagy 'X fo' vagy 'X szemelyes' mintakat). Valaszolj KIZAROLAG valid JSON objektummal, semmi massal.",
           },
           {
             role: "user",
@@ -364,9 +381,9 @@ function buildRestrictionHits(text: string) {
 type WeekOfferRow = {
   resort_name_raw: string | null;
   week_number: number | null;
-  unit_type: string | null;
-  season_label: string | null;
-  rights_end_year: number | null;
+  unit_number: string | null;
+  capacity: number | null;
+  // unit_type megmarad a DB-ben de nem ellenorizzuk
 };
 
 type MismatchResult = {
@@ -389,42 +406,60 @@ function textSimilar(a: string, b: string): boolean {
   return false;
 }
 
+// Ellenorzott mezok: resort_name_raw, week_number, unit_number, capacity
+// NEM ellenorzott: unit_type (renter oldalhoz kell, de nem egyeztetjuk)
 function compareWithWeekOffer(extractedFields: Record<string, unknown>, weekOffer: WeekOfferRow): MismatchResult[] {
   const results: MismatchResult[] = [];
 
+  // 1. Udulohely neve
   const docResort = extractedFields.resort_name as string | null | undefined;
   const formResort = weekOffer.resort_name_raw;
   if (docResort && formResort) {
     results.push({
       field_name: "resort_name_raw",
-      field_label: "Udulohely neve",
+      field_label: "Uduloingatlan neve",
       form_value: formResort,
       doc_value: docResort,
       is_mismatch: !textSimilar(docResort, formResort),
     });
   }
 
+  // 2. Udulesi het sorszama
   const docWeek = extractedFields.week_number as number | null | undefined;
   const formWeek = weekOffer.week_number;
   if (docWeek != null && formWeek != null) {
     results.push({
       field_name: "week_number",
-      field_label: "Het szama",
+      field_label: "Udulesi het sorszama",
       form_value: formWeek,
       doc_value: docWeek,
       is_mismatch: Number(docWeek) !== Number(formWeek),
     });
   }
 
-  const docUnit = extractedFields.unit_type as string | null | undefined;
-  const formUnit = weekOffer.unit_type;
-  if (docUnit && formUnit) {
+  // 3. Apartman/egyseg szama
+  const docUnitNumber = extractedFields.unit_number as string | null | undefined;
+  const formUnitNumber = weekOffer.unit_number;
+  if (docUnitNumber && formUnitNumber) {
     results.push({
-      field_name: "unit_type",
-      field_label: "Apartman tipus",
-      form_value: formUnit,
-      doc_value: docUnit,
-      is_mismatch: !textSimilar(docUnit, formUnit),
+      field_name: "unit_number",
+      field_label: "Apartman/egyseg szama",
+      form_value: formUnitNumber,
+      doc_value: docUnitNumber,
+      is_mismatch: !textSimilar(docUnitNumber, formUnitNumber),
+    });
+  }
+
+  // 4. Ferohely (max elhelyezheto fo szama)
+  const docCapacity = extractedFields.capacity as number | null | undefined;
+  const formCapacity = weekOffer.capacity;
+  if (docCapacity != null && formCapacity != null) {
+    results.push({
+      field_name: "capacity",
+      field_label: "Ferohely (max. szemelyek szama)",
+      form_value: formCapacity,
+      doc_value: docCapacity,
+      is_mismatch: Number(docCapacity) !== Number(formCapacity),
     });
   }
 
@@ -442,29 +477,7 @@ async function saveCheckResults(
 ) {
   const rows: Array<Record<string, unknown>> = [];
 
-  const fieldKeys = [
-    "owner_name",
-    "resort_name",
-    "week_number",
-    "contract_number",
-    "end_year",
-    "annual_fee",
-    "share_count",
-  ];
-  for (const fieldKey of fieldKeys) {
-    const extractedValue = extractedFields[fieldKey];
-    const hasValue = extractedValue !== undefined && extractedValue !== null && extractedValue !== "";
-    rows.push({
-      case_id: caseId,
-      document_id: documentId,
-      check_type: `field_presence:${fieldKey}`,
-      result: hasValue ? "pass" : "warning",
-      severity: hasValue ? "info" : "medium",
-      message: hasValue ? `Field extracted: ${fieldKey}` : `Field missing: ${fieldKey}`,
-      details: { field_key: fieldKey, extracted_value: extractedValue ?? null, source: "process_document" },
-    });
-  }
-
+  // Restriction hit count (belso statusz, nem seller-facing)
   rows.push({
     case_id: caseId,
     document_id: documentId,
@@ -488,6 +501,7 @@ async function saveCheckResults(
     });
   }
 
+  // Mezo-egyeztetes eredmenyek (field_match) - ezek jelennek meg a CorrectionPanel-ben
   for (const m of mismatchResults) {
     if (m.is_mismatch) {
       rows.push({
@@ -551,7 +565,6 @@ async function saveRestrictionHits(
   if (error) throw error;
 }
 
-// Hibas job es dokumentum cleanup
 async function markJobAndDocFailed(
   serviceClient: ReturnType<typeof createClient>,
   jobId: string,
@@ -573,7 +586,6 @@ async function markJobAndDocFailed(
       .eq("id", jobId)
       .maybeSingle();
 
-    // Dokumentum is failed-re kerul (nem marad stuck "processing"-ben)
     if (failedJob?.document_id) {
       await serviceClient
         .from("documents")
@@ -588,7 +600,6 @@ async function markJobAndDocFailed(
   }
 }
 
-// Fo handler
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: getCorsHeaders(req) });
@@ -623,7 +634,6 @@ Deno.serve(async (req) => {
 
     jobIdForCleanup = job_id;
 
-    // 1. Job betoltese
     const { data: job, error: jobLoadError } = await serviceClient
       .from("ai_validation_jobs")
       .select("id, case_id, document_id, policy_version_id, job_type, status, attempt_count, input_payload")
@@ -634,7 +644,6 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: "AI validation job not found", detail: jobLoadError?.message ?? null }, 404);
     }
 
-    // Duplikat feldolgozas vedelem: terminalis statusban levo jobot nem futtatjuk ujra
     if (job.status === "completed" || job.status === "failed" || job.status === "cancelled") {
       console.log(`Job ${job_id} already in terminal state: ${job.status}, skipping.`);
       return jsonResponse({
@@ -649,7 +658,6 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: "Job has no document_id" }, 400);
     }
 
-    // 2. Job -> processing
     await serviceClient
       .from("ai_validation_jobs")
       .update({
@@ -659,7 +667,6 @@ Deno.serve(async (req) => {
       })
       .eq("id", job.id);
 
-    // 3. Dokumentum betoltese
     const { data: doc, error: docLoadError } = await serviceClient
       .from("documents")
       .select(
@@ -677,7 +684,6 @@ Deno.serve(async (req) => {
       throw new Error(`Document upload_status must be 'uploaded', got '${doc.upload_status}'`);
     }
 
-    // 4. Dokumentum -> processing
     await serviceClient
       .from("documents")
       .update({
@@ -688,7 +694,6 @@ Deno.serve(async (req) => {
       })
       .eq("id", doc.id);
 
-    // 5. Fajl letoltese storage-bol
     const { data: fileData, error: downloadError } = await serviceClient.storage
       .from(doc.storage_bucket)
       .download(doc.storage_path);
@@ -697,7 +702,6 @@ Deno.serve(async (req) => {
       throw new Error(`Failed to download file from storage: ${downloadError?.message ?? "unknown error"}`);
     }
 
-    // 6. OCR / szoveg kinyerese (30s timeout)
     const openAiKey = Deno.env.get("OPENAI_API_KEY") ?? "";
     let extractedTextRaw = "";
     let ocrMethod = "unknown";
@@ -712,10 +716,7 @@ Deno.serve(async (req) => {
       ocrMethod = "error";
     }
 
-    // 7. Dokumentumtipus felismeres
     const detectedType = detectDocumentType(doc.document_type, doc.original_file_name);
-
-    // 8. Mezo kinyeres (30s timeout)
     const regexFields = extractFieldsFromText(extractedTextRaw, detectedType);
     let aiFields: Record<string, unknown> = {};
 
@@ -727,12 +728,13 @@ Deno.serve(async (req) => {
 
     const extractedFields = { ...regexFields, ...aiFields };
 
-    // 9. Form vs. dokumentum osszehasonlitas
+    // Form vs. dokumentum osszehasonlitas
+    // Mezok: resort_name_raw, week_number, unit_number, capacity
     let mismatchResults: MismatchResult[] = [];
     try {
       const { data: weekOffer } = await serviceClient
         .from("week_offers")
-        .select("resort_name_raw, week_number, unit_type, season_label, rights_end_year")
+        .select("resort_name_raw, week_number, unit_number, capacity")
         .eq("case_id", doc.case_id)
         .maybeSingle();
 
@@ -744,11 +746,9 @@ Deno.serve(async (req) => {
       console.error("Mismatch comparison error (non-blocking):", mismatchErr);
     }
 
-    // 10. Tilto klauzula kereses
     const restrictionHits = buildRestrictionHits(extractedTextRaw);
     await saveRestrictionHits(serviceClient, doc.case_id, doc.id, job.policy_version_id, restrictionHits);
 
-    // 11. check_results mentese
     await saveCheckResults(
       serviceClient,
       doc.case_id,
@@ -759,7 +759,6 @@ Deno.serve(async (req) => {
       mismatchResults,
     );
 
-    // 12. Dokumentum lezarasa
     const hasConfirmedRestriction = restrictionHits.some((hit) => hit.severity === "confirmed");
     const validationStatus = hasConfirmedRestriction ? "restriction_confirmed" : "match_ok";
 
@@ -780,7 +779,6 @@ Deno.serve(async (req) => {
       })
       .eq("id", doc.id);
 
-    // 13. Job lezarasa
     await serviceClient
       .from("ai_validation_jobs")
       .update({
@@ -796,7 +794,6 @@ Deno.serve(async (req) => {
       })
       .eq("id", job.id);
 
-    // 14. classify-case meghivasa
     try {
       const classifyResponse = await fetch(`${supabaseUrl}/functions/v1/classify-case`, {
         method: "POST",
@@ -834,7 +831,6 @@ Deno.serve(async (req) => {
   } catch (err) {
     console.error("process-document unhandled error:", err);
 
-    // Cleanup: job + document -> failed (ne maradjanak stuck processing-ben)
     if (jobIdForCleanup) {
       const supabaseUrl = Deno.env.get("SUPABASE_URL");
       const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
@@ -856,3 +852,4 @@ Deno.serve(async (req) => {
     );
   }
 });
+
