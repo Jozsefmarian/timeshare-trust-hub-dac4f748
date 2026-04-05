@@ -268,12 +268,27 @@ export default function CaseDetail() {
       const details = cr.details ?? {};
       const fieldName = details.field_name as string | undefined;
 
+      const FIELD_LABEL_HU: Record<string, string> = {
+        resort_name_raw: "Üdülőingatlan neve",
+        week_number: "Üdülési hét sorszáma",
+        unit_number: "Apartman/egység száma",
+        capacity: "Férőhely (max. személyek száma)",
+        unit_type: "Apartman típusa",
+        season_label: "Szezon",
+        rights_start_year: "Jog kezdő éve",
+        rights_end_year: "Jog záró éve",
+        share_count: "Részvényszám",
+        usage_frequency: "Használat gyakorisága",
+        usage_parity: "Év típusa",
+      };
+
       const fieldLabel =
+        (fieldName ? FIELD_LABEL_HU[fieldName] : null) ||
         details.field_label ||
         (fieldName === "resort_name_raw"
-          ? "Üdülő neve"
+          ? "Üdülőingatlan neve"
           : fieldName === "week_number"
-            ? "Hét sorszáma"
+            ? "Üdülési hét sorszáma"
             : fieldName === "unit_type" || fieldName === "apartment_type"
               ? "Apartman típusa"
               : fieldName === "season_label" || fieldName === "season"
