@@ -59,11 +59,11 @@ const steps = [
     number: 6,
     title: "4. oldal — Dokumentumok feltöltése",
     description:
-      "Ezen az oldalon fel kell töltenie az üdülési jogát igazoló dokumentumokat. Minden dokumentumhoz egy külön feltöltési mezőt talál. A feltöltendő dokumentumok: az eredeti üdülőhasználati szerződés, a Standard Information Form (SIF), és a legutóbbi fenntartási díj bizonylat. Ha részvény is kapcsolódik az üdülési joghoz, akkor a részvény adásvételi szerződést is fel kell tölteni. A feltöltéshez kattintson a szaggatott keretes mezőre, vagy húzza rá a fájlt. Elfogadott formátumok: PDF, JPG, PNG. Ha lefotózza a dokumentumot telefonnal, ügyeljen arra, hogy a szöveg jól olvasható és a kép ne legyen elmosódott.",
+      "Ezen az oldalon fel kell töltenie az üdülési joghoz kapcsolódó dokumentumokat. Minden dokumentumhoz egy külön feltöltési mezőt talál. A feltöltendő dokumentumok: az eredeti Üdülőhasználati szerződés, a Tájékoztató, vagy Klubrend, és a legutóbbi fenntartási díj befizetését igazoló bizonylat. Ha részvény is kapcsolódik az üdülési joghoz, akkor a Részvény adásvételi szerződést is fel kell töltenie. A feltöltéshez kattintson a szaggatott keretes mezőre, vagy húzza rá a fájlt. Elfogadott formátumok: PDF, JPG, PNG. Ha lefotózza a dokumentumot telefonnal, ügyeljen arra, hogy a szöveg jól olvasható és a kép ne legyen elmosódott.",
     tips: [
       {
         type: "blue" as const,
-        text: "Ha szkennere nincs, telefonja kamerájával is lefotózhatja a dokumentumokat. Ügyeljen a jó megvilágításra és arra, hogy a teljes oldal látható legyen a fotón.",
+        text: "Ha nincs szkennere, telefonja kamerájával is lefotózhatja a dokumentumokat. Ügyeljen a jó megvilágításra és arra, hogy a teljes oldal látható legyen a fotón.",
       },
       {
         type: "yellow" as const,
@@ -133,9 +133,7 @@ export default function SellerGuide() {
       <div className="max-w-3xl mx-auto space-y-6">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Használati útmutató</h1>
-          <p className="text-muted-foreground mt-1">
-            Lépésről lépésre — hogyan adja el üdülési jogát
-          </p>
+          <p className="text-muted-foreground mt-1">Lépésről lépésre — hogyan adja el üdülési jogát</p>
         </div>
 
         {steps.map((step) => (
