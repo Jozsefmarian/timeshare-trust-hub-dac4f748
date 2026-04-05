@@ -134,20 +134,28 @@ Deno.serve(async (req) => {
     const checkRows = (checks ?? []) as CheckRow[];
     const hitRows = (restrictionHits ?? []) as RestrictionHitRow[];
 
+    // --- Besorolási logika ---
+    // Piros feltételek
     const failChecks = checkRows.filter((row) => row.result === "fail");
-    const warningChecks = checkRows.filter((row) => row.result === "warning");
     const highFailChecks = failChecks.filter((row) => (row.severity ?? "").toLowerCase() === "high");
-
     const autoRejectHits = hitRows.filter((row) => (row.action ?? "").toUpperCase() === "AUTO_REJECT");
+
+    // Sárga feltételek
+    const warningChecks = checkRows.filter((row) => row.result === "warning");
     const manualLegalHits = hitRows.filter((row) => (row.action ?? "").toUpperCase() === "FLAG_MANUAL_LEGAL");
     const allowButYellowHits = hitRows.filter((row) => (row.action ?? "").toUpperCase() === "ALLOW_BUT_YELLOW");
     const confirmedHits = hitRows.filter((row) => (row.severity ?? "").toUpperCase() === "CONFIRMED");
+
+    // KRITIKUS: correction_required result = mezőeltérés → sárga (fix_required ág)
+    // Ez az 1. réteg (field_match) kimenete: ha az AI eltérést talált, a seller javítást kap
+    const correctionRequiredChecks = checkRows.filter((row) => row.result === "correction_required");
 
     let classification: "green" | "yellow" | "red" = "green";
     let reasonSummary = "No blocking issues found.";
     let reasonCodes: string[] = [];
 
     if (autoRejectHits.length > 0 || highFailChecks.length > 0) {
+      // PIROS: auto_reject restriction hit, vagy súlyos (high) fail check
       classification = "red";
       reasonSummary = "Auto reject condition found.";
       reasonCodes = uniq([
@@ -155,20 +163,31 @@ Deno.serve(async (req) => {
         ...highFailChecks.map((row) => `FAIL:${row.check_type}`),
       ]);
     } else if (
+      correctionRequiredChecks.length > 0 ||
       manualLegalHits.length > 0 ||
       allowButYellowHits.length > 0 ||
       confirmedHits.length > 0 ||
       warningChecks.length > 0
     ) {
+      // SÁRGA:
+      // - correction_required: mezőeltérés, seller javíthat (fix_required ág)
+      // - flag_manual_legal / allow_but_yellow / confirmed restriction: admin review szükséges (manual_review ág)
+      // - warning: általános figyelmeztető
       classification = "yellow";
-      reasonSummary = "Manual review recommended.";
+      if (correctionRequiredChecks.length > 0 && manualLegalHits.length === 0 && allowButYellowHits.length === 0 && confirmedHits.length === 0) {
+        reasonSummary = "Field mismatch found. Seller correction required.";
+      } else {
+        reasonSummary = "Manual review recommended.";
+      }
       reasonCodes = uniq([
+        ...correctionRequiredChecks.map((row) => `CORRECTION_REQUIRED:${(row.details as any)?.field_name ?? row.check_type}`),
         ...manualLegalHits.map(() => "FLAG_MANUAL_LEGAL"),
         ...allowButYellowHits.map(() => "ALLOW_BUT_YELLOW"),
         ...confirmedHits.map(() => "CONFIRMED_RESTRICTION"),
         ...warningChecks.map((row) => `WARNING:${row.check_type}`),
       ]);
     } else {
+      // ZÖLD: nincs eltérés, nincs restriction hit
       classification = "green";
       reasonSummary = "Checks passed and no restriction hit requires review.";
       reasonCodes = ["CHECKS_OK"];
@@ -195,7 +214,6 @@ Deno.serve(async (req) => {
       classification === "green" ? "green_approved" : classification === "yellow" ? "yellow_review" : "red_rejected";
 
     const previousStatus = caseRow.status ?? null;
-
     const isSubmitted = !!caseRow.submitted_at;
 
     // Csak akkor írunk business státuszt, ha már submitelve van
@@ -229,6 +247,7 @@ Deno.serve(async (req) => {
         check_count: checkRows.length,
         fail_count: failChecks.length,
         warning_count: warningChecks.length,
+        correction_required_count: correctionRequiredChecks.length,
         restriction_hit_count: hitRows.length,
         auto_reject_hit_count: autoRejectHits.length,
         manual_legal_hit_count: manualLegalHits.length,
