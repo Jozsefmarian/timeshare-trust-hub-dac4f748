@@ -1,43 +1,43 @@
 project_id = "nowfrwpknymkzujijgsz"
 
-[functions.accept-service-agreement]
-verify_jwt = false
-
-[functions.admin-manual-classification]
-verify_jwt = false
-
-[functions.classify-case]
-verify_jwt = false
-
-[functions.close-case-and-create-asset]
+[functions.upload-document-init]
 verify_jwt = false
 
 [functions.confirm-document-upload]
 verify_jwt = false
 
-[functions.create-stripe-checkout]
-verify_jwt = false
-
 [functions.generate-sale-contract]
 verify_jwt = false
 
-[functions.generate-yearly-inventory]
+[functions.accept-service-agreement]
 verify_jwt = false
 
 [functions.process-document]
 verify_jwt = false
 
-[functions.publish-policy]
-verify_jwt = false
-
-[functions.recheck-case]
-verify_jwt = false
-
-[functions.stripe-webhook]
+[functions.classify-case]
 verify_jwt = false
 
 [functions.submit-case]
 verify_jwt = false
 
-[functions.upload-document-init]
+[functions.recheck-case]
+verify_jwt = false
+
+[functions.admin-manual-classification]
+verify_jwt = false
+
+[functions.publish-policy]
+verify_jwt = false
+
+[functions.create-stripe-checkout]
+verify_jwt = false
+
+[functions.close-case-and-create-asset]
+verify_jwt = false
+
+[functions.stripe-webhook]
+verify_jwt = false
+
+[functions.generate-yearly-inventory]
 verify_jwt = false
