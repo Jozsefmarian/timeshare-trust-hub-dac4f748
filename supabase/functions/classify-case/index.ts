@@ -174,13 +174,20 @@ Deno.serve(async (req) => {
       // - flag_manual_legal / allow_but_yellow / confirmed restriction: admin review szükséges (manual_review ág)
       // - warning: általános figyelmeztető
       classification = "yellow";
-      if (correctionRequiredChecks.length > 0 && manualLegalHits.length === 0 && allowButYellowHits.length === 0 && confirmedHits.length === 0) {
+      if (
+        correctionRequiredChecks.length > 0 &&
+        manualLegalHits.length === 0 &&
+        allowButYellowHits.length === 0 &&
+        confirmedHits.length === 0
+      ) {
         reasonSummary = "Field mismatch found. Seller correction required.";
       } else {
         reasonSummary = "Manual review recommended.";
       }
       reasonCodes = uniq([
-        ...correctionRequiredChecks.map((row) => `CORRECTION_REQUIRED:${(row.details as any)?.field_name ?? row.check_type}`),
+        ...correctionRequiredChecks.map(
+          (row) => `CORRECTION_REQUIRED:${(row.details as any)?.field_name ?? row.check_type}`,
+        ),
         ...manualLegalHits.map(() => "FLAG_MANUAL_LEGAL"),
         ...allowButYellowHits.map(() => "ALLOW_BUT_YELLOW"),
         ...confirmedHits.map(() => "CONFIRMED_RESTRICTION"),
@@ -218,11 +225,11 @@ Deno.serve(async (req) => {
 
     // Csak akkor írunk business státuszt, ha már submitelve van
     // FIX: Ha az ugy yellow_review-ban volt es az uj eredmeny zold,
-// mindig frissitsuk a statuszt (recheck utan zold eredmeny eseten is).
-const wasInReview = previousStatus === "yellow_review";
-const isNowGreen = mappedStatus === "green_approved";
-const statusChanged = previousStatus !== mappedStatus;
-const shouldUpdateBusinessStatus = isSubmitted && (statusChanged || (wasInReview && isNowGreen));
+    // mindig frissitsuk a statuszt (recheck utan zold eredmeny eseten is).
+    const wasInReview = previousStatus === "yellow_review";
+    const isNowGreen = mappedStatus === "green_approved";
+    const statusChanged = previousStatus !== mappedStatus;
+    const shouldUpdateBusinessStatus = isSubmitted && (statusChanged || (wasInReview && isNowGreen));
 
     const caseUpdatePayload: Record<string, unknown> = {
       classification,
