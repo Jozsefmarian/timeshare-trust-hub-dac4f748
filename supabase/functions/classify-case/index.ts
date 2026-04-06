@@ -217,7 +217,12 @@ Deno.serve(async (req) => {
     const isSubmitted = !!caseRow.submitted_at;
 
     // Csak akkor írunk business státuszt, ha már submitelve van
-    const shouldUpdateBusinessStatus = isSubmitted && previousStatus !== mappedStatus;
+    // FIX: Ha az ugy yellow_review-ban volt es az uj eredmeny zold,
+// mindig frissitsuk a statuszt (recheck utan zold eredmeny eseten is).
+const wasInReview = previousStatus === "yellow_review";
+const isNowGreen = mappedStatus === "green_approved";
+const statusChanged = previousStatus !== mappedStatus;
+const shouldUpdateBusinessStatus = isSubmitted && (statusChanged || (wasInReview && isNowGreen));
 
     const caseUpdatePayload: Record<string, unknown> = {
       classification,
