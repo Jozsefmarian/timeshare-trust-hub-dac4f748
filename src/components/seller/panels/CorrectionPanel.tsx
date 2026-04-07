@@ -218,7 +218,7 @@ export default function CorrectionPanel({
           valueToSave = rawValue === "" ? null : rawValue;
         }
 
-        const { error: updateError } = await supabase
+        const { error: updateError } = await (supabase as any)
           .from("week_offers")
           .update({
             [normalizedField]: valueToSave,
