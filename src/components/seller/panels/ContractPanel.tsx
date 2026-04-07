@@ -364,6 +364,7 @@ export default function ContractPanel({
         body: { is_signed_contract: true, case_id: caseId },
       });
       if (!recheckErr) {
+        await new Promise((resolve) => setTimeout(resolve, 500));
         onAllContractsSigned();
       } else {
         console.error("confirm-document-upload error:", recheckErr);
