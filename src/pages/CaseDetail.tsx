@@ -262,6 +262,40 @@ export default function CaseDetail() {
     }
   }, [caseId, loadDocumentTypes, loadUploadedDocuments, loadContract, loadClassification, loadCheckResults]);
 
+  // Polling: green_approved → contract_generated
+  useEffect(() => {
+    if (!caseId || !caseData || normalizeCaseStatus(caseData.status) !== "green_approved") return;
+
+    let count = 0;
+    const maxPolls = 150;
+
+    const interval = setInterval(async () => {
+      count++;
+      if (count > maxPolls) {
+        clearInterval(interval);
+        return;
+      }
+      try {
+        const { data } = await supabaseAny
+          .from("cases")
+          .select("status, ai_pipeline_status")
+          .eq("id", caseId)
+          .single();
+        if (data && normalizeCaseStatus(data.status) !== "green_approved") {
+          setCaseData((prev: CaseRow | null) =>
+            prev ? { ...prev, status: data.status, ai_pipeline_status: data.ai_pipeline_status, updated_at: new Date().toISOString() } : prev,
+          );
+          loadContract();
+          clearInterval(interval);
+        }
+      } catch {
+        // silent
+      }
+    }, 4000);
+
+    return () => clearInterval(interval);
+  }, [caseId, caseData?.status, loadContract]);
+
   // Build dynamic correction requirements from check results
   const corrections = useMemo(() => {
     const buildFriendlyMessage = (cr: CheckResult) => {

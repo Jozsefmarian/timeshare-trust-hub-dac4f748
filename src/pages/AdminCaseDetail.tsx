@@ -628,8 +628,14 @@ export default function AdminCaseDetail() {
                             </div>
                           </div>
                           <div className="flex items-center gap-2 shrink-0">
-                            <Badge variant="outline" className={reviewStatusClasses(doc.review_status)}>
-                              {reviewStatusLabel(doc.review_status)}
+                            <Badge variant="outline" className={
+                              doc.ai_status === "completed" ? "border-success/40 text-success"
+                                : doc.ai_status === "failed" ? "border-destructive/40 text-destructive"
+                                : "border-muted-foreground/30 text-muted-foreground"
+                            }>
+                              {doc.ai_status === "completed" ? "Feldolgozva"
+                                : doc.ai_status === "failed" ? "Hiba"
+                                : "Feldolgozás alatt"}
                             </Badge>
                             <Button
                               variant="ghost"
