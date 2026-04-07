@@ -127,13 +127,14 @@ function uint8ToBase64(bytes: Uint8Array): string {
   return btoa(binary);
 }
 
+// MODOSITAS 1: gpt-4o-mini -> gpt-4o (Vision)
 async function callOpenAIVision(base64: string, mimeType: string, openAiKey: string): Promise<string> {
   try {
     const response = await fetchWithTimeout("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: { Authorization: `Bearer ${openAiKey}`, "Content-Type": "application/json" },
       body: JSON.stringify({
-        model: "gpt-4o-mini",
+        model: "gpt-4o",
         messages: [
           {
             role: "user",
@@ -162,13 +163,14 @@ async function callOpenAIVision(base64: string, mimeType: string, openAiKey: str
   }
 }
 
+// MODOSITAS 1: gpt-4o-mini -> gpt-4o (PDF)
 async function callOpenAIPDF(base64: string, fileName: string, openAiKey: string): Promise<string> {
   try {
     const response = await fetchWithTimeout("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: { Authorization: `Bearer ${openAiKey}`, "Content-Type": "application/json" },
       body: JSON.stringify({
-        model: "gpt-4o-mini",
+        model: "gpt-4o",
         messages: [
           {
             role: "user",
@@ -214,7 +216,7 @@ async function extractTextFromFile(
   }
 
   if (!openAiKey) {
-    console.warn("No OPENAI_API_KEY — cannot extract text from non-text file");
+    console.warn("No OPENAI_API_KEY -- cannot extract text from non-text file");
     return { text: "", method: "stub_no_key" };
   }
 
@@ -225,17 +227,11 @@ async function extractTextFromFile(
   }
 
   if (effectiveMime === "application/pdf" || effectiveMime === "application/x-pdf") {
-    // FIX: Ha a PDF bináris fejléccel kezdődik (%PDF-), azonnal OpenAI PDF API-ra tereljük.
-    // Korábban a cleanText számítás (nem-nyomtatható karakterek kiszűrése) után
-    // az isReadableText() átment a PDF fejléc ASCII karakterein, és bináris szemetet
-    // adott át az AI field extraction-nek — hamis mismatch eredményekkel.
     try {
       const rawText = await fileData.text();
       if (rawText.trimStart().startsWith("%PDF-")) {
-        // Bináris/encrypted PDF — ne próbáljuk szövegként, azonnal OpenAI PDF API
         console.log("PDF binary header detected (%PDF-), routing directly to OpenAI PDF API");
       } else {
-        // Nem bináris PDF (pl. szöveges PDF-ek ritka esetei) — próbáljuk szövegként
         const cleanText = rawText.replace(/[^\x20-\x7E\n\r\t\u00C0-\u024F]/g, "").trim();
         if (cleanText.length > 200 && isReadableText(cleanText)) {
           console.log(`PDF text extraction: ${cleanText.length} chars, readable`);
@@ -245,12 +241,24 @@ async function extractTextFromFile(
     } catch {
       /* fall through to OpenAI */
     }
-    // Encrypted/bináris PDF -> OpenAI PDF feldolgozás
-    console.log("Routing PDF to OpenAI PDF API");
-    return { text: await callOpenAIPDF(base64, fileName ?? "document.pdf", openAiKey), method: "openai_pdf" };
+
+    // MODOSITAS 2: Vision fallback ha a PDF API 0 karaktert ad
+    console.log("Routing PDF to OpenAI PDF API (gpt-4o)");
+    const pdfText = await callOpenAIPDF(base64, fileName ?? "document.pdf", openAiKey);
+    if (pdfText.length > 0) {
+      return { text: pdfText, method: "openai_pdf" };
+    }
+    // Fallback: ha a PDF API csodot mondott, probalja Vision API-val
+    console.log("PDF API returned 0 chars -- attempting Vision API fallback (gpt-4o)");
+    const visionText = await callOpenAIVision(base64, "image/jpeg", openAiKey);
+    if (visionText.length > 0) {
+      console.log(`Vision fallback succeeded: ${visionText.length} chars`);
+      return { text: visionText, method: "openai_pdf_vision_fallback" };
+    }
+    console.log("Both PDF API and Vision fallback returned 0 chars");
+    return { text: "", method: "openai_pdf_failed" };
   }
 
-  // Egyéb fájltípus: próbáljuk szövegként, ha olvasható
   try {
     const t = await fileData.text();
     if (isReadableText(t)) return { text: t, method: "fallback_text" };
@@ -334,11 +342,12 @@ async function extractFieldsWithAI(
     return {};
   }
   try {
+    // MODOSITAS 1: gpt-4o-mini -> gpt-4o (field extraction)
     const response = await fetchWithTimeout("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: { Authorization: `Bearer ${openAiKey}`, "Content-Type": "application/json" },
       body: JSON.stringify({
-        model: "gpt-4o-mini",
+        model: "gpt-4o",
         messages: [
           {
             role: "system",
@@ -386,7 +395,7 @@ async function buildRestrictionHitsFromDb(
   }
 
   if (!resolvedPolicyId) {
-    console.log("No active policy version — skipping restriction scan");
+    console.log("No active policy version -- skipping restriction scan");
     return [];
   }
 
@@ -734,6 +743,7 @@ Deno.serve(async (req) => {
     }
     const extractedFields = { ...regexFields, ...aiFields };
 
+    // MODOSITAS 3: mismatch logika - compareWithWeekOffer csak timeshare_contract-on fut
     let mismatchResults: MismatchResult[] = [];
     try {
       const { data: weekOffer } = await serviceClient
@@ -744,7 +754,9 @@ Deno.serve(async (req) => {
       if (weekOffer) {
         mismatchResults = compareWithWeekOffer(extractedFields, weekOffer as WeekOfferRow, detectedType);
         const mismatches = mismatchResults.filter((m) => m.is_mismatch);
-        console.log(`Mismatch check (${detectedType}): ${mismatches.length} elteres`);
+        console.log(
+          `Mismatch check (${detectedType}): ${mismatches.length} elteres, chars_extracted=${extractedTextRaw.length}`,
+        );
         if (mismatches.length > 0)
           console.log(
             "Mismatches:",
@@ -796,14 +808,34 @@ Deno.serve(async (req) => {
       })
       .eq("id", job.id);
 
+    // classify-case meghivasa es eredmeny alapjan szerzodesgeneral trigger
     try {
       const classifyResponse = await fetch(`${supabaseUrl}/functions/v1/classify-case`, {
         method: "POST",
         headers: { "Content-Type": "application/json", apikey: serviceRoleKey },
         body: JSON.stringify({ case_id: doc.case_id, policy_version_id: job.policy_version_id ?? null }),
       });
-      if (!classifyResponse.ok)
+
+      if (!classifyResponse.ok) {
         console.error("classify-case invoke failed:", classifyResponse.status, await classifyResponse.text());
+      } else {
+        const classifyData = await classifyResponse.json();
+        console.log(
+          `classify-case result: classification=${classifyData.classification}, previous_status=${classifyData.previous_case_status}`,
+        );
+
+        // Ha recheck utan zold eredmeny: automatikus szerzodesgeneral
+        if (classifyData.classification === "green" && classifyData.previous_case_status === "yellow_review") {
+          console.log("Recheck result is green from yellow_review -> triggering generate-sale-contract");
+          fetch(`${supabaseUrl}/functions/v1/generate-sale-contract`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", apikey: serviceRoleKey },
+            body: JSON.stringify({ case_id: doc.case_id }),
+          }).catch((err) => {
+            console.error("generate-sale-contract fire-and-forget error:", err);
+          });
+        }
+      }
     } catch (classifyErr) {
       console.error("classify-case invoke error:", classifyErr);
     }
