@@ -96,8 +96,7 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Ha mar tullepte a limitet (> MAX_RECHECK), 200-as valasszal jelezzuk
-    // (ne 409, mert a Supabase JS kliens azt error-kent kezeli)
+    // Ha mar tullepte a limitet (> MAX_RECHECK), nem engedjuk tovabb
     if (currentRecheckCount > MAX_RECHECK) {
       return jsonResponse({
         success: false,
@@ -130,6 +129,12 @@ Deno.serve(async (req) => {
     // Case AI status visszaallitasa, recheck_count novelese
     const newRecheckCount = currentRecheckCount + 1;
 
+    // FONTOS: NEM allitjuk be yellow_review-ra azonnal itt.
+    // A classify-case fogja beallitani a helyes uzleti statuszt az AI eredmeny alapjan:
+    // - Ha zold -> green_approved (es triggereli a generate-sale-contract-ot)
+    // - Ha sarga -> yellow_review
+    // - Ha piros -> red_rejected
+    // Ha a limit elert ES az eredmeny sarga, a classify-case irja yellow_review-ra.
     const { error: caseResetError } = await serviceClient
       .from("cases")
       .update({
@@ -217,20 +222,22 @@ Deno.serve(async (req) => {
       new_data: { document_count: docs.length, job_results: jobResults, recheck_count: newRecheckCount },
     });
 
-    // Ha elerte a limitet (3. recheck utan) -> yellow_review es jelzes a frontendnek
-    // A 4. gombnyomast mar a limit ellenorzes fogja el (currentRecheckCount > MAX_RECHECK)
+    // FIX: NEM allitjuk azonnali yellow_review-ra a 3. rechecknel.
+    // A classify-case pipeline eredmenye dontil a vegso statuszrol.
+    // A frontend recheck_limit_reached: true valaszt kap, es a CorrectionPanel
+    // lezarttnak tekinti a javitasi lehetoseget (ManualReviewPanel-t mutat),
+    // DE a polling folytatodik, es ha zold lesz az eredmeny, contract_generated-re valt.
     const reachedLimit = newRecheckCount >= MAX_RECHECK;
 
     if (reachedLimit) {
-      await serviceClient.from("cases").update({ status: "yellow_review" }).eq("id", case_id);
-
+      // Csak audit log, NEM irjuk at a statuszt - azt a classify-case teszi
       await serviceClient.from("audit_logs").insert({
         entity_type: "cases",
         entity_id: case_id,
         action: "recheck_limit_reached",
         performed_by_user_id: user.id,
         source: "edge_function",
-        new_data: { recheck_count: newRecheckCount, max_recheck: MAX_RECHECK, auto_escalated_to: "yellow_review" },
+        new_data: { recheck_count: newRecheckCount, max_recheck: MAX_RECHECK, note: "status_set_by_classify_case" },
       });
     }
 
@@ -240,7 +247,6 @@ Deno.serve(async (req) => {
       document_count: docs.length,
       jobs: jobResults,
       recheck_count: newRecheckCount,
-      // Ha elerte a limitet, a frontend tudja hogy ez volt az utolso lehetoseg
       recheck_limit_reached: reachedLimit,
     });
   } catch (err) {
