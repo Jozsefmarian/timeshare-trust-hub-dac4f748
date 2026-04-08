@@ -84,22 +84,28 @@ Deno.serve(async (req) => {
     if (!caseRow) return jsonResponse({ error: "Case not found or access denied" }, 404);
     if (caseRow.seller_user_id !== user.id) return jsonResponse({ error: "Forbidden" }, 403);
 
-    const allowedStatuses = ["docs_uploaded", "submitted"];
+    const allowedStatuses = ["docs_uploaded", "submitted", "yellow_review"];
     const currentRecheckCount = (caseRow as any).recheck_count ?? 0;
     const MAX_RECHECK = 3;
 
-    if (caseRow.status === "yellow_review") {
-      if (currentRecheckCount >= MAX_RECHECK) {
-        return jsonResponse(
-          { error: "Maximum recheck attempts reached", detail: `Recheck count: ${currentRecheckCount}/${MAX_RECHECK}` },
-          409,
-        );
-      }
-    } else if (!allowedStatuses.includes(caseRow.status)) {
+    // Ha az ugy nem engedelyezett statuszon van, visszautasitjuk
+    if (!allowedStatuses.includes(caseRow.status)) {
       return jsonResponse(
         { error: "Recheck not allowed from current status", detail: `Current status: ${caseRow.status}` },
         409,
       );
+    }
+
+    // Ha mar tullepte a limitet (> MAX_RECHECK), 200-as valasszal jelezzuk
+    // (ne 409, mert a Supabase JS kliens azt error-kent kezeli)
+    if (currentRecheckCount > MAX_RECHECK) {
+      return jsonResponse({
+        success: false,
+        recheck_limit_reached: true,
+        case_id,
+        recheck_count: currentRecheckCount,
+        max_recheck: MAX_RECHECK,
+      });
     }
 
     // Regi AI eredmenyek torlese
@@ -121,9 +127,8 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: "Failed to invalidate old classifications", detail: classDeleteError.message }, 500);
     }
 
-    // Case AI status visszaallitasa
+    // Case AI status visszaallitasa, recheck_count novelese
     const newRecheckCount = currentRecheckCount + 1;
-    const reachedLimit = newRecheckCount >= MAX_RECHECK;
 
     const { error: caseResetError } = await serviceClient
       .from("cases")
@@ -177,7 +182,7 @@ Deno.serve(async (req) => {
           policy_version_id: publishedPolicy?.id ?? null,
           job_type: "process_document",
           status: "queued",
-          input_payload: { trigger: "recheck_case", document_id: doc.id, case_id },
+          input_payload: { trigger: "recheck_case", document_id: doc.id, case_id, recheck_count: newRecheckCount },
         })
         .select("id")
         .single();
@@ -190,8 +195,7 @@ Deno.serve(async (req) => {
 
       await serviceClient.from("documents").update({ last_ai_job_id: newJob.id }).eq("id", doc.id);
 
-      // FIRE AND FORGET: nem varjuk meg a process-document veget,
-      // azonnal visszaterunk a sellernek. A pipeline a hatterben fut.
+      // FIRE AND FORGET: nem varjuk meg a process-document veget
       fetch(`${supabaseUrl}/functions/v1/process-document`, {
         method: "POST",
         headers: { "Content-Type": "application/json", apikey: serviceRoleKey },
@@ -210,12 +214,16 @@ Deno.serve(async (req) => {
       action: "recheck_requested",
       performed_by_user_id: user.id,
       source: "edge_function",
-      new_data: { document_count: docs.length, job_results: jobResults },
+      new_data: { document_count: docs.length, job_results: jobResults, recheck_count: newRecheckCount },
     });
 
-    // Ha elerte a limitet -> yellow_review (manualis review)
+    // Ha elerte a limitet (3. recheck utan) -> yellow_review es jelzes a frontendnek
+    // A 4. gombnyomast mar a limit ellenorzes fogja el (currentRecheckCount > MAX_RECHECK)
+    const reachedLimit = newRecheckCount >= MAX_RECHECK;
+
     if (reachedLimit) {
       await serviceClient.from("cases").update({ status: "yellow_review" }).eq("id", case_id);
+
       await serviceClient.from("audit_logs").insert({
         entity_type: "cases",
         entity_id: case_id,
@@ -231,6 +239,9 @@ Deno.serve(async (req) => {
       case_id,
       document_count: docs.length,
       jobs: jobResults,
+      recheck_count: newRecheckCount,
+      // Ha elerte a limitet, a frontend tudja hogy ez volt az utolso lehetoseg
+      recheck_limit_reached: reachedLimit,
     });
   } catch (err) {
     console.error("recheck-case unhandled error:", err);
