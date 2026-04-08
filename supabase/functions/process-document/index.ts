@@ -7,7 +7,7 @@ const ALLOWED_ORIGINS = [
   "http://localhost:3000",
 ];
 
-const OPENAI_TIMEOUT_MS = 30_000;
+const AI_TIMEOUT_MS = 60_000;
 
 function getCorsHeaders(req: Request): Record<string, string> {
   const origin = req.headers.get("Origin") ?? "";
@@ -107,7 +107,7 @@ function isReadableText(text: string): boolean {
   return ratio >= 0.7;
 }
 
-async function fetchWithTimeout(url: string, options: RequestInit, timeoutMs = OPENAI_TIMEOUT_MS): Promise<Response> {
+async function fetchWithTimeout(url: string, options: RequestInit, timeoutMs = AI_TIMEOUT_MS): Promise<Response> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
@@ -127,74 +127,85 @@ function uint8ToBase64(bytes: Uint8Array): string {
   return btoa(binary);
 }
 
-// MODOSITAS 1: gpt-4o-mini -> gpt-4o (Vision)
-async function callOpenAIVision(base64: string, mimeType: string, openAiKey: string): Promise<string> {
+// Claude Haiku OCR - PDF es kep feldolgozas
+async function callClaudeOCR(
+  base64: string,
+  mimeType: string,
+  anthropicKey: string,
+  fileName: string | null,
+): Promise<string> {
   try {
-    const response = await fetchWithTimeout("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${openAiKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: "gpt-4o",
-        messages: [
-          {
-            role: "user",
-            content: [
-              { type: "image_url", image_url: { url: `data:${mimeType};base64,${base64}`, detail: "high" } },
-              {
-                type: "text",
-                text: "Extract all text from this document image. Return only the extracted text content, preserving the original structure as much as possible. Do not add any commentary or explanation.",
-              },
-            ],
-          },
-        ],
-        max_tokens: 4000,
-      }),
-    });
-    if (!response.ok) {
-      console.error("OpenAI Vision API error:", response.status, await response.text());
-      return "";
-    }
-    const data = await response.json();
-    return (data.choices?.[0]?.message?.content ?? "") as string;
-  } catch (err: unknown) {
-    if (err instanceof Error && err.name === "AbortError") console.error("OpenAI Vision timeout");
-    else console.error("OpenAI Vision call failed:", err);
-    return "";
-  }
-}
+    // Claude nativ document/image input
+    const isImage = mimeType.startsWith("image/");
+    const isPdf = mimeType === "application/pdf" || mimeType === "application/x-pdf";
 
-// MODOSITAS 1: gpt-4o-mini -> gpt-4o (PDF)
-async function callOpenAIPDF(base64: string, fileName: string, openAiKey: string): Promise<string> {
-  try {
-    const response = await fetchWithTimeout("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${openAiKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: "gpt-4o",
-        messages: [
-          {
-            role: "user",
-            content: [
-              { type: "file", file: { filename: fileName, file_data: `data:application/pdf;base64,${base64}` } },
-              {
-                type: "text",
-                text: "Extract all text from this PDF document. Return only the extracted text content, preserving the original structure as much as possible. Do not add any commentary or explanation.",
-              },
-            ],
-          },
-        ],
-        max_tokens: 4000,
-      }),
-    });
-    if (!response.ok) {
-      console.error("OpenAI PDF API error:", response.status, await response.text());
+    let contentBlock: unknown;
+    if (isPdf) {
+      contentBlock = {
+        type: "document",
+        source: {
+          type: "base64",
+          media_type: "application/pdf",
+          data: base64,
+        },
+      };
+    } else if (isImage) {
+      const supportedImageTypes = ["image/jpeg", "image/png", "image/gif", "image/webp"];
+      const claudeMime = supportedImageTypes.includes(mimeType) ? mimeType : "image/jpeg";
+      contentBlock = {
+        type: "image",
+        source: {
+          type: "base64",
+          media_type: claudeMime,
+          data: base64,
+        },
+      };
+    } else {
+      console.warn("callClaudeOCR: unsupported mime type:", mimeType);
       return "";
     }
+
+    const response = await fetchWithTimeout(
+      "https://api.anthropic.com/v1/messages",
+      {
+        method: "POST",
+        headers: {
+          "x-api-key": anthropicKey,
+          "anthropic-version": "2023-06-01",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "claude-haiku-4-5-20251001",
+          max_tokens: 4096,
+          messages: [
+            {
+              role: "user",
+              content: [
+                contentBlock,
+                {
+                  type: "text",
+                  text: "Kinyom ki az osszes szoveget ebbol a dokumentumbol. Csak a szoveget add vissza, semmi mast. Orizdz meg az eredeti strukturat, de ne adj magyarazatot vagy kommentart.",
+                },
+              ],
+            },
+          ],
+        }),
+      },
+      AI_TIMEOUT_MS,
+    );
+
+    if (!response.ok) {
+      const errText = await response.text();
+      console.error("Claude OCR API error:", response.status, errText);
+      return "";
+    }
+
     const data = await response.json();
-    return (data.choices?.[0]?.message?.content ?? "") as string;
+    const textBlock = data.content?.find((b: any) => b.type === "text");
+    return (textBlock?.text ?? "") as string;
   } catch (err: unknown) {
-    if (err instanceof Error && err.name === "AbortError") console.error("OpenAI PDF timeout");
-    else console.error("OpenAI PDF call failed:", err);
+    if (err instanceof Error && err.name === "AbortError") console.error("Claude OCR timeout");
+    else console.error("Claude OCR call failed:", err);
     return "";
   }
 }
@@ -203,7 +214,7 @@ async function extractTextFromFile(
   fileData: Blob,
   mimeType: string | null,
   fileName: string | null,
-  openAiKey: string,
+  anthropicKey: string,
 ): Promise<{ text: string; method: string }> {
   const effectiveMime = (mimeType ?? "").toLowerCase();
 
@@ -215,23 +226,23 @@ async function extractTextFromFile(
     }
   }
 
-  if (!openAiKey) {
-    console.warn("No OPENAI_API_KEY -- cannot extract text from non-text file");
+  if (!anthropicKey) {
+    console.warn("No ANTHROPIC_API_KEY -- cannot extract text from non-text file");
     return { text: "", method: "stub_no_key" };
   }
 
   const base64 = uint8ToBase64(new Uint8Array(await fileData.arrayBuffer()));
 
   if (effectiveMime.startsWith("image/")) {
-    return { text: await callOpenAIVision(base64, effectiveMime, openAiKey), method: "openai_vision" };
+    const text = await callClaudeOCR(base64, effectiveMime, anthropicKey, fileName);
+    return { text, method: text.length > 0 ? "claude_vision" : "claude_vision_failed" };
   }
 
   if (effectiveMime === "application/pdf" || effectiveMime === "application/x-pdf") {
+    // Eloszor probaljuk szoveges PDF-kent kiolvasni
     try {
       const rawText = await fileData.text();
-      if (rawText.trimStart().startsWith("%PDF-")) {
-        console.log("PDF binary header detected (%PDF-), routing directly to OpenAI PDF API");
-      } else {
+      if (!rawText.trimStart().startsWith("%PDF-")) {
         const cleanText = rawText.replace(/[^\x20-\x7E\n\r\t\u00C0-\u024F]/g, "").trim();
         if (cleanText.length > 200 && isReadableText(cleanText)) {
           console.log(`PDF text extraction: ${cleanText.length} chars, readable`);
@@ -239,24 +250,18 @@ async function extractTextFromFile(
         }
       }
     } catch {
-      /* fall through to OpenAI */
+      /* fall through to Claude */
     }
 
-    // MODOSITAS 2: Vision fallback ha a PDF API 0 karaktert ad
-    console.log("Routing PDF to OpenAI PDF API (gpt-4o)");
-    const pdfText = await callOpenAIPDF(base64, fileName ?? "document.pdf", openAiKey);
+    // Claude Haiku nativ PDF feldolgozas
+    console.log("Routing PDF to Claude Haiku (native document input)");
+    const pdfText = await callClaudeOCR(base64, "application/pdf", anthropicKey, fileName);
     if (pdfText.length > 0) {
-      return { text: pdfText, method: "openai_pdf" };
+      console.log(`Claude PDF OCR succeeded: ${pdfText.length} chars`);
+      return { text: pdfText, method: "claude_pdf" };
     }
-    // Fallback: ha a PDF API csodot mondott, probalja Vision API-val
-    console.log("PDF API returned 0 chars -- attempting Vision API fallback (gpt-4o)");
-    const visionText = await callOpenAIVision(base64, "image/jpeg", openAiKey);
-    if (visionText.length > 0) {
-      console.log(`Vision fallback succeeded: ${visionText.length} chars`);
-      return { text: visionText, method: "openai_pdf_vision_fallback" };
-    }
-    console.log("Both PDF API and Vision fallback returned 0 chars");
-    return { text: "", method: "openai_pdf_failed" };
+    console.log("Claude PDF OCR returned 0 chars");
+    return { text: "", method: "claude_pdf_failed" };
   }
 
   try {
@@ -333,38 +338,44 @@ function extractFieldsFromText(text: string, detectedType: string): Record<strin
 
 async function extractFieldsWithAI(
   text: string,
-  openAiKey: string,
+  anthropicKey: string,
   documentType: string,
 ): Promise<Record<string, unknown>> {
-  if (!text || text.length < 50 || !openAiKey) return {};
+  if (!text || text.length < 50 || !anthropicKey) return {};
   if (!["timeshare_contract", "share_statement"].includes(documentType)) {
     console.log(`Skipping AI field extraction for document type: ${documentType}`);
     return {};
   }
   try {
-    // MODOSITAS 1: gpt-4o-mini -> gpt-4o (field extraction)
-    const response = await fetchWithTimeout("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${openAiKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: "gpt-4o",
-        messages: [
-          {
-            role: "system",
-            content:
-              "Te egy magyar udulesi szerzodoseket elemzo asszisztens vagy. A megadott szerzodes szovegebol nyerd ki a kovetkezo mezokat JSON formatumban. Csak valodi adatokat adj vissza, ne talalj ki semmit. Ha egy mezo nem talalhato, hagyd ki. Keresendo mezok: resort_name (udulohely neve), week_number (het szama egesz szamkent), owner_name (tulajdonos neve), contract_number (szerzodes szama), annual_fee (eves fenntartasi dij szamkent pl. 150000), share_count (reszvenyek darabszama), unit_type (apartman tipusa pl. studio, 1 haloszobas), unit_number (egyseg/apartman azonositoja pl. A-12 vagy 304), capacity (max elhelyezheto fo szama egesz szamkent - keress 'X fo reszere' vagy 'X fo' vagy 'X szemelyes' mintakat). Valaszolj KIZAROLAG valid JSON objektummal, semmi massal.",
-          },
-          { role: "user", content: text.substring(0, 6000) },
-        ],
-        max_tokens: 500,
-      }),
-    });
+    const response = await fetchWithTimeout(
+      "https://api.anthropic.com/v1/messages",
+      {
+        method: "POST",
+        headers: {
+          "x-api-key": anthropicKey,
+          "anthropic-version": "2023-06-01",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "claude-haiku-4-5-20251001",
+          max_tokens: 1024,
+          messages: [
+            {
+              role: "user",
+              content: `Te egy magyar udulesi szerzodoseket elemzo asszisztens vagy. A megadott szerzodes szovegebol nyerd ki a kovetkezo mezokat JSON formatumban. Csak valodi adatokat adj vissza, ne talalj ki semmit. Ha egy mezo nem talalhato, hagyd ki.\n\nKeresendo mezok:\n- resort_name: udulohely neve\n- week_number: het szama egesz szamkent\n- owner_name: tulajdonos neve\n- contract_number: szerzodes szama\n- annual_fee: eves fenntartasi dij szamkent (pl. 150000)\n- share_count: reszvenyek darabszama\n- unit_type: apartman tipusa (pl. studio, 1 haloszobas)\n- unit_number: egyseg/apartman azonositoja (pl. A-12 vagy 304)\n- capacity: max elhelyezheto fo szama egesz szamkent\n\nValaszolj KIZAROLAG valid JSON objektummal, semmi massal.\n\nSzerzodes szovege:\n${text.substring(0, 8000)}`,
+            },
+          ],
+        }),
+      },
+      AI_TIMEOUT_MS,
+    );
     if (!response.ok) {
-      console.error("OpenAI field extraction error:", response.status);
+      console.error("Claude field extraction error:", response.status, await response.text());
       return {};
     }
     const data = await response.json();
-    const content = data.choices?.[0]?.message?.content ?? "{}";
+    const textBlock = data.content?.find((b: any) => b.type === "text");
+    const content = textBlock?.text ?? "{}";
     return JSON.parse(content.replace(/```json|```/g, "").trim());
   } catch (err: unknown) {
     if (err instanceof Error && err.name === "AbortError") console.error("Field extraction timeout");
@@ -716,11 +727,11 @@ Deno.serve(async (req) => {
     if (downloadError || !fileData)
       throw new Error(`Failed to download file: ${downloadError?.message ?? "unknown error"}`);
 
-    const openAiKey = Deno.env.get("OPENAI_API_KEY") ?? "";
+    const anthropicKey = Deno.env.get("ANTHROPIC_API_KEY") ?? "";
     let extractedTextRaw = "";
     let ocrMethod = "unknown";
     try {
-      const { text, method } = await extractTextFromFile(fileData, doc.mime_type, doc.original_file_name, openAiKey);
+      const { text, method } = await extractTextFromFile(fileData, doc.mime_type, doc.original_file_name, anthropicKey);
       extractedTextRaw = text;
       ocrMethod = method;
       console.log(`OCR: method=${method}, chars=${text.length}`);
@@ -737,13 +748,12 @@ Deno.serve(async (req) => {
         ? extractFieldsFromText(extractedTextRaw, detectedType)
         : { detected_document_type: detectedType };
     let aiFields: Record<string, unknown> = {};
-    if (extractedTextRaw.length > 50 && openAiKey) {
-      aiFields = await extractFieldsWithAI(extractedTextRaw, openAiKey, detectedType);
+    if (extractedTextRaw.length > 50 && anthropicKey) {
+      aiFields = await extractFieldsWithAI(extractedTextRaw, anthropicKey, detectedType);
       if (Object.keys(aiFields).length > 0) console.log("AI extracted fields:", JSON.stringify(aiFields));
     }
     const extractedFields = { ...regexFields, ...aiFields };
 
-    // MODOSITAS 3: mismatch logika - compareWithWeekOffer csak timeshare_contract-on fut
     let mismatchResults: MismatchResult[] = [];
     try {
       const { data: weekOffer } = await serviceClient
@@ -808,7 +818,7 @@ Deno.serve(async (req) => {
       })
       .eq("id", job.id);
 
-    // classify-case meghivasa es eredmeny alapjan szerzodesgeneral trigger
+    // classify-case meghivasa
     try {
       const classifyResponse = await fetch(`${supabaseUrl}/functions/v1/classify-case`, {
         method: "POST",
@@ -824,7 +834,6 @@ Deno.serve(async (req) => {
           `classify-case result: classification=${classifyData.classification}, previous_status=${classifyData.previous_case_status}`,
         );
 
-        // Ha recheck utan zold eredmeny: automatikus szerzodesgeneral
         if (classifyData.classification === "green" && classifyData.previous_case_status === "yellow_review") {
           console.log("Recheck result is green from yellow_review -> triggering generate-sale-contract");
           fetch(`${supabaseUrl}/functions/v1/generate-sale-contract`, {
