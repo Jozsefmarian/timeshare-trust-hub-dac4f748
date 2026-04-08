@@ -240,6 +240,9 @@ export default function CorrectionPanel({
         text: "Az adat sikeresen mentve.",
       });
 
+      // Update local field value immediately so the UI reflects the saved value
+      setFieldValues((prev) => ({ ...prev, [idx]: rawValue }));
+
       onCorrectionCompleted();
     } catch (err: any) {
       setMessage(idx, {

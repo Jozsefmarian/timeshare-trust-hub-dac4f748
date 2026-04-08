@@ -296,6 +296,45 @@ export default function CaseDetail() {
     return () => clearInterval(interval);
   }, [caseId, caseData?.status, loadContract]);
 
+  // Polling: yellow_review (ai re-processing) → status change
+  useEffect(() => {
+    if (!caseId || !caseData) return;
+    const normalized = normalizeCaseStatus(caseData.status);
+    if (normalized !== "yellow_review") return;
+    if (caseData.ai_pipeline_status !== "queued" && caseData.ai_pipeline_status !== "processing") return;
+
+    let count = 0;
+    const maxPolls = 150;
+
+    const interval = setInterval(async () => {
+      count++;
+      if (count > maxPolls) {
+        clearInterval(interval);
+        return;
+      }
+      try {
+        const { data } = await supabaseAny
+          .from("cases")
+          .select("status, ai_pipeline_status, classification")
+          .eq("id", caseId)
+          .single();
+        if (data && normalizeCaseStatus(data.status) !== "yellow_review") {
+          setCaseData((prev: CaseRow | null) =>
+            prev ? { ...prev, status: data.status, ai_pipeline_status: data.ai_pipeline_status, classification: data.classification, updated_at: new Date().toISOString() } : prev,
+          );
+          loadContract();
+          loadCheckResults();
+          loadClassification();
+          clearInterval(interval);
+        }
+      } catch {
+        // silent
+      }
+    }, 4000);
+
+    return () => clearInterval(interval);
+  }, [caseId, caseData?.status, caseData?.ai_pipeline_status, loadContract, loadCheckResults, loadClassification]);
+
   // Build dynamic correction requirements from check results
   const corrections = useMemo(() => {
     const buildFriendlyMessage = (cr: CheckResult) => {
