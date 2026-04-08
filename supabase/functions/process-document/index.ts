@@ -127,7 +127,6 @@ function uint8ToBase64(bytes: Uint8Array): string {
   return btoa(binary);
 }
 
-// Claude Haiku OCR - PDF es kep feldolgozas
 async function callClaudeOCR(
   base64: string,
   mimeType: string,
@@ -135,7 +134,6 @@ async function callClaudeOCR(
   fileName: string | null,
 ): Promise<string> {
   try {
-    // Claude nativ document/image input
     const isImage = mimeType.startsWith("image/");
     const isPdf = mimeType === "application/pdf" || mimeType === "application/x-pdf";
 
@@ -143,22 +141,14 @@ async function callClaudeOCR(
     if (isPdf) {
       contentBlock = {
         type: "document",
-        source: {
-          type: "base64",
-          media_type: "application/pdf",
-          data: base64,
-        },
+        source: { type: "base64", media_type: "application/pdf", data: base64 },
       };
     } else if (isImage) {
       const supportedImageTypes = ["image/jpeg", "image/png", "image/gif", "image/webp"];
       const claudeMime = supportedImageTypes.includes(mimeType) ? mimeType : "image/jpeg";
       contentBlock = {
         type: "image",
-        source: {
-          type: "base64",
-          media_type: claudeMime,
-          data: base64,
-        },
+        source: { type: "base64", media_type: claudeMime, data: base64 },
       };
     } else {
       console.warn("callClaudeOCR: unsupported mime type:", mimeType);
@@ -239,13 +229,11 @@ async function extractTextFromFile(
   }
 
   if (effectiveMime === "application/pdf" || effectiveMime === "application/x-pdf") {
-    // Eloszor probaljuk szoveges PDF-kent kiolvasni
     try {
       const rawText = await fileData.text();
       if (!rawText.trimStart().startsWith("%PDF-")) {
         const cleanText = rawText.replace(/[^\x20-\x7E\n\r\t\u00C0-\u024F]/g, "").trim();
         if (cleanText.length > 200 && isReadableText(cleanText)) {
-          console.log(`PDF text extraction: ${cleanText.length} chars, readable`);
           return { text: cleanText, method: "pdf_text_extraction" };
         }
       }
@@ -253,14 +241,10 @@ async function extractTextFromFile(
       /* fall through to Claude */
     }
 
-    // Claude Haiku nativ PDF feldolgozas
-    console.log("Routing PDF to Claude Haiku (native document input)");
     const pdfText = await callClaudeOCR(base64, "application/pdf", anthropicKey, fileName);
     if (pdfText.length > 0) {
-      console.log(`Claude PDF OCR succeeded: ${pdfText.length} chars`);
       return { text: pdfText, method: "claude_pdf" };
     }
-    console.log("Claude PDF OCR returned 0 chars");
     return { text: "", method: "claude_pdf_failed" };
   }
 
@@ -343,7 +327,6 @@ async function extractFieldsWithAI(
 ): Promise<Record<string, unknown>> {
   if (!text || text.length < 50 || !anthropicKey) return {};
   if (!["timeshare_contract", "share_statement"].includes(documentType)) {
-    console.log(`Skipping AI field extraction for document type: ${documentType}`);
     return {};
   }
   try {
@@ -406,7 +389,6 @@ async function buildRestrictionHitsFromDb(
   }
 
   if (!resolvedPolicyId) {
-    console.log("No active policy version -- skipping restriction scan");
     return [];
   }
 
@@ -425,10 +407,7 @@ async function buildRestrictionHitsFromDb(
     return [];
   }
 
-  if (rules.length === 0) {
-    console.log(`No active restriction rules for policy ${resolvedPolicyId}`);
-    return [];
-  }
+  if (rules.length === 0) return [];
 
   const normalizedText = normalizeText(text);
   const hits: RestrictionHit[] = [];
@@ -469,7 +448,6 @@ async function buildRestrictionHitsFromDb(
     }
   }
 
-  console.log(`Restriction scan: ${hits.length} hits / ${rules.length} rules`);
   return hits;
 }
 
@@ -489,7 +467,6 @@ function compareWithWeekOffer(
   documentType: string,
 ): MismatchResult[] {
   if (documentType !== "timeshare_contract") {
-    console.log(`Skipping field_match comparison for document type: ${documentType}`);
     return [];
   }
 
@@ -818,7 +795,11 @@ Deno.serve(async (req) => {
       })
       .eq("id", job.id);
 
+    // -------------------------------------------------------------------
     // classify-case meghivasa
+    // A classify-case dontese az osszes dok keszulete alapjan tortenik.
+    // A generate-sale-contract triggeret a classify-case kezeli -- itt NEM triggerelunk.
+    // -------------------------------------------------------------------
     try {
       const classifyResponse = await fetch(`${supabaseUrl}/functions/v1/classify-case`, {
         method: "POST",
@@ -830,19 +811,14 @@ Deno.serve(async (req) => {
         console.error("classify-case invoke failed:", classifyResponse.status, await classifyResponse.text());
       } else {
         const classifyData = await classifyResponse.json();
-        console.log(
-          `classify-case result: classification=${classifyData.classification}, previous_status=${classifyData.previous_case_status}`,
-        );
-
-        if (classifyData.classification === "green" && classifyData.previous_case_status === "yellow_review") {
-          console.log("Recheck result is green from yellow_review -> triggering generate-sale-contract");
-          fetch(`${supabaseUrl}/functions/v1/generate-sale-contract`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json", apikey: serviceRoleKey },
-            body: JSON.stringify({ case_id: doc.case_id }),
-          }).catch((err) => {
-            console.error("generate-sale-contract fire-and-forget error:", err);
-          });
+        if (classifyData.pending) {
+          console.log(
+            `classify-case returned pending (${classifyData.docs_done}/${classifyData.docs_total} docs done) -- waiting for other documents`,
+          );
+        } else {
+          console.log(
+            `classify-case result: classification=${classifyData.classification}, status=${classifyData.case_status}`,
+          );
         }
       }
     } catch (classifyErr) {
