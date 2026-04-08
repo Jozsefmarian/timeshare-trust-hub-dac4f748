@@ -276,14 +276,17 @@ export default function CaseDetail() {
         return;
       }
       try {
-        const { data } = await supabaseAny
-          .from("cases")
-          .select("status, ai_pipeline_status")
-          .eq("id", caseId)
-          .single();
+        const { data } = await supabaseAny.from("cases").select("status, ai_pipeline_status").eq("id", caseId).single();
         if (data && normalizeCaseStatus(data.status) !== "green_approved") {
           setCaseData((prev: CaseRow | null) =>
-            prev ? { ...prev, status: data.status, ai_pipeline_status: data.ai_pipeline_status, updated_at: new Date().toISOString() } : prev,
+            prev
+              ? {
+                  ...prev,
+                  status: data.status,
+                  ai_pipeline_status: data.ai_pipeline_status,
+                  updated_at: new Date().toISOString(),
+                }
+              : prev,
           );
           loadContract();
           clearInterval(interval);
@@ -320,7 +323,15 @@ export default function CaseDetail() {
           .single();
         if (data && normalizeCaseStatus(data.status) !== "yellow_review") {
           setCaseData((prev: CaseRow | null) =>
-            prev ? { ...prev, status: data.status, ai_pipeline_status: data.ai_pipeline_status, classification: data.classification, updated_at: new Date().toISOString() } : prev,
+            prev
+              ? {
+                  ...prev,
+                  status: data.status,
+                  ai_pipeline_status: data.ai_pipeline_status,
+                  classification: data.classification,
+                  updated_at: new Date().toISOString(),
+                }
+              : prev,
           );
           loadContract();
           loadCheckResults();
@@ -451,9 +462,14 @@ export default function CaseDetail() {
       body: { case_id: caseId },
     });
 
-    // Handle 409 (limit reached) — supabase client wraps non-2xx as error
+    // Ha a válaszban recheck_limit_reached van (akár data-ban, akár error context-ben),
+    // azt SOHA nem dobjuk exception-ként — a CorrectionPanel kezeli
+    if (data?.recheck_limit_reached) {
+      return { recheck_limit_reached: true };
+    }
+
     if (error) {
-      // Check if the error response body contains recheck_limit_reached
+      // Utoljára ellenőrizzük az error body-ban is
       const errorBody = typeof error === "object" && error !== null ? (error as any) : null;
       const contextData = errorBody?.context?.body
         ? (() => {
@@ -468,10 +484,6 @@ export default function CaseDetail() {
         return { recheck_limit_reached: true };
       }
       throw error;
-    }
-
-    if (data?.recheck_limit_reached) {
-      return { recheck_limit_reached: true };
     }
 
     // Normal success — refresh UI after delay
