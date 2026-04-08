@@ -95,20 +95,67 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: "Missing required field: case_id" }, 400);
     }
 
+    // --- Betoltjuk az ugyet ---
     const { data: caseRow, error: caseLoadError } = await serviceClient
       .from("cases")
-      .select("id, status, submitted_at")
+      .select("id, status, submitted_at, recheck_count")
       .eq("id", caseId)
       .maybeSingle();
 
     if (caseLoadError) {
       return jsonResponse({ error: "Failed to load case", detail: caseLoadError.message }, 500);
     }
-
     if (!caseRow) {
       return jsonResponse({ error: "Case not found" }, 404);
     }
 
+    // -------------------------------------------------------------------
+    // KRITIKUS ELLENORZES: Minden feltoltott dokumentum feldolgozasa kesz?
+    // Ha nem, ne dontson az ugy sorsarol -- varjunk a tobbi dokumentumra.
+    // Ez akadalyozza meg, hogy a parhuzamos process-document futtatasok
+    // egymasnak ellentmondo statuszt irjanak az ügyre.
+    // -------------------------------------------------------------------
+    const { data: allDocs, error: docsError } = await serviceClient
+      .from("documents")
+      .select("id, ai_status, upload_status")
+      .eq("case_id", caseId)
+      .eq("upload_status", "uploaded");
+
+    if (docsError) {
+      return jsonResponse({ error: "Failed to load documents", detail: docsError.message }, 500);
+    }
+
+    const totalDocs = (allDocs ?? []).length;
+    const doneDocs = (allDocs ?? []).filter((d: any) => d.ai_status === "completed" || d.ai_status === "failed").length;
+
+    console.log(`Document readiness: ${doneDocs}/${totalDocs} done for case ${caseId}`);
+
+    if (totalDocs === 0) {
+      return jsonResponse({
+        success: false,
+        pending: true,
+        reason: "no_uploaded_documents",
+        case_id: caseId,
+      });
+    }
+
+    if (doneDocs < totalDocs) {
+      // Meg nem minden dok kesz -- ez a classify-case hivas korai, visszaterunk
+      // A utolso process-document majd ujra meghivja ezt, es akkor mar mind kesz lesz
+      console.log(`classify-case: returning pending (${doneDocs}/${totalDocs} docs done)`);
+      return jsonResponse({
+        success: false,
+        pending: true,
+        reason: "not_all_docs_processed",
+        docs_done: doneDocs,
+        docs_total: totalDocs,
+        case_id: caseId,
+      });
+    }
+
+    // -------------------------------------------------------------------
+    // Mind kesz -- elvegezzuk a besorolast
+    // -------------------------------------------------------------------
     const { data: checks, error: checksError } = await serviceClient
       .from("check_results")
       .select("id, case_id, document_id, check_type, result, severity, message, details, created_at")
@@ -134,20 +181,14 @@ Deno.serve(async (req) => {
     const checkRows = (checks ?? []) as CheckRow[];
     const hitRows = (restrictionHits ?? []) as RestrictionHitRow[];
 
-    // --- Besorolási logika ---
-    // Piros feltételek
+    // --- Besorolasi logika ---
     const failChecks = checkRows.filter((row) => row.result === "fail");
     const highFailChecks = failChecks.filter((row) => (row.severity ?? "").toLowerCase() === "high");
     const autoRejectHits = hitRows.filter((row) => (row.action ?? "").toUpperCase() === "AUTO_REJECT");
-
-    // Sárga feltételek
     const warningChecks = checkRows.filter((row) => row.result === "warning");
     const manualLegalHits = hitRows.filter((row) => (row.action ?? "").toUpperCase() === "FLAG_MANUAL_LEGAL");
     const allowButYellowHits = hitRows.filter((row) => (row.action ?? "").toUpperCase() === "ALLOW_BUT_YELLOW");
     const confirmedHits = hitRows.filter((row) => (row.severity ?? "").toUpperCase() === "CONFIRMED");
-
-    // KRITIKUS: correction_required result = mezőeltérés → sárga (fix_required ág)
-    // Ez az 1. réteg (field_match) kimenete: ha az AI eltérést talált, a seller javítást kap
     const correctionRequiredChecks = checkRows.filter((row) => row.result === "correction_required");
 
     let classification: "green" | "yellow" | "red" = "green";
@@ -155,7 +196,6 @@ Deno.serve(async (req) => {
     let reasonCodes: string[] = [];
 
     if (autoRejectHits.length > 0 || highFailChecks.length > 0) {
-      // PIROS: auto_reject restriction hit, vagy súlyos (high) fail check
       classification = "red";
       reasonSummary = "Auto reject condition found.";
       reasonCodes = uniq([
@@ -169,10 +209,6 @@ Deno.serve(async (req) => {
       confirmedHits.length > 0 ||
       warningChecks.length > 0
     ) {
-      // SÁRGA:
-      // - correction_required: mezőeltérés, seller javíthat (fix_required ág)
-      // - flag_manual_legal / allow_but_yellow / confirmed restriction: admin review szükséges (manual_review ág)
-      // - warning: általános figyelmeztető
       classification = "yellow";
       if (
         correctionRequiredChecks.length > 0 &&
@@ -194,7 +230,6 @@ Deno.serve(async (req) => {
         ...warningChecks.map((row) => `WARNING:${row.check_type}`),
       ]);
     } else {
-      // ZÖLD: nincs eltérés, nincs restriction hit
       classification = "green";
       reasonSummary = "Checks passed and no restriction hit requires review.";
       reasonCodes = ["CHECKS_OK"];
@@ -222,13 +257,11 @@ Deno.serve(async (req) => {
 
     const previousStatus = caseRow.status ?? null;
     const isSubmitted = !!caseRow.submitted_at;
-
-    // Csak akkor írunk business státuszt, ha már submitelve van
-    // FIX: Ha az ugy yellow_review-ban volt es az uj eredmeny zold,
-    // mindig frissitsuk a statuszt (recheck utan zold eredmeny eseten is).
+    const statusChanged = previousStatus !== mappedStatus;
     const wasInReview = previousStatus === "yellow_review";
     const isNowGreen = mappedStatus === "green_approved";
-    const statusChanged = previousStatus !== mappedStatus;
+
+    // Csak akkor irunk business statuszt, ha mar submitelve van
     const shouldUpdateBusinessStatus = isSubmitted && (statusChanged || (wasInReview && isNowGreen));
 
     const caseUpdatePayload: Record<string, unknown> = {
@@ -246,15 +279,39 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: "Failed to update case classification", detail: caseUpdateError.message }, 500);
     }
 
+    console.log(
+      `classify-case: case=${caseId} classification=${classification} previous_status=${previousStatus} new_status=${shouldUpdateBusinessStatus ? mappedStatus : "(unchanged)"}`,
+    );
+
+    // -------------------------------------------------------------------
+    // generate-sale-contract trigger:
+    // CSAK ha: minden dok kesz + eredmeny zold + elozo statuszt yellow_review volt
+    // Ez azt jelenti: recheck utan sikeres javitas -> automatikus szerzodesgeneral
+    // A process-document EF-bol eltavolitottuk ezt a logikát (ott nem tudható
+    // biztosan, hogy ez az utolso dok volt-e).
+    // -------------------------------------------------------------------
+    if (shouldUpdateBusinessStatus && isNowGreen && wasInReview) {
+      console.log(`classify-case: green result after yellow_review -> triggering generate-sale-contract`);
+      fetch(`${supabaseUrl}/functions/v1/generate-sale-contract`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", apikey: serviceRoleKey },
+        body: JSON.stringify({ case_id: caseId }),
+      }).catch((err) => {
+        console.error("generate-sale-contract fire-and-forget error:", err);
+      });
+    }
+
     return jsonResponse({
       success: true,
       case_id: caseId,
-      case_status: mappedStatus,
-      previous_case_status: caseRow.status,
+      case_status: shouldUpdateBusinessStatus ? mappedStatus : previousStatus,
+      previous_case_status: previousStatus,
       classification_id: insertedClassification.id,
       classification,
       reason_summary: reasonSummary,
       reason_codes: reasonCodes,
+      docs_total: totalDocs,
+      docs_done: doneDocs,
       stats: {
         check_count: checkRows.length,
         fail_count: failChecks.length,
