@@ -1,11 +1,17 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { AlertTriangle } from "lucide-react";
 
+// messageType értékek:
+// "uze1" — Üzenet 1: sárga1 ág, recheck limit elérve, manuális review kényszer
+// "uze3" — Üzenet 3: sárga2 ág, policy ütközés, nem volt recheck
+// null   — ha a classifications rekord még töltődik (transition állapot)
+
 interface ManualReviewPanelProps {
+  messageType: "uze1" | "uze3" | null;
   reasonSummary?: string | null;
 }
 
-export default function ManualReviewPanel({ reasonSummary }: ManualReviewPanelProps) {
+export default function ManualReviewPanel({ messageType, reasonSummary }: ManualReviewPanelProps) {
   return (
     <Card className="border-amber-200 bg-amber-50/50 shadow-sm">
       <CardHeader className="pb-3">
@@ -16,18 +22,26 @@ export default function ManualReviewPanel({ reasonSummary }: ManualReviewPanelPr
       </CardHeader>
 
       <CardContent className="space-y-3 text-sm text-amber-900">
-        <p>Az Ön ügyét nem tudtuk automatikusan véglegesíteni, ezért manuális admin ellenőrzésre került.</p>
-
-        {reasonSummary && (
-          <div className="rounded-md border border-amber-200 bg-white/70 p-3">
-            <p className="font-medium">Ellenőrzési megjegyzés</p>
-            <p className="mt-1 text-amber-800">
-              {reasonSummary === "Manual review recommended." ? "Manuális ellenőrzés javasolt." : reasonSummary}
-            </p>
-          </div>
+        {/* Üzenet 1: sárga1 limit — recheck_limit_reached */}
+        {messageType === "uze1" && (
+          <p>
+            Sajnos a javítás sikertelen volt, így az ügyét átirányítottuk munkatársunkhoz ellenőrzésre. A manuális
+            ellenőrzést legfeljebb 24 órán belül elvégezzük. Az eredményről azonnali értesítést küldünk Önnek e-mailben
+            és folytathatja az adásvételi folyamatot.
+          </p>
         )}
 
-        {!reasonSummary && (
+        {/* Üzenet 3: sárga2 — policy ütközés, nem kizáró */}
+        {messageType === "uze3" && (
+          <p>
+            Az Ön által feltöltött dokumentumok alapján, az üdülési hetének megvásárlásáról további részletes elemzést
+            követően tudunk megalapozott döntést hozni. Az elemzést legfeljebb 24 órán belül elvégezzük. Az eredményről
+            és a további teendőkről emailben küldünk Önnek tájékoztatást.
+          </p>
+        )}
+
+        {/* Töltődés közben fallback */}
+        {messageType === null && (
           <p className="text-amber-800">
             Az adminisztrátor hamarosan átnézi az ügyet. Az eredményről emailben is értesítjük.
           </p>
