@@ -95,15 +95,16 @@ function isInternalRequest(req: Request, serviceRoleKey: string) {
 function normalizeText(value: string | null | undefined): string {
   return (value ?? "")
     .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[u0300-u036f]/g, "")
     .toLowerCase()
-    .replace(/\s+/g, " ")
+    .replace(/s+/g, " ")
     .trim();
 }
 
 function isReadableText(text: string): boolean {
   if (!text || text.length < 30) return false;
-  const printable = text.replace(/[^\x20-\x7E\u00C0-\u024F\n\r\t]/g, "");
+  const printable = text.replace(/[^x20-x7Eu00C0-u024F
+r	]/g, "");
   const ratio = printable.length / text.length;
   return ratio >= 0.7;
 }
@@ -233,7 +234,8 @@ async function extractTextFromFile(
     try {
       const rawText = await fileData.text();
       if (!rawText.trimStart().startsWith("%PDF-")) {
-        const cleanText = rawText.replace(/[^\x20-\x7E\n\r\t\u00C0-\u024F]/g, "").trim();
+        const cleanText = rawText.replace(/[^x20-x7E
+r	u00C0-u024F]/g, "").trim();
         if (cleanText.length > 200 && isReadableText(cleanText)) {
           return { text: cleanText, method: "pdf_text_extraction" };
         }
@@ -276,42 +278,44 @@ function detectDocumentType(documentType: string | null, fileName: string | null
 }
 
 function extractFieldsFromText(text: string, detectedType: string): Record<string, unknown> {
-  const normalized = text.replace(/\r/g, "");
+  const normalized = text.replace(/r/g, "");
   const result: Record<string, unknown> = { detected_document_type: detectedType };
 
-  const weekMatch = normalized.match(/(?:het(?:e|\u00e9ben|eben)?|week)\s*[:\-]?\s*(\d{1,2})/i);
+  const weekMatch = normalized.match(/(?:het(?:e|u00e9ben|eben)?|week)s*[:-]?s*(d{1,2})/i);
   if (weekMatch) result.week_number = Number(weekMatch[1]);
 
   const contractMatch = normalized.match(
-    /(?:szerz[\u0151o]d[\u00e9e]s(?:sz[a\u00e1]m)?|contract(?: number)?)\s*[:\-]?\s*([A-Z0-9\-\/]+)/i,
+    /(?:szerz[u0151o]d[u00e9e]s(?:sz[au00e1]m)?|contract(?: number)?)s*[:-]?s*([A-Z0-9-/]+)/i,
   );
   if (contractMatch) result.contract_number = contractMatch[1];
 
   const shareCountMatch = normalized.match(
-    /(?:r[e\u00e9]szv[e\u00e9]ny(?:ek)?\s*sz[a\u00e1]ma|share count)\s*[:\-]?\s*(\d+)/i,
+    /(?:r[eu00e9]szv[eu00e9]ny(?:ek)?s*sz[au00e1]ma|share count)s*[:-]?s*(d+)/i,
   );
   if (shareCountMatch) result.share_count = Number(shareCountMatch[1]);
 
   const annualFeeMatch = normalized.match(
-    /(?:fenntart[a\u00e1]si d[i\u00ed]j|annual fee)\s*[:\-]?\s*([\d\s.,]+)\s*(?:ft|huf)?/i,
+    /(?:fenntart[au00e1]si d[iu00ed]j|annual fee)s*[:-]?s*([ds.,]+)s*(?:ft|huf)?/i,
   );
   if (annualFeeMatch) result.annual_fee = annualFeeMatch[1].trim();
 
-  const ownerLineMatch = normalized.match(/(?:jogosult|tulajdonos|owner|n[e\u00e9]v)\s*[:\-]?\s*([^\n]+)/i);
+  const ownerLineMatch = normalized.match(/(?:jogosult|tulajdonos|owner|n[eu00e9]v)s*[:-]?s*([^
+]+)/i);
   if (ownerLineMatch) result.owner_name = ownerLineMatch[1].trim();
 
   const resortLineMatch = normalized.match(
-    /(?:\u00fcd\u00fcl[\u0151o]ingatlan|resort|hotel|club)\s*[:\-]?\s*([^\n]+)/i,
+    /(?:u00fcdu00fcl[u0151o]ingatlan|resort|hotel|club)s*[:-]?s*([^
+]+)/i,
   );
   if (resortLineMatch) result.resort_name = resortLineMatch[1].trim();
 
   const unitNumberMatch = normalized.match(
-    /(?:egys[e\u00e9]g(?:sz[a\u00e1]m)?|apartman\s*sz[a\u00e1]m|unit(?:\s*number)?|apart(?:ment)?\s*no)\s*[:\-]?\s*([A-Z0-9\-\/]+)/i,
+    /(?:egys[eu00e9]g(?:sz[au00e1]m)?|apartmans*sz[au00e1]m|unit(?:s*number)?|apart(?:ment)?s*no)s*[:-]?s*([A-Z0-9-/]+)/i,
   );
   if (unitNumberMatch) result.unit_number = unitNumberMatch[1].trim();
 
   const capacityMatch = normalized.match(
-    /(?:(\d+)\s*f[o\u0151]\s*(?:r[e\u00e9]sz[e\u00e9]re|sz[a\u00e1]m[a\u00e1]ra)?|(\d+)\s*szem[e\u00e9]lyes|capacity\s*[:\-]?\s*(\d+))/i,
+    /(?:(d+)s*f[ou0151]s*(?:r[eu00e9]sz[eu00e9]re|sz[au00e1]m[au00e1]ra)?|(d+)s*szem[eu00e9]lyes|capacitys*[:-]?s*(d+))/i,
   );
   if (capacityMatch) {
     const cap = Number(capacityMatch[1] ?? capacityMatch[2] ?? capacityMatch[3]);
@@ -346,7 +350,23 @@ async function extractFieldsWithAI(
           messages: [
             {
               role: "user",
-              content: `Te egy magyar udulesi szerzodoseket elemzo asszisztens vagy. A megadott szerzodes szovegebol nyerd ki a kovetkezo mezokat JSON formatumban. Csak valodi adatokat adj vissza, ne talalj ki semmit. Ha egy mezo nem talalhato, hagyd ki.\n\nKeresendo mezok:\n- resort_name: udulohely neve\n- week_number: het szama egesz szamkent\n- owner_name: tulajdonos neve\n- contract_number: szerzodes szama\n- annual_fee: eves fenntartasi dij szamkent (pl. 150000)\n- share_count: reszvenyek darabszama\n- unit_type: apartman tipusa (pl. studio, 1 haloszobas)\n- unit_number: egyseg/apartman azonositoja (pl. A-12 vagy 304)\n- capacity: max elhelyezheto fo szama egesz szamkent\n\nValaszolj KIZAROLAG valid JSON objektummal, semmi massal.\n\nSzerzodes szovege:\n${text.substring(0, 8000)}`,
+              content: `Te egy magyar udulesi szerzodoseket elemzo asszisztens vagy. A megadott szerzodes szovegebol nyerd ki a kovetkezo mezokat JSON formatumban. Csak valodi adatokat adj vissza, ne talalj ki semmit. Ha egy mezo nem talalhato, hagyd ki.
+
+Keresendo mezok:
+- resort_name: udulohely neve
+- week_number: het szama egesz szamkent
+- owner_name: tulajdonos neve
+- contract_number: szerzodes szama
+- annual_fee: eves fenntartasi dij szamkent (pl. 150000)
+- share_count: reszvenyek darabszama
+- unit_type: apartman tipusa (pl. studio, 1 haloszobas)
+- unit_number: egyseg/apartman azonositoja (pl. A-12 vagy 304)
+- capacity: max elhelyezheto fo szama egesz szamkent
+
+Valaszolj KIZAROLAG valid JSON objektummal, semmi massal.
+
+Szerzodes szovege:
+${text.substring(0, 8000)}`,
             },
           ],
         }),
