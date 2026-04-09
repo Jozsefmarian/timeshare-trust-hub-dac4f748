@@ -95,7 +95,7 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: "Missing required field: case_id" }, 400);
     }
 
-    // --- Betoltjuk az ugyet ---
+    // --- Load case ---
     const { data: caseRow, error: caseLoadError } = await serviceClient
       .from("cases")
       .select("id, status, submitted_at, recheck_count")
@@ -110,14 +110,11 @@ Deno.serve(async (req) => {
     }
 
     // -------------------------------------------------------------------
-    // KRITIKUS ELLENORZES: Minden feltoltott dokumentum feldolgozasa kesz?
-    // Ha nem, ne dontson az ugy sorsarol -- varjunk a tobbi dokumentumra.
-    // Ez akadalyozza meg, hogy a parhuzamos process-document futtatasok
-    // egymasnak ellentmondo statuszt irjanak az ügyre.
+    // Wait for all uploaded documents to finish processing before deciding.
     // -------------------------------------------------------------------
     const { data: allDocs, error: docsError } = await serviceClient
       .from("documents")
-      .select("id, ai_status, upload_status")
+      .select("id, ai_status, upload_status, document_type")
       .eq("case_id", caseId)
       .eq("upload_status", "uploaded");
 
@@ -140,8 +137,6 @@ Deno.serve(async (req) => {
     }
 
     if (doneDocs < totalDocs) {
-      // Meg nem minden dok kesz -- ez a classify-case hivas korai, visszaterunk
-      // A utolso process-document majd ujra meghivja ezt, es akkor mar mind kesz lesz
       console.log(`classify-case: returning pending (${doneDocs}/${totalDocs} docs done)`);
       return jsonResponse({
         success: false,
@@ -154,7 +149,7 @@ Deno.serve(async (req) => {
     }
 
     // -------------------------------------------------------------------
-    // Mind kesz -- elvegezzuk a besorolast
+    // All docs processed. Load check results and restriction hits.
     // -------------------------------------------------------------------
     const { data: checks, error: checksError } = await serviceClient
       .from("check_results")
@@ -181,7 +176,29 @@ Deno.serve(async (req) => {
     const checkRows = (checks ?? []) as CheckRow[];
     const hitRows = (restrictionHits ?? []) as RestrictionHitRow[];
 
-    // --- Besorolasi logika ---
+    // -------------------------------------------------------------------
+    // SAFETY NET: If there is a timeshare_contract document but no
+    // field_match or document_check check results exist for it, the field
+    // comparison did not run (e.g. process-document failed silently).
+    // In that case we force yellow so an admin can review manually.
+    // -------------------------------------------------------------------
+    const hasTimeshareContractDoc = (allDocs ?? []).some(
+      (d: any) =>
+        (d.document_type ?? "").toLowerCase().includes("timeshare") ||
+        (d.document_type ?? "").toLowerCase().includes("contract") ||
+        (d.document_type ?? "").toLowerCase().includes("udulo"),
+    );
+    const hasFieldMatchOrDocCheckResults = checkRows.some(
+      (r) => r.check_type === "field_match" || r.check_type === "document_check",
+    );
+    const safetyNetTriggered = hasTimeshareContractDoc && !hasFieldMatchOrDocCheckResults;
+    if (safetyNetTriggered) {
+      console.log(
+        `classify-case SAFETY NET: timeshare_contract doc found but no field_match/document_check results — forcing yellow`,
+      );
+    }
+
+    // --- Classification logic ---
     const failChecks = checkRows.filter((row) => row.result === "fail");
     const highFailChecks = failChecks.filter((row) => (row.severity ?? "").toLowerCase() === "high");
     const autoRejectHits = hitRows.filter((row) => (row.action ?? "").toUpperCase() === "AUTO_REJECT");
@@ -203,6 +220,7 @@ Deno.serve(async (req) => {
         ...highFailChecks.map((row) => `FAIL:${row.check_type}`),
       ]);
     } else if (
+      safetyNetTriggered ||
       correctionRequiredChecks.length > 0 ||
       manualLegalHits.length > 0 ||
       allowButYellowHits.length > 0 ||
@@ -210,25 +228,33 @@ Deno.serve(async (req) => {
       warningChecks.length > 0
     ) {
       classification = "yellow";
-      if (
+      if (safetyNetTriggered) {
+        reasonSummary = "Field comparison did not run. Manual review required.";
+        reasonCodes = ["NO_FIELD_MATCH_RESULTS"];
+      } else if (
         correctionRequiredChecks.length > 0 &&
         manualLegalHits.length === 0 &&
         allowButYellowHits.length === 0 &&
         confirmedHits.length === 0
       ) {
         reasonSummary = "Field mismatch found. Seller correction required.";
+        reasonCodes = uniq(
+          correctionRequiredChecks.map(
+            (row) => `CORRECTION_REQUIRED:${(row.details as any)?.field_name ?? row.check_type}`,
+          ),
+        );
       } else {
         reasonSummary = "Manual review recommended.";
+        reasonCodes = uniq([
+          ...correctionRequiredChecks.map(
+            (row) => `CORRECTION_REQUIRED:${(row.details as any)?.field_name ?? row.check_type}`,
+          ),
+          ...manualLegalHits.map(() => "FLAG_MANUAL_LEGAL"),
+          ...allowButYellowHits.map(() => "ALLOW_BUT_YELLOW"),
+          ...confirmedHits.map(() => "CONFIRMED_RESTRICTION"),
+          ...warningChecks.map((row) => `WARNING:${row.check_type}`),
+        ]);
       }
-      reasonCodes = uniq([
-        ...correctionRequiredChecks.map(
-          (row) => `CORRECTION_REQUIRED:${(row.details as any)?.field_name ?? row.check_type}`,
-        ),
-        ...manualLegalHits.map(() => "FLAG_MANUAL_LEGAL"),
-        ...allowButYellowHits.map(() => "ALLOW_BUT_YELLOW"),
-        ...confirmedHits.map(() => "CONFIRMED_RESTRICTION"),
-        ...warningChecks.map((row) => `WARNING:${row.check_type}`),
-      ]);
     } else {
       classification = "green";
       reasonSummary = "Checks passed and no restriction hit requires review.";
@@ -261,7 +287,6 @@ Deno.serve(async (req) => {
     const wasInReview = previousStatus === "yellow_review";
     const isNowGreen = mappedStatus === "green_approved";
 
-    // Csak akkor irunk business statuszt, ha mar submitelve van
     const shouldUpdateBusinessStatus = isSubmitted && (statusChanged || (wasInReview && isNowGreen));
 
     const caseUpdatePayload: Record<string, unknown> = {
@@ -283,13 +308,7 @@ Deno.serve(async (req) => {
       `classify-case: case=${caseId} classification=${classification} previous_status=${previousStatus} new_status=${shouldUpdateBusinessStatus ? mappedStatus : "(unchanged)"}`,
     );
 
-    // -------------------------------------------------------------------
-    // generate-sale-contract trigger:
-    // CSAK ha: minden dok kesz + eredmeny zold + elozo statuszt yellow_review volt
-    // Ez azt jelenti: recheck utan sikeres javitas -> automatikus szerzodesgeneral
-    // A process-document EF-bol eltavolitottuk ezt a logikát (ott nem tudható
-    // biztosan, hogy ez az utolso dok volt-e).
-    // -------------------------------------------------------------------
+    // Trigger contract generation after yellow_review → green (recheck success)
     if (shouldUpdateBusinessStatus && isNowGreen && wasInReview) {
       console.log(`classify-case: green result after yellow_review -> triggering generate-sale-contract`);
       fetch(`${supabaseUrl}/functions/v1/generate-sale-contract`, {
@@ -310,6 +329,7 @@ Deno.serve(async (req) => {
       classification,
       reason_summary: reasonSummary,
       reason_codes: reasonCodes,
+      safety_net_triggered: safetyNetTriggered,
       docs_total: totalDocs,
       docs_done: doneDocs,
       stats: {
