@@ -266,18 +266,18 @@ Deno.serve(async (req) => {
     });
 
     // 10. Zöld: szerződésgenerálás + email magic linkkel
+    // FIX: existingContracts is defined here (outside if block) so it's in scope for the return statement
+    let hasExistingContracts = false;
+
     if (classification === "green") {
-      // Ellenőrzés: már vannak-e generált szerződések?
-      // Ha igen, kihagyjuk a generálást (pl. recheck után már automatikusan lefutott)
-      // Ha az admin explicit újragenerálást akar, azt az AdminCaseDetail külön gombbal végzi
-      const { data: existingContracts } = await serviceClient
+      const { data: existingContractsData } = await serviceClient
         .from("contracts")
         .select("id")
         .eq("case_id", case_id)
         .in("contract_type", ["timeshare_transfer", "power_of_attorney", "share_transfer", "securities_transfer"])
         .limit(1);
 
-      const hasExistingContracts = (existingContracts ?? []).length > 0;
+      hasExistingContracts = (existingContractsData ?? []).length > 0;
 
       if (hasExistingContracts) {
         console.log(`case_id=${case_id}: existing contracts found, skipping auto-generation`);
@@ -289,11 +289,10 @@ Deno.serve(async (req) => {
           });
         } catch (genErr) {
           console.error("generate-sale-contract auto-invoke error:", genErr);
-          // Nem blokkoló hiba
         }
       }
 
-      // Magic link + email küldése (szerz. meglétetől függetlenül mindig küldjük)
+      // Magic link + email küldése
       if (sellerProfile?.email && resendApiKey) {
         try {
           const { data: linkData, error: linkError } = await serviceClient.auth.admin.generateLink({
@@ -354,7 +353,7 @@ Deno.serve(async (req) => {
         previous_status: caseRow.status,
         new_status: newStatus,
         classification_id: newClassification.id,
-        contracts_already_existed: classification === "green" ? ((existingContracts ?? []).length > 0) : null,
+        contracts_already_existed: classification === "green" ? hasExistingContracts : null,
       },
       200,
       req,
