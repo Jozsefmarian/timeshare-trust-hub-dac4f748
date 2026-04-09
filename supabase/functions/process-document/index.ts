@@ -34,6 +34,7 @@ type DocumentRow = {
   id: string;
   case_id: string;
   document_type: string;
+  document_type_id: string | null;
   storage_bucket: string;
   storage_path: string;
   original_file_name: string | null;
@@ -461,39 +462,85 @@ function textSimilar(a: string, b: string): boolean {
   return false;
 }
 
+/**
+ * Compares extracted document fields with the seller's form data.
+ *
+ * KEY CHANGE vs previous version:
+ * For timeshare_contract, the resort_name and week_number are MANDATORY comparison fields.
+ * If the OCR successfully extracted text (textExtracted=true) but could NOT find these
+ * fields in the document, we treat that as a mismatch (is_mismatch: true, doc_value: null).
+ * This prevents silent green classification when OCR text exists but key data is missing.
+ *
+ * If textExtracted=false (unreadable doc), we skip field comparison entirely — the
+ * caller will add a document_check correction_required row instead.
+ */
 function compareWithWeekOffer(
   extractedFields: Record<string, unknown>,
   weekOffer: WeekOfferRow,
   documentType: string,
+  textExtracted: boolean,
 ): MismatchResult[] {
   if (documentType !== "timeshare_contract") {
     return [];
   }
 
+  // If OCR produced no usable text, skip field comparison.
+  // The caller handles this as an unreadable-document correction.
+  if (!textExtracted) {
+    return [];
+  }
+
   const results: MismatchResult[] = [];
 
-  const docResort = extractedFields.resort_name as string | null | undefined;
-  if (docResort && weekOffer.resort_name_raw) {
-    results.push({
-      field_name: "resort_name_raw",
-      field_label: "Uduloingatlan neve",
-      form_value: weekOffer.resort_name_raw,
-      doc_value: docResort,
-      is_mismatch: !textSimilar(docResort, weekOffer.resort_name_raw),
-    });
+  // --- resort_name: mandatory check ---
+  // Compare if form has a value. If OCR text exists but resort not found → mismatch.
+  if (weekOffer.resort_name_raw) {
+    const docResort = extractedFields.resort_name as string | null | undefined;
+    if (docResort) {
+      results.push({
+        field_name: "resort_name_raw",
+        field_label: "Uduloingatlan neve",
+        form_value: weekOffer.resort_name_raw,
+        doc_value: docResort,
+        is_mismatch: !textSimilar(docResort, weekOffer.resort_name_raw),
+      });
+    } else {
+      // Text extracted but resort name not found in document
+      results.push({
+        field_name: "resort_name_raw",
+        field_label: "Uduloingatlan neve",
+        form_value: weekOffer.resort_name_raw,
+        doc_value: null,
+        is_mismatch: true,
+      });
+    }
   }
 
-  const docWeek = extractedFields.week_number as number | null | undefined;
-  if (docWeek != null && weekOffer.week_number != null) {
-    results.push({
-      field_name: "week_number",
-      field_label: "Udulesi het sorszama",
-      form_value: weekOffer.week_number,
-      doc_value: docWeek,
-      is_mismatch: Number(docWeek) !== Number(weekOffer.week_number),
-    });
+  // --- week_number: mandatory check ---
+  // Compare if form has a value. If OCR text exists but week not found → mismatch.
+  if (weekOffer.week_number != null) {
+    const docWeek = extractedFields.week_number as number | null | undefined;
+    if (docWeek != null) {
+      results.push({
+        field_name: "week_number",
+        field_label: "Udulesi het sorszama",
+        form_value: weekOffer.week_number,
+        doc_value: docWeek,
+        is_mismatch: Number(docWeek) !== Number(weekOffer.week_number),
+      });
+    } else {
+      // Text extracted but week number not found in document
+      results.push({
+        field_name: "week_number",
+        field_label: "Udulesi het sorszama",
+        form_value: weekOffer.week_number,
+        doc_value: null,
+        is_mismatch: true,
+      });
+    }
   }
 
+  // --- unit_number: optional check (only if both sides have a value) ---
   const docUnitNumber = extractedFields.unit_number as string | null | undefined;
   if (docUnitNumber && weekOffer.unit_number) {
     results.push({
@@ -505,6 +552,7 @@ function compareWithWeekOffer(
     });
   }
 
+  // --- capacity: optional check (only if both sides have a value) ---
   const docCapacity = extractedFields.capacity as number | null | undefined;
   if (docCapacity != null && weekOffer.capacity != null) {
     results.push({
@@ -523,11 +571,14 @@ async function saveCheckResults(
   serviceClient: any,
   caseId: string,
   documentId: string,
+  documentTypeId: string | null,
   restrictionHits: RestrictionHit[],
   mismatchResults: MismatchResult[],
+  unreadableDocument: boolean,
 ) {
   const rows: Array<Record<string, unknown>> = [];
 
+  // --- Restriction hit summary row ---
   rows.push({
     case_id: caseId,
     document_id: documentId,
@@ -551,6 +602,28 @@ async function saveCheckResults(
     });
   }
 
+  // --- Unreadable document: seller must re-upload ---
+  if (unreadableDocument) {
+    rows.push({
+      case_id: caseId,
+      document_id: documentId,
+      check_type: "document_check",
+      result: "correction_required",
+      severity: "correction",
+      message: "A feltoltott dokumentum nem olvashato. Kerem toltse fel ujra a dokumentumot jobb minosegben.",
+      details: {
+        document_type_id: documentTypeId,
+        document_type_label: "Udulohaszanulati szerzodes",
+        source: "ocr_failed",
+      },
+    });
+    // Emit no field_match rows when doc is unreadable — document_check is sufficient
+    const { error } = await serviceClient.from("check_results").insert(rows);
+    if (error) throw error;
+    return;
+  }
+
+  // --- Field match rows ---
   for (const m of mismatchResults) {
     if (m.is_mismatch) {
       rows.push({
@@ -679,7 +752,7 @@ Deno.serve(async (req) => {
     const { data: doc, error: docLoadError } = await serviceClient
       .from("documents")
       .select(
-        "id, case_id, document_type, storage_bucket, storage_path, original_file_name, mime_type, file_size_bytes, ai_status, upload_status",
+        "id, case_id, document_type, document_type_id, storage_bucket, storage_path, original_file_name, mime_type, file_size_bytes, ai_status, upload_status",
       )
       .eq("id", job.document_id)
       .single<DocumentRow>();
@@ -731,24 +804,43 @@ Deno.serve(async (req) => {
     }
     const extractedFields = { ...regexFields, ...aiFields };
 
+    // textExtracted = true means OCR produced enough text to attempt field comparison.
+    // Threshold: 100 chars. Below this, the document is considered unreadable.
+    const textExtracted = extractedTextRaw.length >= 100;
+
     let mismatchResults: MismatchResult[] = [];
+    // unreadableTimeshare = timeshare_contract where OCR failed to produce usable text
+    let unreadableTimeshareDoc = false;
+
     try {
       const { data: weekOffer } = await serviceClient
         .from("week_offers")
         .select("resort_name_raw, week_number, unit_number, capacity")
         .eq("case_id", doc.case_id)
         .maybeSingle();
+
       if (weekOffer) {
-        mismatchResults = compareWithWeekOffer(extractedFields, weekOffer as WeekOfferRow, detectedType);
-        const mismatches = mismatchResults.filter((m) => m.is_mismatch);
-        console.log(
-          `Mismatch check (${detectedType}): ${mismatches.length} elteres, chars_extracted=${extractedTextRaw.length}`,
-        );
-        if (mismatches.length > 0)
-          console.log(
-            "Mismatches:",
-            JSON.stringify(mismatches.map((m) => ({ field: m.field_name, form: m.form_value, doc: m.doc_value }))),
+        if (detectedType === "timeshare_contract" && !textExtracted) {
+          // Document is unreadable — will be flagged as document_check correction
+          unreadableTimeshareDoc = true;
+          console.log(`timeshare_contract unreadable: chars_extracted=${extractedTextRaw.length}`);
+        } else {
+          mismatchResults = compareWithWeekOffer(
+            extractedFields,
+            weekOffer as WeekOfferRow,
+            detectedType,
+            textExtracted,
           );
+          const mismatches = mismatchResults.filter((m) => m.is_mismatch);
+          console.log(
+            `Mismatch check (${detectedType}): ${mismatches.length} mismatches, chars_extracted=${extractedTextRaw.length}`,
+          );
+          if (mismatches.length > 0)
+            console.log(
+              "Mismatches:",
+              JSON.stringify(mismatches.map((m) => ({ field: m.field_name, form: m.form_value, doc: m.doc_value }))),
+            );
+        }
       }
     } catch (mismatchErr) {
       console.error("Mismatch comparison error (non-blocking):", mismatchErr);
@@ -757,11 +849,22 @@ Deno.serve(async (req) => {
     const restrictionHits = await buildRestrictionHitsFromDb(extractedTextRaw, serviceClient, job.policy_version_id);
 
     await saveRestrictionHits(serviceClient, doc.case_id, doc.id, job.policy_version_id, restrictionHits);
-    await saveCheckResults(serviceClient, doc.case_id, doc.id, restrictionHits, mismatchResults);
+    await saveCheckResults(
+      serviceClient,
+      doc.case_id,
+      doc.id,
+      doc.document_type_id,
+      restrictionHits,
+      mismatchResults,
+      unreadableTimeshareDoc,
+    );
 
     const validationStatus = restrictionHits.some((h) => h.severity === "confirmed")
       ? "restriction_confirmed"
+      : unreadableTimeshareDoc
+      ? "failed"
       : "match_ok";
+
     await serviceClient
       .from("documents")
       .update({
@@ -791,15 +894,12 @@ Deno.serve(async (req) => {
           ocr_method: ocrMethod,
           chars_extracted: extractedTextRaw.length,
           mismatch_count: mismatchResults.filter((m) => m.is_mismatch).length,
+          unreadable_document: unreadableTimeshareDoc,
         },
       })
       .eq("id", job.id);
 
-    // -------------------------------------------------------------------
-    // classify-case meghivasa
-    // A classify-case dontese az osszes dok keszulete alapjan tortenik.
-    // A generate-sale-contract triggeret a classify-case kezeli -- itt NEM triggerelunk.
-    // -------------------------------------------------------------------
+    // Trigger classify-case. It decides the final classification once all docs are processed.
     try {
       const classifyResponse = await fetch(`${supabaseUrl}/functions/v1/classify-case`, {
         method: "POST",
@@ -834,6 +934,7 @@ Deno.serve(async (req) => {
       restriction_hits_count: restrictionHits.length,
       mismatch_count: mismatchResults.filter((m) => m.is_mismatch).length,
       mismatch_fields: mismatchResults.filter((m) => m.is_mismatch).map((m) => m.field_name),
+      unreadable_document: unreadableTimeshareDoc,
       ocr_method: ocrMethod,
       chars_extracted: extractedTextRaw.length,
     });
