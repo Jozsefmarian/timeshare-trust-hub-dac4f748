@@ -57,6 +57,8 @@ async function sendEmail(params: {
   }
 }
 
+// Email 1 — admin zöldre kattint manuális ellenőrzés után
+// Szöveg: sikeres manuális ellenőrzés, magic link a szerződésekhez
 function buildGreenEmailHtml(params: {
   sellerName: string;
   caseNumber: string;
@@ -73,9 +75,9 @@ function buildGreenEmailHtml(params: {
   <p>Örömmel értesítjük, hogy a <strong>${caseNumber}</strong> számú ügyének dokumentumait átvizsgáltuk és minden rendben van.</p>
   <p>Az adásvételi szerződések elkészültek. A szerződések megtekintéséhez, aláírásához és visszatöltéséhez kérjük, kattintson az alábbi gombra:</p>
   <p style="text-align: center; margin: 32px 0;">
-    <a href="${magicLink}" style="background-color: #1a7a4a; color: white; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block;">Szerz&#x151;dések megtekintése &rarr;</a>
+    <a href="${magicLink}" style="background-color: #1a7a4a; color: white; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block;">Szerződések megtekintése &rarr;</a>
   </p>
-  <p style="font-size: 13px; color: #666;">Ha a gomb nem m&#x171;ködik, másolja be ezt a linket a böngész&#x151;be:<br>
+  <p style="font-size: 13px; color: #666;">Ha a gomb nem működik, másolja be ezt a linket a böngészőbe:<br>
     <a href="${magicLink}" style="color: #1a7a4a;">${magicLink}</a>
   </p>
   <p style="font-size: 13px; color: #666;">A link 24 óráig érvényes. Ha kérdése van, írjon nekünk: 
@@ -87,24 +89,18 @@ function buildGreenEmailHtml(params: {
 </html>`;
 }
 
-function buildRedEmailHtml(params: {
-  sellerName: string;
-  caseNumber: string;
-  reason: string;
-  contactEmail: string;
-}): string {
-  const { sellerName, caseNumber, reason, contactEmail } = params;
+// Email 2 — admin pirosra kattint manuális ellenőrzés után
+// Szöveg: sajnos nem tudjuk megvásárolni, ügyfélszolgálat
+function buildRedEmailHtml(params: { sellerName: string; caseNumber: string; contactEmail: string }): string {
+  const { sellerName, caseNumber, contactEmail } = params;
   return `<!DOCTYPE html>
 <html lang="hu">
 <head><meta charset="UTF-8"></head>
 <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 40px auto; padding: 20px; color: #222; line-height: 1.6;">
   <h2 style="color: #c0392b;">&#x274C; Tájékoztatás az ügy elbírálásáról</h2>
   <p>Kedves ${sellerName}!</p>
-  <p>Sajnálattal értesítjük, hogy a <strong>${caseNumber}</strong> számú ügyét az elvégzett vizsgálat alapján nem tudjuk elfogadni.</p>
-  <div style="background: #fdf2f2; border: 1px solid #f5c6cb; border-radius: 8px; padding: 16px; margin: 20px 0;">
-    <p style="margin: 0; font-size: 14px;"><strong>Indoklás:</strong><br>${reason}</p>
-  </div>
-  <p>Ha kérdése van, vagy további tájékoztatást szeretne, kérjük, vegye fel velünk a kapcsolatot:</p>
+  <p>Sajnálattal értesítjük, hogy a <strong>${caseNumber}</strong> számú ügyét az elvégzett vizsgálat alapján jelenleg nem tudjuk megvásárolni.</p>
+  <p>Sajnos a rendelkezésünkre álló információk alapján jelenleg nem tudjuk megvásárolni az üdülési jogát. A részletekért kérjük keresse fel ügyfélszolgálatunkat.</p>
   <p>&#x1F4E7; <a href="mailto:${contactEmail}" style="color: #c0392b;">${contactEmail}</a></p>
   <p>Köszönjük megértését.</p>
   <hr style="margin-top: 40px; border: none; border-top: 1px solid #eee;">
@@ -213,7 +209,7 @@ Deno.serve(async (req) => {
       }
     }
 
-    // 7. Új classification rekord mentése
+    // 7. Új classification rekord mentése (ADMIN_OVERRIDE reason_code)
     const { data: newClassification, error: classInsertError } = await serviceClient
       .from("classifications")
       .insert({
@@ -244,6 +240,8 @@ Deno.serve(async (req) => {
       .update({
         classification,
         status: newStatus,
+        // Zöld és piros esetén ai_pipeline_status: completed, hogy a seller oldal polling leálljon
+        ai_pipeline_status: "completed",
         updated_at: new Date().toISOString(),
       })
       .eq("id", case_id);
@@ -268,8 +266,7 @@ Deno.serve(async (req) => {
       },
     });
 
-    // 10. Zöld: szerződésgenerálás + email magic linkkel
-    // FIX: existingContracts is defined here (outside if block) so it's in scope for the return statement
+    // 10. Zöld: szerződésgenerálás + Email 1 (magic linkkel)
     let hasExistingContracts = false;
 
     if (classification === "green") {
@@ -282,9 +279,7 @@ Deno.serve(async (req) => {
 
       hasExistingContracts = (existingContractsData ?? []).length > 0;
 
-      if (hasExistingContracts) {
-        console.log(`case_id=${case_id}: existing contracts found, skipping auto-generation`);
-      } else {
+      if (!hasExistingContracts) {
         console.log(`case_id=${case_id}: no existing contracts, triggering generate-sale-contract`);
         try {
           await serviceClient.functions.invoke("generate-sale-contract", {
@@ -295,7 +290,7 @@ Deno.serve(async (req) => {
         }
       }
 
-      // Magic link + email küldése
+      // Email 1 — magic link a szerződésekhez
       if (sellerProfile?.email && resendApiKey) {
         try {
           const { data: linkData, error: linkError } = await serviceClient.auth.admin.generateLink({
@@ -310,7 +305,7 @@ Deno.serve(async (req) => {
 
           await sendEmail({
             to: sellerProfile.email,
-            subject: `Szerzu0151du00e9sek elku00e9szu00fcltek u2013 ${caseRow.case_number}`,
+            subject: `Szerződések elkészültek – ${caseRow.case_number}`,
             html: buildGreenEmailHtml({
               sellerName: sellerProfile.full_name ?? "Tisztelt Ügyfelünk",
               caseNumber: caseRow.case_number,
@@ -325,17 +320,16 @@ Deno.serve(async (req) => {
       }
     }
 
-    // 11. Piros: értesítő email
+    // 11. Piros: Email 2
     if (classification === "red") {
       if (sellerProfile?.email && resendApiKey) {
         try {
           await sendEmail({
             to: sellerProfile.email,
-            subject: `Tu00e1ju00e9koztatu00e1s az u00fcgy elbu00edru00e1lu00e1su00e1ru00f3l u2013 ${caseRow.case_number}`,
+            subject: `Tájékoztatás az ügy elbírálásáról – ${caseRow.case_number}`,
             html: buildRedEmailHtml({
               sellerName: sellerProfile.full_name ?? "Tisztelt Ügyfelünk",
               caseNumber: caseRow.case_number,
-              reason: reason.trim(),
               contactEmail,
             }),
             resendApiKey,
