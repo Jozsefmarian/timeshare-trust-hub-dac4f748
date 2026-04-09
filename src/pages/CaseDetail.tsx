@@ -13,9 +13,9 @@ import ManualReviewPanel from "@/components/seller/panels/ManualReviewPanel";
 import RejectedPanel from "@/components/seller/panels/RejectedPanel";
 import CorrectionPanel from "@/components/seller/panels/CorrectionPanel";
 import ContractPanel from "@/components/seller/panels/ContractPanel";
-
 import PaymentPanel from "@/components/seller/panels/PaymentPanel";
 import SubmittedDocumentsPanel from "@/components/seller/panels/SubmittedDocumentsPanel";
+import ServiceAgreementPanel from "@/components/seller/panels/ServiceAgreementPanel";
 
 const supabaseAny: any = supabase;
 
@@ -33,6 +33,7 @@ type CaseRow = {
   closed_at: string | null;
   classification: string | null;
   ai_pipeline_status: string | null;
+  recheck_count: number;
 };
 
 type WeekOffer = {
@@ -75,6 +76,7 @@ type ContractRow = {
 
 type ClassificationRow = {
   reason_summary: string | null;
+  reason_codes: string[] | null;
 };
 
 type CheckResult = {
@@ -108,7 +110,6 @@ const STATUS_ORDER = [
 
 function normalizeCaseStatus(status: string | null | undefined): string {
   if (!status) return "draft";
-
   const map: Record<string, string> = {
     documents_uploaded: "docs_uploaded",
     review_in_progress: "ai_processing",
@@ -120,13 +121,29 @@ function normalizeCaseStatus(status: string | null | undefined): string {
     waiting_payment: "payment_pending",
     completed: "closed",
   };
-
   return map[status] ?? status;
 }
 
 function isAtOrPast(current: string, target: string): boolean {
   const normalizedCurrent = normalizeCaseStatus(current);
   return STATUS_ORDER.indexOf(normalizedCurrent) >= STATUS_ORDER.indexOf(target);
+}
+
+// ---------- Üzenet típus meghatározása reason_codes alapján ----------
+// Ez a függvény dönti el, hogy a ManualReviewPanel melyik üzenetet mutassa:
+// - "uze1": Üzenet 1 — sárga1 ág, recheck limit elérve (RECHECK_LIMIT_REACHED)
+// - "uze3": Üzenet 3 — sárga2 ág, policy ütközés (nem volt recheck, admin review kell)
+// - null: ha nincs classifications rekord (pl. még töltődik)
+type ManualReviewMessageType = "uze1" | "uze3" | null;
+
+function getManualReviewMessageType(classification: ClassificationRow | null): ManualReviewMessageType {
+  if (!classification?.reason_codes) return null;
+  if (classification.reason_codes.includes("RECHECK_LIMIT_REACHED")) return "uze1";
+  // Sárga2 jellemző kódok: FLAG_MANUAL_LEGAL, ALLOW_BUT_YELLOW, NO_FIELD_MATCH_RESULTS, WARNING:*, CONFIRMED_RESTRICTION
+  const sarga2Codes = ["FLAG_MANUAL_LEGAL", "ALLOW_BUT_YELLOW", "NO_FIELD_MATCH_RESULTS", "CONFIRMED_RESTRICTION"];
+  if (classification.reason_codes.some((c) => sarga2Codes.includes(c) || c.startsWith("WARNING:"))) return "uze3";
+  // Ha van RECHECK_LIMIT_REACHED → uze1, egyébként default: uze3
+  return "uze3";
 }
 
 // ---------- Component ----------
@@ -167,7 +184,7 @@ export default function CaseDetail() {
         const { data, error } = await supabaseAny
           .from("cases")
           .select(
-            "id, case_number, status, status_group, current_step, created_at, updated_at, submitted_at, closed_at, classification, ai_pipeline_status",
+            "id, case_number, status, status_group, current_step, created_at, updated_at, submitted_at, closed_at, classification, ai_pipeline_status, recheck_count",
           )
           .eq("id", caseId)
           .eq("seller_user_id", session.user.id)
@@ -176,7 +193,6 @@ export default function CaseDetail() {
         if (error) throw error;
         setCaseData(data as CaseRow | null);
 
-        // Load week offer
         if (data) {
           const { data: wo } = await supabaseAny
             .from("week_offers")
@@ -194,7 +210,6 @@ export default function CaseDetail() {
     load();
   }, [caseId]);
 
-  // Load supporting data
   const loadDocumentTypes = useCallback(async () => {
     const { data } = await supabaseAny
       .from("document_types")
@@ -234,7 +249,7 @@ export default function CaseDetail() {
     if (!caseId) return;
     const { data } = await supabaseAny
       .from("classifications")
-      .select("reason_summary")
+      .select("reason_summary, reason_codes")
       .eq("case_id", caseId)
       .order("created_at", { ascending: false })
       .limit(1)
@@ -292,18 +307,23 @@ export default function CaseDetail() {
           clearInterval(interval);
         }
       } catch {
-        // silent
+        /* silent */
       }
     }, 4000);
 
     return () => clearInterval(interval);
   }, [caseId, caseData?.status, loadContract]);
 
-  // Polling: yellow_review (ai re-processing) → status change
+  // Polling: yellow_review + AI folyamatban van (ai_pipeline_status = queued/processing)
+  // Ha a classify-case már lefutott (completed) és a status yellow_review,
+  // akkor NEM pollingolunk — az állapot végleges (RECHECK_LIMIT_REACHED vagy sárga2).
   useEffect(() => {
     if (!caseId || !caseData) return;
     const normalized = normalizeCaseStatus(caseData.status);
     if (normalized !== "yellow_review") return;
+
+    // Ha az AI pipeline már kész, nincs mit várni
+    if (caseData.ai_pipeline_status === "completed") return;
 
     let count = 0;
     const maxPolls = 150;
@@ -320,7 +340,31 @@ export default function CaseDetail() {
           .select("status, ai_pipeline_status, classification")
           .eq("id", caseId)
           .single();
-        if (data && normalizeCaseStatus(data.status) !== "yellow_review") {
+
+        if (!data) return;
+
+        const newNormalized = normalizeCaseStatus(data.status);
+
+        // Ha az AI befejezett (completed), frissítjük az állapotot és leállítjuk a pollingot
+        if (data.ai_pipeline_status === "completed") {
+          setCaseData((prev: CaseRow | null) =>
+            prev
+              ? {
+                  ...prev,
+                  status: data.status,
+                  ai_pipeline_status: data.ai_pipeline_status,
+                  classification: data.classification,
+                  updated_at: new Date().toISOString(),
+                }
+              : prev,
+          );
+          loadContract();
+          loadCheckResults();
+          loadClassification();
+          clearInterval(interval);
+        }
+        // Ha az ügy elhagyta a yellow_review státuszt, frissítjük
+        else if (newNormalized !== "yellow_review") {
           setCaseData((prev: CaseRow | null) =>
             prev
               ? {
@@ -338,14 +382,14 @@ export default function CaseDetail() {
           clearInterval(interval);
         }
       } catch {
-        // silent
+        /* silent */
       }
     }, 4000);
 
     return () => clearInterval(interval);
-  }, [caseId, caseData?.status, loadContract, loadCheckResults, loadClassification]);
+  }, [caseId, caseData?.status, caseData?.ai_pipeline_status, loadContract, loadCheckResults, loadClassification]);
 
-  // Build dynamic correction requirements from check results
+  // Corrections meghatározása check_results alapján
   const corrections = useMemo(() => {
     const buildFriendlyMessage = (cr: CheckResult) => {
       const details = cr.details ?? {};
@@ -366,55 +410,28 @@ export default function CaseDetail() {
       };
 
       const fieldLabel =
-        (fieldName ? FIELD_LABEL_HU[fieldName] : null) ||
-        details.field_label ||
-        (fieldName === "resort_name_raw"
-          ? "Üdülőingatlan neve"
-          : fieldName === "week_number"
-            ? "Üdülési hét sorszáma"
-            : fieldName === "unit_type" || fieldName === "apartment_type"
-              ? "Apartman típusa"
-              : fieldName === "season_label" || fieldName === "season"
-                ? "Szezon"
-                : fieldName === "rights_start_year"
-                  ? "Jog kezdő éve"
-                  : fieldName === "rights_end_year"
-                    ? "Jog záró éve"
-                    : fieldName === "share_count"
-                      ? "Részvényszám"
-                      : fieldName === "usage_frequency"
-                        ? "Használat gyakorisága"
-                        : fieldName === "usage_parity"
-                          ? "Év típusa"
-                          : fieldName || "Adatmező");
-
-      const expectedValue =
-        details.expected_value ?? details.document_value ?? details.extracted_value ?? details.matched_value ?? null;
-
+        (fieldName ? FIELD_LABEL_HU[fieldName] : null) || details.field_label || fieldName || "Adatmező";
+      const expectedValue = details.expected_value ?? details.document_value ?? details.extracted_value ?? null;
       const currentValue = details.current_value ?? details.form_value ?? null;
 
       if (cr.check_type === "document_check") {
         return cr.message || `${details.document_type_label || "A szükséges dokumentum"} újrafeltöltése szükséges.`;
       }
-
       if (fieldName === "usage_frequency") {
         return (
           cr.message ||
           "A használat gyakorisága nem egyezik. Kérjük, ellenőrizze, hogy minden éves vagy minden másodéves jogról van-e szó."
         );
       }
-
       if (fieldName === "usage_parity") {
         return (
           cr.message ||
           "Az év típusa nem egyezik. Kérjük, ellenőrizze, hogy páros vagy páratlan évekre vonatkozik-e a használat."
         );
       }
-
       if (expectedValue || currentValue) {
         return cr.message || `${fieldLabel} eltér a dokumentumban szereplő adattól.`;
       }
-
       return cr.message || `${fieldLabel} javítása szükséges.`;
     };
 
@@ -431,7 +448,6 @@ export default function CaseDetail() {
       )
       .map((cr) => {
         const details = cr.details ?? {};
-
         return {
           type: (cr.check_type === "document_check" ? "document_replace" : "field_correction") as
             | "document_replace"
@@ -444,12 +460,7 @@ export default function CaseDetail() {
             (cr.check_type.startsWith("field_presence:") ? cr.check_type.replace("field_presence:", "") : undefined),
           field_label: details.field_label,
           current_value: details.current_value ?? details.form_value ?? null,
-          expected_value:
-            details.expected_value ??
-            details.document_value ??
-            details.extracted_value ??
-            details.matched_value ??
-            null,
+          expected_value: details.expected_value ?? details.document_value ?? details.extracted_value ?? null,
         };
       });
   }, [checkResults]);
@@ -461,14 +472,19 @@ export default function CaseDetail() {
       body: { case_id: caseId },
     });
 
-    // Ha a válaszban recheck_limit_reached van (akár data-ban, akár error context-ben),
-    // azt SOHA nem dobjuk exception-ként — a CorrectionPanel kezeli
     if (data?.recheck_limit_reached) {
+      // A recheck-case EF már DB-ben rögzítette a RECHECK_LIMIT_REACHED állapotot.
+      // Frissítjük a lokális state-et és betöltjük az új classification rekordot.
+      await loadClassification();
+      setCaseData((prev) =>
+        prev
+          ? { ...prev, ai_pipeline_status: "completed", classification: "yellow", updated_at: new Date().toISOString() }
+          : prev,
+      );
       return { recheck_limit_reached: true };
     }
 
     if (error) {
-      // Utoljára ellenőrizzük az error body-ban is
       const errorBody = typeof error === "object" && error !== null ? (error as any) : null;
       const contextData = errorBody?.context?.body
         ? (() => {
@@ -480,24 +496,20 @@ export default function CaseDetail() {
           })()
         : null;
       if (contextData?.recheck_limit_reached) {
+        await loadClassification();
         return { recheck_limit_reached: true };
       }
       throw error;
     }
 
-    // Normal success — refresh UI after delay
+    // Normál recheck elindult — polling veszi át a státuszfrissítést
     setTimeout(async () => {
       await Promise.all([loadCheckResults(), loadClassification(), loadUploadedDocuments()]);
     }, 3000);
 
     setCaseData((prev) =>
       prev
-        ? {
-            ...prev,
-            ai_pipeline_status: "queued",
-            classification: null,
-            updated_at: new Date().toISOString(),
-          }
+        ? { ...prev, ai_pipeline_status: "queued", classification: null, updated_at: new Date().toISOString() }
         : prev,
     );
 
@@ -506,19 +518,17 @@ export default function CaseDetail() {
 
   const handleCaseStatusUpdate = (newStatus: string) => {
     setCaseData((prev) =>
-      prev
-        ? {
-            ...prev,
-            status: normalizeCaseStatus(newStatus),
-            updated_at: new Date().toISOString(),
-          }
-        : prev,
+      prev ? { ...prev, status: normalizeCaseStatus(newStatus), updated_at: new Date().toISOString() } : prev,
     );
   };
 
   const handleAllContractsSigned = () => {
     handleCaseStatusUpdate("signed_contract_uploaded");
     navigate(`/seller/cases/${caseId}/payment`);
+  };
+
+  const handleServiceAgreementAccepted = () => {
+    handleCaseStatusUpdate("service_agreement_accepted");
   };
 
   // ---------- Render ----------
@@ -560,21 +570,42 @@ export default function CaseDetail() {
 
   const rawStatus = normalizeCaseStatus(caseData.status);
 
-  const status =
-    rawStatus === "docs_uploaded" &&
-    (caseData.ai_pipeline_status === "queued" || caseData.ai_pipeline_status === "processing")
-      ? "ai_processing"
-      : rawStatus;
+  // Ha az AI pipeline fut (queued/processing) és a státusz nem egy végleges állapot,
+  // akkor AI feldolgozás panelt mutatunk.
+  const aiRunning =
+    (caseData.ai_pipeline_status === "queued" || caseData.ai_pipeline_status === "processing") &&
+    ![
+      "red_rejected",
+      "yellow_review",
+      "green_approved",
+      "contract_generated",
+      "awaiting_signed_contract",
+      "signed_contract_uploaded",
+      "service_agreement_accepted",
+      "payment_pending",
+      "paid",
+      "closed",
+    ].includes(rawStatus);
 
-  const isRejected = status === "red_rejected" || (rawStatus === "docs_uploaded" && caseData.classification === "red");
+  const status = aiRunning ? "ai_processing" : rawStatus;
 
-  const isYellow =
-    status === "yellow_review" || (rawStatus === "docs_uploaded" && caseData.classification === "yellow");
+  const isRejected = status === "red_rejected";
+  const isYellow = status === "yellow_review";
 
+  // A corrections csak akkor releváns, ha az AI pipeline már kész
+  // (különben még töltődnek az eredmények)
+  const aiDone = caseData.ai_pipeline_status === "completed";
   const hasCorrections = corrections.length > 0;
 
-  const isYellowFixRequired = isYellow && hasCorrections;
-  const isYellowManualReview = isYellow && !hasCorrections;
+  // A sárga ág meghatározása reason_codes alapján:
+  // - ha van RECHECK_LIMIT_REACHED a classifications-ban → sárga1 limit, nincs CorrectionPanel
+  // - ha van correction_required a check_results-ban → sárga1 javítási ág, CorrectionPanel kell
+  // - egyébként → sárga2 policy ütközés, ManualReviewPanel Üzenet3
+  const manualReviewMessageType = getManualReviewMessageType(classification);
+  const isRecheckLimitReached = manualReviewMessageType === "uze1";
+
+  const isYellowFixRequired = isYellow && aiDone && hasCorrections && !isRecheckLimitReached;
+  const isYellowManualReview = isYellow && aiDone && (!hasCorrections || isRecheckLimitReached);
 
   const shouldHideForwardFlow = isRejected || isYellowFixRequired || isYellowManualReview;
 
@@ -583,7 +614,6 @@ export default function CaseDetail() {
       <div className="space-y-6">
         <BackLink />
 
-        {/* Summary Card */}
         <CaseSummaryCard
           caseNumber={caseData.case_number}
           status={status}
@@ -592,9 +622,7 @@ export default function CaseDetail() {
           weekOffer={weekOffer}
         />
 
-        {/* Two-column layout */}
         <div className="grid lg:grid-cols-5 gap-6">
-          {/* Left: Timeline */}
           <div className="lg:col-span-2">
             <Card className="shadow-sm">
               <CardContent className="p-6">
@@ -604,14 +632,13 @@ export default function CaseDetail() {
             </Card>
           </div>
 
-          {/* Right: Status-based action panels */}
           <div className="lg:col-span-3 space-y-6">
             {/* AI Processing */}
             {(status === "submitted" || status === "docs_uploaded" || status === "ai_processing") && (
               <AiProcessingPanel />
             )}
 
-            {/* Yellow - fix required */}
+            {/* Yellow - javítási ág (CorrectionPanel) */}
             {isYellowFixRequired && (
               <CorrectionPanel
                 caseId={caseId!}
@@ -625,13 +652,23 @@ export default function CaseDetail() {
               />
             )}
 
-            {/* Yellow - manual review */}
-            {isYellowManualReview && <ManualReviewPanel reasonSummary={classification?.reason_summary} />}
+            {/* Yellow - manuális review (Üzenet 1 vagy Üzenet 3) */}
+            {isYellowManualReview && (
+              <ManualReviewPanel
+                messageType={manualReviewMessageType}
+                reasonSummary={classification?.reason_summary ?? null}
+              />
+            )}
 
-            {/* Rejected */}
-            {isRejected && <RejectedPanel reasonSummary={classification?.reason_summary} />}
+            {/* Rejected — Üzenet 2 */}
+            {isRejected && (
+              <RejectedPanel
+                reasonSummary={classification?.reason_summary ?? null}
+                reasonCodes={classification?.reason_codes ?? null}
+              />
+            )}
 
-            {/* Contract panel */}
+            {/* Szerződések */}
             {isAtOrPast(status, "green_approved") && !shouldHideForwardFlow && (
               <ContractPanel
                 contracts={contracts}
@@ -643,12 +680,17 @@ export default function CaseDetail() {
               />
             )}
 
-            {/* Payment */}
+            {/* Szolgáltatási szerződés */}
+            {isAtOrPast(status, "signed_contract_uploaded") && !shouldHideForwardFlow && (
+              <ServiceAgreementPanel caseId={caseId!} caseStatus={status} onAccepted={handleServiceAgreementAccepted} />
+            )}
+
+            {/* Fizetés */}
             {isAtOrPast(status, "service_agreement_accepted") && !shouldHideForwardFlow && (
               <PaymentPanel caseStatus={status} />
             )}
 
-            {/* Submitted documents (read-only) */}
+            {/* Feltöltött dokumentumok (csak olvasható) */}
             <SubmittedDocumentsPanel documents={uploadedDocuments} documentTypes={documentTypes} />
           </div>
         </div>
