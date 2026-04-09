@@ -73,7 +73,6 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: "Missing required field: case_id" }, 400);
     }
 
-    // Case betoltese + jogosultsag
     const { data: caseRow, error: caseError } = await authClient
       .from("cases")
       .select("id, status, seller_user_id, ai_pipeline_status, recheck_count")
@@ -84,19 +83,11 @@ Deno.serve(async (req) => {
     if (!caseRow) return jsonResponse({ error: "Case not found or access denied" }, 404);
     if (caseRow.seller_user_id !== user.id) return jsonResponse({ error: "Forbidden" }, 403);
 
-    const allowedStatuses = ["docs_uploaded", "submitted", "yellow_review"];
     const currentRecheckCount = (caseRow as any).recheck_count ?? 0;
     const MAX_RECHECK = 3;
 
-    // Ha az ugy nem engedelyezett statuszon van, visszautasitjuk
-    if (!allowedStatuses.includes(caseRow.status)) {
-      return jsonResponse(
-        { error: "Recheck not allowed from current status", detail: `Current status: ${caseRow.status}` },
-        409,
-      );
-    }
-
-    // Ha mar tullepte a limitet (> MAX_RECHECK), nem engedjuk tovabb
+    // Ha a recheck limit mar teljesult, adjuk vissza a recheck_limit_reached valaszt.
+    // A frontend CorrectionPanel kezeli ezt - ManualReviewPanel-t mutat.
     if (currentRecheckCount > MAX_RECHECK) {
       return jsonResponse({
         success: false,
@@ -105,6 +96,40 @@ Deno.serve(async (req) => {
         recheck_count: currentRecheckCount,
         max_recheck: MAX_RECHECK,
       });
+    }
+
+    // Engedelyezett statuszok: azok ahol a seller meg a javitasi agon van
+    // VAGY ahol a recheck mar lefutott es az ugy elore ment (pl. contract_generated),
+    // de a seller oldal meg nem frissult - ilyenkor a recheck_already_done valaszt adjuk.
+    const sellerCorrectionStatuses = ["docs_uploaded", "submitted", "yellow_review"];
+    const alreadyForwardStatuses = [
+      "green_approved",
+      "contract_generated",
+      "awaiting_signed_contract",
+      "signed_contract_uploaded",
+      "service_agreement_accepted",
+      "payment_pending",
+      "paid",
+      "closed",
+    ];
+
+    if (alreadyForwardStatuses.includes(caseRow.status)) {
+      // Az ugy mar elore ment - a seller oldal nem frissult meg.
+      // Visszaadjuk az aktualis statuszt, hogy a frontend frissiteni tudjon.
+      return jsonResponse({
+        success: false,
+        recheck_already_done: true,
+        case_id,
+        current_status: caseRow.status,
+        message: "Az ugy mar sikeresen feldolgozva, a szerzodes elkeszult.",
+      });
+    }
+
+    if (!sellerCorrectionStatuses.includes(caseRow.status)) {
+      return jsonResponse(
+        { error: "Recheck not allowed from current status", detail: `Current status: ${caseRow.status}` },
+        409,
+      );
     }
 
     // Regi AI eredmenyek torlese
@@ -126,15 +151,8 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: "Failed to invalidate old classifications", detail: classDeleteError.message }, 500);
     }
 
-    // Case AI status visszaallitasa, recheck_count novelese
     const newRecheckCount = currentRecheckCount + 1;
 
-    // FONTOS: NEM allitjuk be yellow_review-ra azonnal itt.
-    // A classify-case fogja beallitani a helyes uzleti statuszt az AI eredmeny alapjan:
-    // - Ha zold -> green_approved (es triggereli a generate-sale-contract-ot)
-    // - Ha sarga -> yellow_review
-    // - Ha piros -> red_rejected
-    // Ha a limit elert ES az eredmeny sarga, a classify-case irja yellow_review-ra.
     const { error: caseResetError } = await serviceClient
       .from("cases")
       .update({
@@ -149,7 +167,6 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: "Failed to reset case AI status", detail: caseResetError.message }, 500);
     }
 
-    // Dokumentumok lekerdezese
     const { data: docs, error: docsError } = await serviceClient
       .from("documents")
       .select("id")
@@ -159,14 +176,12 @@ Deno.serve(async (req) => {
     if (docsError) return jsonResponse({ error: "Failed to load documents", detail: docsError.message }, 500);
     if (!docs || docs.length === 0) return jsonResponse({ error: "No uploaded documents found for recheck" }, 400);
 
-    // Dokumentumok AI statusanak visszaallitasa
     await serviceClient
       .from("documents")
       .update({ ai_status: "queued", ocr_status: "pending", parse_status: "pending", validation_status: "pending" })
       .eq("case_id", case_id)
       .eq("upload_status", "uploaded");
 
-    // Aktiv policy verzio
     const { data: publishedPolicy } = await serviceClient
       .from("policy_versions")
       .select("id")
@@ -175,7 +190,6 @@ Deno.serve(async (req) => {
       .limit(1)
       .maybeSingle();
 
-    // Job letrehozas es fire-and-forget process-document inditas
     const jobResults: Array<{ doc_id: string; job_id: string; status: string }> = [];
 
     for (const doc of docs) {
@@ -200,7 +214,6 @@ Deno.serve(async (req) => {
 
       await serviceClient.from("documents").update({ last_ai_job_id: newJob.id }).eq("id", doc.id);
 
-      // FIRE AND FORGET: nem varjuk meg a process-document veget
       fetch(`${supabaseUrl}/functions/v1/process-document`, {
         method: "POST",
         headers: { "Content-Type": "application/json", apikey: serviceRoleKey },
@@ -212,7 +225,6 @@ Deno.serve(async (req) => {
       jobResults.push({ doc_id: doc.id, job_id: newJob.id, status: "queued" });
     }
 
-    // Audit log
     await serviceClient.from("audit_logs").insert({
       entity_type: "cases",
       entity_id: case_id,
@@ -222,15 +234,9 @@ Deno.serve(async (req) => {
       new_data: { document_count: docs.length, job_results: jobResults, recheck_count: newRecheckCount },
     });
 
-    // FIX: NEM allitjuk azonnali yellow_review-ra a 3. rechecknel.
-    // A classify-case pipeline eredmenye dontil a vegso statuszrol.
-    // A frontend recheck_limit_reached: true valaszt kap, es a CorrectionPanel
-    // lezarttnak tekinti a javitasi lehetoseget (ManualReviewPanel-t mutat),
-    // DE a polling folytatodik, es ha zold lesz az eredmeny, contract_generated-re valt.
     const reachedLimit = newRecheckCount >= MAX_RECHECK;
 
     if (reachedLimit) {
-      // Csak audit log, NEM irjuk at a statuszt - azt a classify-case teszi
       await serviceClient.from("audit_logs").insert({
         entity_type: "cases",
         entity_id: case_id,
