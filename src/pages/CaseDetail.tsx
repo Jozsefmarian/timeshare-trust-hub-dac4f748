@@ -304,7 +304,6 @@ export default function CaseDetail() {
     if (!caseId || !caseData) return;
     const normalized = normalizeCaseStatus(caseData.status);
     if (normalized !== "yellow_review") return;
-    if (caseData.ai_pipeline_status !== "queued" && caseData.ai_pipeline_status !== "processing") return;
 
     let count = 0;
     const maxPolls = 150;
@@ -344,7 +343,7 @@ export default function CaseDetail() {
     }, 4000);
 
     return () => clearInterval(interval);
-  }, [caseId, caseData?.status, caseData?.ai_pipeline_status, loadContract, loadCheckResults, loadClassification]);
+  }, [caseId, caseData?.status, loadContract, loadCheckResults, loadClassification]);
 
   // Build dynamic correction requirements from check results
   const corrections = useMemo(() => {
