@@ -91,7 +91,11 @@ function buildGreenEmailHtml(params: {
 
 // Email 2 — admin pirosra kattint manuális ellenőrzés után
 // Szöveg: sajnos nem tudjuk megvásárolni, ügyfélszolgálat
-function buildRedEmailHtml(params: { sellerName: string; caseNumber: string; contactEmail: string }): string {
+function buildRedEmailHtml(params: {
+  sellerName: string;
+  caseNumber: string;
+  contactEmail: string;
+}): string {
   const { sellerName, caseNumber, contactEmail } = params;
   return `<!DOCTYPE html>
 <html lang="hu">
