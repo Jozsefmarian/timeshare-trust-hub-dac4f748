@@ -286,29 +286,17 @@ export default function CaseDetail() {
 
     const interval = setInterval(async () => {
       count++;
-      if (count > maxPolls) {
-        clearInterval(interval);
-        return;
-      }
+      if (count > maxPolls) { clearInterval(interval); return; }
       try {
         const { data } = await supabaseAny.from("cases").select("status, ai_pipeline_status").eq("id", caseId).single();
         if (data && normalizeCaseStatus(data.status) !== "green_approved") {
           setCaseData((prev: CaseRow | null) =>
-            prev
-              ? {
-                  ...prev,
-                  status: data.status,
-                  ai_pipeline_status: data.ai_pipeline_status,
-                  updated_at: new Date().toISOString(),
-                }
-              : prev,
+            prev ? { ...prev, status: data.status, ai_pipeline_status: data.ai_pipeline_status, updated_at: new Date().toISOString() } : prev,
           );
           loadContract();
           clearInterval(interval);
         }
-      } catch {
-        /* silent */
-      }
+      } catch { /* silent */ }
     }, 4000);
 
     return () => clearInterval(interval);
@@ -330,10 +318,7 @@ export default function CaseDetail() {
 
     const interval = setInterval(async () => {
       count++;
-      if (count > maxPolls) {
-        clearInterval(interval);
-        return;
-      }
+      if (count > maxPolls) { clearInterval(interval); return; }
       try {
         const { data } = await supabaseAny
           .from("cases")
@@ -348,15 +333,7 @@ export default function CaseDetail() {
         // Ha az AI befejezett (completed), frissítjük az állapotot és leállítjuk a pollingot
         if (data.ai_pipeline_status === "completed") {
           setCaseData((prev: CaseRow | null) =>
-            prev
-              ? {
-                  ...prev,
-                  status: data.status,
-                  ai_pipeline_status: data.ai_pipeline_status,
-                  classification: data.classification,
-                  updated_at: new Date().toISOString(),
-                }
-              : prev,
+            prev ? { ...prev, status: data.status, ai_pipeline_status: data.ai_pipeline_status, classification: data.classification, updated_at: new Date().toISOString() } : prev,
           );
           loadContract();
           loadCheckResults();
@@ -366,24 +343,14 @@ export default function CaseDetail() {
         // Ha az ügy elhagyta a yellow_review státuszt, frissítjük
         else if (newNormalized !== "yellow_review") {
           setCaseData((prev: CaseRow | null) =>
-            prev
-              ? {
-                  ...prev,
-                  status: data.status,
-                  ai_pipeline_status: data.ai_pipeline_status,
-                  classification: data.classification,
-                  updated_at: new Date().toISOString(),
-                }
-              : prev,
+            prev ? { ...prev, status: data.status, ai_pipeline_status: data.ai_pipeline_status, classification: data.classification, updated_at: new Date().toISOString() } : prev,
           );
           loadContract();
           loadCheckResults();
           loadClassification();
           clearInterval(interval);
         }
-      } catch {
-        /* silent */
-      }
+      } catch { /* silent */ }
     }, 4000);
 
     return () => clearInterval(interval);
@@ -409,8 +376,7 @@ export default function CaseDetail() {
         usage_parity: "Év típusa",
       };
 
-      const fieldLabel =
-        (fieldName ? FIELD_LABEL_HU[fieldName] : null) || details.field_label || fieldName || "Adatmező";
+      const fieldLabel = (fieldName ? FIELD_LABEL_HU[fieldName] : null) || details.field_label || fieldName || "Adatmező";
       const expectedValue = details.expected_value ?? details.document_value ?? details.extracted_value ?? null;
       const currentValue = details.current_value ?? details.form_value ?? null;
 
@@ -418,16 +384,10 @@ export default function CaseDetail() {
         return cr.message || `${details.document_type_label || "A szükséges dokumentum"} újrafeltöltése szükséges.`;
       }
       if (fieldName === "usage_frequency") {
-        return (
-          cr.message ||
-          "A használat gyakorisága nem egyezik. Kérjük, ellenőrizze, hogy minden éves vagy minden másodéves jogról van-e szó."
-        );
+        return cr.message || "A használat gyakorisága nem egyezik. Kérjük, ellenőrizze, hogy minden éves vagy minden másodéves jogról van-e szó.";
       }
       if (fieldName === "usage_parity") {
-        return (
-          cr.message ||
-          "Az év típusa nem egyezik. Kérjük, ellenőrizze, hogy páros vagy páratlan évekre vonatkozik-e a használat."
-        );
+        return cr.message || "Az év típusa nem egyezik. Kérjük, ellenőrizze, hogy páros vagy páratlan évekre vonatkozik-e a használat.";
       }
       if (expectedValue || currentValue) {
         return cr.message || `${fieldLabel} eltér a dokumentumban szereplő adattól.`;
@@ -487,13 +447,7 @@ export default function CaseDetail() {
     if (error) {
       const errorBody = typeof error === "object" && error !== null ? (error as any) : null;
       const contextData = errorBody?.context?.body
-        ? (() => {
-            try {
-              return JSON.parse(errorBody.context.body);
-            } catch {
-              return null;
-            }
-          })()
+        ? (() => { try { return JSON.parse(errorBody.context.body); } catch { return null; } })()
         : null;
       if (contextData?.recheck_limit_reached) {
         await loadClassification();
@@ -574,18 +528,9 @@ export default function CaseDetail() {
   // akkor AI feldolgozás panelt mutatunk.
   const aiRunning =
     (caseData.ai_pipeline_status === "queued" || caseData.ai_pipeline_status === "processing") &&
-    ![
-      "red_rejected",
-      "yellow_review",
-      "green_approved",
-      "contract_generated",
-      "awaiting_signed_contract",
-      "signed_contract_uploaded",
-      "service_agreement_accepted",
-      "payment_pending",
-      "paid",
-      "closed",
-    ].includes(rawStatus);
+    !["red_rejected", "yellow_review", "green_approved", "contract_generated",
+      "awaiting_signed_contract", "signed_contract_uploaded", "service_agreement_accepted",
+      "payment_pending", "paid", "closed"].includes(rawStatus);
 
   const status = aiRunning ? "ai_processing" : rawStatus;
 
@@ -682,7 +627,11 @@ export default function CaseDetail() {
 
             {/* Szolgáltatási szerződés */}
             {isAtOrPast(status, "signed_contract_uploaded") && !shouldHideForwardFlow && (
-              <ServiceAgreementPanel caseId={caseId!} caseStatus={status} onAccepted={handleServiceAgreementAccepted} />
+              <ServiceAgreementPanel
+                caseId={caseId!}
+                caseStatus={status}
+                onAccepted={handleServiceAgreementAccepted}
+              />
             )}
 
             {/* Fizetés */}
