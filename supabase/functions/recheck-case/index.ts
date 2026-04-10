@@ -101,17 +101,13 @@ Deno.serve(async (req) => {
     ];
 
     if (alreadyForwardStatuses.includes(caseRow.status)) {
-      return jsonResponse(
-        {
-          success: false,
-          recheck_already_done: true,
-          case_id,
-          current_status: caseRow.status,
-          message: "Az ügy már sikeresen feldolgozva.",
-        },
-        200,
-        req,
-      );
+      return jsonResponse({
+        success: false,
+        recheck_already_done: true,
+        case_id,
+        current_status: caseRow.status,
+        message: "Az ügy már sikeresen feldolgozva.",
+      }, 200, req);
     }
 
     // ── Engedélyezett státuszok ellenőrzése ──────────────────────────────────
@@ -130,9 +126,7 @@ Deno.serve(async (req) => {
     // és a case státuszát yellow_review + ai_pipeline_status: completed-re állítjuk.
     // Ezzel az állapot DB-ben perzisztálódik és oldalfrissítés után is helyes marad.
     if (currentRecheckCount >= MAX_RECHECK) {
-      console.log(
-        `recheck-case LIMIT: case=${case_id} recheck_count=${currentRecheckCount} >= MAX=${MAX_RECHECK} → manuális review`,
-      );
+      console.log(`recheck-case LIMIT: case=${case_id} recheck_count=${currentRecheckCount} >= MAX=${MAX_RECHECK} → manuális review`);
 
       // Töröljük a régi AI eredményeket, hogy ne zavarjanak
       await serviceClient.from("check_results").delete().eq("case_id", case_id);
@@ -156,15 +150,12 @@ Deno.serve(async (req) => {
 
       // Case frissítése: yellow_review státusz, ai_pipeline_status: completed
       // (completed = a CaseDetail.tsx polling leáll, és a classification alapján dönt)
-      const { error: caseUpdateError } = await serviceClient
-        .from("cases")
-        .update({
-          status: "yellow_review",
-          ai_pipeline_status: "completed",
-          classification: "yellow",
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", case_id);
+      const { error: caseUpdateError } = await serviceClient.from("cases").update({
+        status: "yellow_review",
+        ai_pipeline_status: "completed",
+        classification: "yellow",
+        updated_at: new Date().toISOString(),
+      }).eq("id", case_id);
 
       if (caseUpdateError) {
         console.error("Failed to update case to manual review:", caseUpdateError);
@@ -183,18 +174,14 @@ Deno.serve(async (req) => {
         },
       });
 
-      return jsonResponse(
-        {
-          success: true,
-          recheck_limit_reached: true,
-          case_id,
-          recheck_count: currentRecheckCount,
-          max_recheck: MAX_RECHECK,
-          new_status: "yellow_review",
-        },
-        200,
-        req,
-      );
+      return jsonResponse({
+        success: true,
+        recheck_limit_reached: true,
+        case_id,
+        recheck_count: currentRecheckCount,
+        max_recheck: MAX_RECHECK,
+        new_status: "yellow_review",
+      }, 200, req);
     }
 
     // ── NORMÁL RECHECK: van még kísérlet ─────────────────────────────────────
@@ -202,45 +189,27 @@ Deno.serve(async (req) => {
     // Régi AI eredmények törlése
     const { error: checkDeleteError } = await serviceClient.from("check_results").delete().eq("case_id", case_id);
     if (checkDeleteError) {
-      return jsonResponse(
-        { error: "Failed to invalidate old check results", detail: checkDeleteError.message },
-        500,
-        req,
-      );
+      return jsonResponse({ error: "Failed to invalidate old check results", detail: checkDeleteError.message }, 500, req);
     }
 
-    const { error: hitsDeleteError } = await serviceClient
-      .from("case_restriction_hits")
-      .delete()
-      .eq("case_id", case_id);
+    const { error: hitsDeleteError } = await serviceClient.from("case_restriction_hits").delete().eq("case_id", case_id);
     if (hitsDeleteError) {
-      return jsonResponse(
-        { error: "Failed to invalidate old restriction hits", detail: hitsDeleteError.message },
-        500,
-        req,
-      );
+      return jsonResponse({ error: "Failed to invalidate old restriction hits", detail: hitsDeleteError.message }, 500, req);
     }
 
     const { error: classDeleteError } = await serviceClient.from("classifications").delete().eq("case_id", case_id);
     if (classDeleteError) {
-      return jsonResponse(
-        { error: "Failed to invalidate old classifications", detail: classDeleteError.message },
-        500,
-        req,
-      );
+      return jsonResponse({ error: "Failed to invalidate old classifications", detail: classDeleteError.message }, 500, req);
     }
 
     const newRecheckCount = currentRecheckCount + 1;
 
-    const { error: caseResetError } = await serviceClient
-      .from("cases")
-      .update({
-        ai_pipeline_status: "queued",
-        classification: null,
-        recheck_count: newRecheckCount,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", case_id);
+    const { error: caseResetError } = await serviceClient.from("cases").update({
+      ai_pipeline_status: "queued",
+      classification: null,
+      recheck_count: newRecheckCount,
+      updated_at: new Date().toISOString(),
+    }).eq("id", case_id);
 
     if (caseResetError) {
       return jsonResponse({ error: "Failed to reset case AI status", detail: caseResetError.message }, 500, req);
@@ -313,18 +282,15 @@ Deno.serve(async (req) => {
       new_data: { document_count: docs.length, job_results: jobResults, recheck_count: newRecheckCount },
     });
 
-    return jsonResponse(
-      {
-        success: true,
-        case_id,
-        document_count: docs.length,
-        jobs: jobResults,
-        recheck_count: newRecheckCount,
-        recheck_limit_reached: false,
-      },
-      200,
-      req,
-    );
+    return jsonResponse({
+      success: true,
+      case_id,
+      document_count: docs.length,
+      jobs: jobResults,
+      recheck_count: newRecheckCount,
+      recheck_limit_reached: false,
+    }, 200, req);
+
   } catch (err) {
     console.error("recheck-case unhandled error:", err);
     return jsonResponse(
