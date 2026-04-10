@@ -25,18 +25,19 @@ export default function ManualReviewPanel({ messageType, reasonSummary }: Manual
         {/* Üzenet 1: sárga1 limit — recheck_limit_reached */}
         {messageType === "uze1" && (
           <p>
-            Sajnos a javítás sikertelen volt, így az ügyét átirányítottuk munkatársunkhoz ellenőrzésre. A manuális
-            ellenőrzést legfeljebb 24 órán belül elvégezzük. Az eredményről azonnali értesítést küldünk Önnek e-mailben
-            és folytathatja az adásvételi folyamatot.
+            Sajnos a javítás sikertelen volt, így az ügyét átirányítottuk munkatársunkhoz ellenőrzésre.
+            A manuális ellenőrzést legfeljebb 24 órán belül elvégezzük. Az eredményről azonnali értesítést
+            küldünk Önnek e-mailben és folytathatja az adásvételi folyamatot.
           </p>
         )}
 
         {/* Üzenet 3: sárga2 — policy ütközés, nem kizáró */}
         {messageType === "uze3" && (
           <p>
-            Az Ön által feltöltött dokumentumok alapján, az üdülési hetének megvásárlásáról további részletes elemzést
-            követően tudunk megalapozott döntést hozni. Az elemzést legfeljebb 24 órán belül elvégezzük. Az eredményről
-            és a további teendőkről emailben küldünk Önnek tájékoztatást.
+            Az Ön által feltöltött dokumentumok alapján, az üdülési hetének megvásárlásáról további
+            részletes elemzést követően tudunk megalapozott döntést hozni. Az elemzést legfeljebb 24
+            órán belül elvégezzük. Az eredményről és a további teendőkről emailben küldünk Önnek
+            tájékoztatást.
           </p>
         )}
 
