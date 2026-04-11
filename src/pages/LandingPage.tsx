@@ -37,7 +37,7 @@ const steps = [
     icon: CreditCard,
     title: "Átruházással kapcsolatos ügyintézés",
     description:
-      "Szolgáltatási szerződés alapján elvégezzük az átruházás teljes adminisztrációját, az ezzel kapcsolatos ügyintézést, hogy Önnek ne kelljen. ",
+      "Szolgáltatási szerződésünk keretében elvégezzük az átruházás teljes adminisztrációját, az ezzel kapcsolatos ügyintézést, hogy Önnek ne kelljen.",
   },
 ];
 
