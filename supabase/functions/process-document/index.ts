@@ -473,8 +473,8 @@ function textSimilar(a: string, b: string): boolean {
   const na = normalizeText(a);
   const nb = normalizeText(b);
   if (na === nb) return true;
-  if (na.length > 3 && nb.includes(na)) return true;
-  if (nb.length > 3 && na.includes(nb)) return true;
+  if (na.length >= 5 && nb.includes(na)) return true;
+  if (nb.length >= 5 && na.includes(nb)) return true;
   if (na.split(" ")[0].length > 4 && na.split(" ")[0] === nb.split(" ")[0]) return true;
   return false;
 }
