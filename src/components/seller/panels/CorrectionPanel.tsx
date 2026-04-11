@@ -76,7 +76,17 @@ export default function CorrectionPanel({
   const [fieldValues, setFieldValues] = useState<Record<number, string>>({});
   const savedIndices = useRef<Set<number>>(new Set());
   const fileRefs = useRef<Record<number, HTMLInputElement | null>>({});
+  const correctionKeysRef = useRef<string>("");
+
   useEffect(() => {
+    // Csak akkor futtatjuk, ha a corrections tömb tartalmilag változott
+    // (pl. recheck után új mezők jönnek), nem egyszerű re-render esetén
+    const correctionKey = corrections.map((c) => `${c.type}:${c.field_name ?? c.document_type_id ?? ""}`).join("|");
+
+    if (correctionKey === correctionKeysRef.current) return;
+    correctionKeysRef.current = correctionKey;
+
+    // Csak azokat az indexeket inicializáljuk, amelyek még nem lettek manuálisan mentve
     setFieldValues((prev) => {
       const nextValues: Record<number, string> = { ...prev };
 
@@ -409,9 +419,15 @@ export default function CorrectionPanel({
   const isSupportedField = (fieldName?: string) => {
     const normalizedField = normalizeFieldName(fieldName);
 
-    return ["week_number", "usage_frequency", "usage_parity", "unit_type", "season_label", "share_count", "capacity"].includes(
-      normalizedField || "",
-    );
+    return [
+      "week_number",
+      "usage_frequency",
+      "usage_parity",
+      "unit_type",
+      "season_label",
+      "share_count",
+      "capacity",
+    ].includes(normalizedField || "");
   };
 
   if (corrections.length === 0) return null;
@@ -517,44 +533,44 @@ export default function CorrectionPanel({
           </div>
         ))}
         <div className="border-t pt-4 space-y-3">
-        {recheckLimitReached ? (
-          <Alert className="border-warning/50 bg-warning/10">
-            <AlertTriangle className="h-4 w-4 text-warning" />
-            <AlertDescription className="text-sm">
-              Sajnos a javítás sikertelen volt, így az ügyét átirányítottuk munkatársunkhoz ellenőrzésre. A manuális ellenőrzést legfeljebb 24 órán belül elvégezzük. Az eredményről azonnal értesítést küldünk Önnek e-mailben és folytathatja az adásvételi folyamatot.
-            </AlertDescription>
-          </Alert>
-        ) : (
-          <>
-            <div className="text-sm text-muted-foreground">
-              Ha minden szükséges adatot javított és a dokumentumokat is frissítette, indítsa el újra az ellenőrzést.
-            </div>
+          {recheckLimitReached ? (
+            <Alert className="border-warning/50 bg-warning/10">
+              <AlertTriangle className="h-4 w-4 text-warning" />
+              <AlertDescription className="text-sm">
+                Sajnos a javítás sikertelen volt, így az ügyét átirányítottuk munkatársunkhoz ellenőrzésre. A manuális
+                ellenőrzést legfeljebb 24 órán belül elvégezzük. Az eredményről azonnal értesítést küldünk Önnek
+                e-mailben és folytathatja az adásvételi folyamatot.
+              </AlertDescription>
+            </Alert>
+          ) : (
+            <>
+              <div className="text-sm text-muted-foreground">
+                Ha minden szükséges adatot javított és a dokumentumokat is frissítette, indítsa el újra az ellenőrzést.
+              </div>
 
-            <Button type="button" onClick={requestRecheck} disabled={isRechecking || !onRecheckRequested}>
-              {isRechecking ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Újraellenőrzés indul...
-                </>
-              ) : (
-                "Újraellenőrzés kérése"
+              <Button type="button" onClick={requestRecheck} disabled={isRechecking || !onRecheckRequested}>
+                {isRechecking ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Újraellenőrzés indul...
+                  </>
+                ) : (
+                  "Újraellenőrzés kérése"
+                )}
+              </Button>
+
+              {panelMessage && panelMessage.type === "error" && (
+                <div className="text-sm text-destructive">{panelMessage.text}</div>
               )}
-            </Button>
 
-            {panelMessage && panelMessage.type === "error" && (
-              <div className="text-sm text-destructive">
-                {panelMessage.text}
-              </div>
-            )}
-
-            {panelMessage && panelMessage.type === "success" && (
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Az ellenőrzés folyamatban van, hamarosan folytathatjuk.
-              </div>
-            )}
-          </>
-        )}
+              {panelMessage && panelMessage.type === "success" && (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Az ellenőrzés folyamatban van, hamarosan folytathatjuk.
+                </div>
+              )}
+            </>
+          )}
         </div>
       </CardContent>
     </Card>
