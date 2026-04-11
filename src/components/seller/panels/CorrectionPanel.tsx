@@ -27,7 +27,7 @@ export interface RecheckResult {
 interface CorrectionPanelProps {
   caseId: string;
   corrections: CorrectionRequirement[];
-  onCorrectionCompleted: () => void;
+  onCorrectionCompleted: () => void | Promise<void>;
   onRecheckRequested?: () => Promise<RecheckResult>;
 }
 
