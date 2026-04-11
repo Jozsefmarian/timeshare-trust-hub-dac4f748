@@ -211,10 +211,16 @@ const stateStyles: Record<StepState, { circle: string; line: string; label: stri
 
 interface CaseTimelineProps {
   status: string;
+  forceBranch?: "approved" | "manual" | "rejected";
 }
 
-export default function CaseTimeline({ status }: CaseTimelineProps) {
-  const visibleSteps = getVisibleSteps(status);
+export default function CaseTimeline({ status, forceBranch }: CaseTimelineProps) {
+  const visibleSteps = forceBranch
+    ? TIMELINE_STEPS.filter((step) => {
+        if (!step.branch) return true;
+        return step.branch === forceBranch;
+      })
+    : getVisibleSteps(status);
 
   return (
     <div className="space-y-0">
