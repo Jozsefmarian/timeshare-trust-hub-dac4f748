@@ -74,17 +74,20 @@ export default function CorrectionPanel({
   const [panelMessage, setPanelMessage] = useState<MessageState | null>(null);
   const [messages, setMessages] = useState<Record<number, MessageState>>({});
   const [fieldValues, setFieldValues] = useState<Record<number, string>>({});
+  const savedIndices = useRef<Set<number>>(new Set());
   const fileRefs = useRef<Record<number, HTMLInputElement | null>>({});
   useEffect(() => {
-    const nextValues: Record<number, string> = {};
+    setFieldValues((prev) => {
+      const nextValues: Record<number, string> = { ...prev };
 
-    corrections.forEach((correction, idx) => {
-      if (correction.type === "field_correction") {
-        nextValues[idx] = getInitialFieldValue(correction);
-      }
+      corrections.forEach((correction, idx) => {
+        if (correction.type === "field_correction" && !savedIndices.current.has(idx)) {
+          nextValues[idx] = getInitialFieldValue(correction);
+        }
+      });
+
+      return nextValues;
     });
-
-    setFieldValues(nextValues);
   }, [corrections]);
 
   const setMessage = (idx: number, message: MessageState) => {
@@ -239,6 +242,9 @@ export default function CorrectionPanel({
         type: "success",
         text: "Az adat sikeresen mentve.",
       });
+
+      // Mark this index as saved so the useEffect won't overwrite it
+      savedIndices.current.add(idx);
 
       // Update local field value immediately so the UI reflects the saved value
       setFieldValues((prev) => ({ ...prev, [idx]: rawValue }));
@@ -535,9 +541,16 @@ export default function CorrectionPanel({
               )}
             </Button>
 
-            {panelMessage && (
-              <div className={`text-sm ${panelMessage.type === "success" ? "text-green-600" : "text-destructive"}`}>
+            {panelMessage && panelMessage.type === "error" && (
+              <div className="text-sm text-destructive">
                 {panelMessage.text}
+              </div>
+            )}
+
+            {panelMessage && panelMessage.type === "success" && (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Az ellenőrzés folyamatban van, hamarosan folytathatjuk.
               </div>
             )}
           </>
