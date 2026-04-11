@@ -233,8 +233,8 @@ async function extractTextFromFile(
     try {
       const rawText = await fileData.text();
       if (!rawText.trimStart().startsWith("%PDF-")) {
-        const cleanText = rawText.replace(/[^x20-x7E
-r	u00C0-u024F]/g, "").trim();
+        const printable = text.replace(/[^\x20-\x7E\u00C0-\u024F\n\r\t]/g, "");
+        const cleanText = rawText.replace(/[^\x20-\x7E\n\r\t\u00C0-\u024F]/g, "").trim();
         if (cleanText.length > 200 && isReadableText(cleanText)) {
           return { text: cleanText, method: "pdf_text_extraction" };
         }
