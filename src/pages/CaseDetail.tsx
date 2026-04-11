@@ -527,7 +527,7 @@ export default function CaseDetail() {
   // akkor AI feldolgozás panelt mutatunk.
   const aiRunning =
     (caseData.ai_pipeline_status === "queued" || caseData.ai_pipeline_status === "processing") &&
-    !["red_rejected", "yellow_review", "green_approved", "contract_generated",
+    !["red_rejected", "green_approved", "contract_generated",
       "awaiting_signed_contract", "signed_contract_uploaded", "service_agreement_accepted",
       "payment_pending", "paid", "closed"].includes(rawStatus);
 
