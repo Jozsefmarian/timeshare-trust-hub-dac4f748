@@ -297,7 +297,7 @@ export default function CaseDetail() {
           clearInterval(interval);
         }
       } catch { /* silent */ }
-    }, 4000);
+    }, 2000);
 
     return () => clearInterval(interval);
   }, [caseId, caseData?.status, loadContract]);
@@ -351,7 +351,7 @@ export default function CaseDetail() {
           clearInterval(interval);
         }
       } catch { /* silent */ }
-    }, 4000);
+    }, 2000);
 
     return () => clearInterval(interval);
   }, [caseId, caseData?.status, caseData?.ai_pipeline_status, loadContract, loadCheckResults, loadClassification]);
@@ -456,16 +456,15 @@ export default function CaseDetail() {
       throw error;
     }
 
-    // Normál recheck elindult — polling veszi át a státuszfrissítést
-    setTimeout(async () => {
-      await Promise.all([loadCheckResults(), loadClassification(), loadUploadedDocuments()]);
-    }, 3000);
-
+    // Normál recheck elindult — azonnal frissítjük a case adatokat, polling veszi át a többit
     setCaseData((prev) =>
       prev
         ? { ...prev, ai_pipeline_status: "queued", classification: null, updated_at: new Date().toISOString() }
         : prev,
     );
+
+    // Azonnal frissítjük a check results-t és classification-t (ne várjon az első polling intervallumra)
+    await Promise.all([loadCheckResults(), loadClassification(), loadUploadedDocuments()]);
 
     return { recheck_limit_reached: false };
   }, [caseId, loadCheckResults, loadClassification, loadUploadedDocuments]);
