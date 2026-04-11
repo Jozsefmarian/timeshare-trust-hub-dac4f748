@@ -27,7 +27,7 @@ export interface RecheckResult {
 interface CorrectionPanelProps {
   caseId: string;
   corrections: CorrectionRequirement[];
-  onCorrectionCompleted: () => void;
+  onCorrectionCompleted: () => void | Promise<void>;
   onRecheckRequested?: () => Promise<RecheckResult>;
 }
 
@@ -243,7 +243,8 @@ export default function CorrectionPanel({
       // Update local field value immediately so the UI reflects the saved value
       setFieldValues((prev) => ({ ...prev, [idx]: rawValue }));
 
-      onCorrectionCompleted();
+      // Reload case data so "Jelenlegi megadott érték" reflects the DB value
+      await onCorrectionCompleted();
     } catch (err: any) {
       setMessage(idx, {
         type: "error",

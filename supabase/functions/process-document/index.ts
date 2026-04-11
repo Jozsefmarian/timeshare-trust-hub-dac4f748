@@ -103,8 +103,7 @@ function normalizeText(value: string | null | undefined): string {
 
 function isReadableText(text: string): boolean {
   if (!text || text.length < 30) return false;
-  const printable = text.replace(/[^x20-x7Eu00C0-u024F
-r	]/g, "");
+  const printable = text.replace(/[^\x20-\x7E\u00C0-\u024F\n\r\t]/g, "");
   const ratio = printable.length / text.length;
   return ratio >= 0.7;
 }
