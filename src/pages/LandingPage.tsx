@@ -90,7 +90,7 @@ export default function LandingPage() {
           <div className="max-w-3xl mx-auto text-center">
             <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border border-primary-foreground/20 text-primary-foreground/80 text-sm mb-8">
               <Shield className="h-4 w-4" />
-              Üdülési jog tulajdonosok ezrei bíznak bennünk
+              Valós megoldás üdülési jog tulajdonosoknak
             </div>
             <h1 className="text-4xl md:text-6xl font-bold text-primary-foreground leading-tight mb-6">
               Eladná üdülési hetét? Mi megvásároljuk.
