@@ -587,10 +587,8 @@ export default function CaseDetail() {
               <CorrectionPanel
                 caseId={caseId!}
                 corrections={corrections}
-                onCorrectionCompleted={() => {
-                  loadUploadedDocuments();
-                  loadCheckResults();
-                  loadClassification();
+                onCorrectionCompleted={async () => {
+                  await Promise.all([loadUploadedDocuments(), loadCheckResults(), loadClassification()]);
                 }}
                 onRecheckRequested={handleRecheckRequested}
               />
