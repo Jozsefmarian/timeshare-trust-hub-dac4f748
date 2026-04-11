@@ -280,41 +280,39 @@ function extractFieldsFromText(text: string, detectedType: string): Record<strin
   const normalized = text.replace(/r/g, "");
   const result: Record<string, unknown> = { detected_document_type: detectedType };
 
-  const weekMatch = normalized.match(/(?:het(?:e|u00e9ben|eben)?|week)s*[:-]?s*(d{1,2})/i);
+  const weekMatch = normalized.match(/(?:het(?:e|ében|eben)?|week)\s*[:-]?\s*(\d{1,2})/i);
   if (weekMatch) result.week_number = Number(weekMatch[1]);
 
   const contractMatch = normalized.match(
-    /(?:szerz[u0151o]d[u00e9e]s(?:sz[au00e1]m)?|contract(?: number)?)s*[:-]?s*([A-Z0-9-/]+)/i,
+    /(?:szerz[őo]d[ée]s(?:sz[áa]m)?|contract(?: number)?)\s*[:-]?\s*([A-Z0-9-/]+)/i,
   );
   if (contractMatch) result.contract_number = contractMatch[1];
 
   const shareCountMatch = normalized.match(
-    /(?:r[eu00e9]szv[eu00e9]ny(?:ek)?s*sz[au00e1]ma|share count)s*[:-]?s*(d+)/i,
+    /(?:r[eé]szv[eé]ny(?:ek)?\s*sz[áa]ma|share count)\s*[:-]?\s*(\d+)/i,
   );
   if (shareCountMatch) result.share_count = Number(shareCountMatch[1]);
 
   const annualFeeMatch = normalized.match(
-    /(?:fenntart[au00e1]si d[iu00ed]j|annual fee)s*[:-]?s*([ds.,]+)s*(?:ft|huf)?/i,
+    /(?:fenntart[aá]si d[ií]j|annual fee)\s*[:-]?\s*([\d\s.,]+)\s*(?:ft|huf)?/i,
   );
   if (annualFeeMatch) result.annual_fee = annualFeeMatch[1].trim();
 
-  const ownerLineMatch = normalized.match(/(?:jogosult|tulajdonos|owner|n[eu00e9]v)s*[:-]?s*([^
-]+)/i);
+  const ownerLineMatch = normalized.match(/(?:jogosult|tulajdonos|owner|n[eé]v)\s*[:-]?\s*([^\n]+)/i);
   if (ownerLineMatch) result.owner_name = ownerLineMatch[1].trim();
 
   const resortLineMatch = normalized.match(
-    /(?:u00fcdu00fcl[u0151o]ingatlan|resort|hotel|club)s*[:-]?s*([^
-]+)/i,
+    /(?:üdül[őo]ingatlan|resort|hotel|club)\s*[:-]?\s*([^\n]+)/i,
   );
   if (resortLineMatch) result.resort_name = resortLineMatch[1].trim();
 
   const unitNumberMatch = normalized.match(
-    /(?:egys[eu00e9]g(?:sz[au00e1]m)?|apartmans*sz[au00e1]m|unit(?:s*number)?|apart(?:ment)?s*no)s*[:-]?s*([A-Z0-9-/]+)/i,
+    /(?:egys[eé]g(?:sz[áa]m)?|apartman\s*sz[áa]m|unit(?:\s*number)?|apart(?:ment)?\s*no)\s*[:-]?\s*([A-Z0-9-/]+)/i,
   );
   if (unitNumberMatch) result.unit_number = unitNumberMatch[1].trim();
 
   const capacityMatch = normalized.match(
-    /(?:(d+)s*f[ou0151]s*(?:r[eu00e9]sz[eu00e9]re|sz[au00e1]m[au00e1]ra)?|(d+)s*szem[eu00e9]lyes|capacitys*[:-]?s*(d+))/i,
+    /(?:(\d+)\s*f[őo]\s*(?:r[eé]sz[eé]re|sz[áa]m[áa]ra)?|(\d+)\s*szem[eé]lyes|capacity\s*[:-]?\s*(\d+))/i,
   );
   if (capacityMatch) {
     const cap = Number(capacityMatch[1] ?? capacityMatch[2] ?? capacityMatch[3]);
