@@ -224,7 +224,7 @@ export default function ServiceAgreementPanel({ caseId, caseStatus, onAccepted }
       <CardContent className="space-y-5">
         {/* Szerződés szövege */}
         {renderedHtml ? (
-          <div className="max-h-96 overflow-y-auto p-4 rounded-xl border border-border bg-muted/30 text-sm">
+          <div className="max-h-96 overflow-y-auto p-4 rounded-xl border border-border bg-muted/30 text-sm w-full">
             <div dangerouslySetInnerHTML={{ __html: renderedHtml }} />
           </div>
         ) : (
