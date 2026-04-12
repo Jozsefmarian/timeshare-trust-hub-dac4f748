@@ -128,7 +128,7 @@ export default function SellerCasePayment() {
 
   return (
     <SellerLayout>
-      <div className="max-w-lg mx-auto space-y-6">
+      <div className="max-w-2xl mx-auto space-y-6">
         <button
           onClick={() => navigate(`/seller/cases/${caseId}`)}
           className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
@@ -207,8 +207,7 @@ export default function SellerCasePayment() {
             <CardContent className="space-y-4">
               {/* Scrollozható szerződés szöveg */}
               <div
-                <div
-                  className="max-h-96 overflow-y-auto border rounded-lg p-4 bg-muted/30 text-sm w-full"
+                className="max-h-96 overflow-y-auto border rounded-lg p-4 bg-muted/30 text-sm w-full"
                 dangerouslySetInnerHTML={{
                   __html: agreement?.html_content ?? "<p>A szerződés szövege betöltés alatt...</p>",
                 }}
