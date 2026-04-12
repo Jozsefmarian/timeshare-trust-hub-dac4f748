@@ -54,22 +54,90 @@ export default function ServiceAgreementPanel({ caseId, caseStatus, onAccepted }
     text: string;
   } | null>(null);
 
+  const [processedHtml, setProcessedHtml] = useState<string | null>(null);
+
+  function applyTemplate(html: string, vars: Record<string, string>): string {
+    let result = html;
+    for (const [key, value] of Object.entries(vars)) {
+      result = result.replaceAll(`{{${key}}}`, value || "—");
+    }
+    return result;
+  }
+
+  function formatDateHu(dateStr: string | null | undefined): string {
+    if (!dateStr) return "—";
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return "—";
+    return d.toLocaleDateString("hu-HU", { year: "numeric", month: "long", day: "numeric" });
+  }
+
   const loadAgreement = useCallback(async () => {
-    const { data } = await supabaseAny
+    // 1. Szerződés szövege
+    const { data: ag } = await supabaseAny
       .from("service_agreements")
       .select("id, version, title, html_content")
       .eq("is_active", true)
       .maybeSingle();
-    if (data) setAgreement(data as Agreement);
-  }, []);
+    if (!ag) return;
+    setAgreement(ag as Agreement);
+
+    // 2. Case → seller_user_id
+    const { data: caseRow } = await supabaseAny
+      .from("cases")
+      .select("seller_user_id, case_number")
+      .eq("id", caseId)
+      .maybeSingle();
+
+    // 3. Seller adatok
+    const { data: sp } = await supabaseAny
+      .from("seller_profiles")
+      .select("billing_name, birth_name, birth_place, birth_date, mother_name, billing_address")
+      .eq("user_id", caseRow?.seller_user_id)
+      .maybeSingle();
+
+    // 4. Policy settings (buyer adatok)
+    const { data: policy } = await supabaseAny
+      .from("policy_versions")
+      .select("id")
+      .eq("status", "published")
+      .order("published_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    let buyerVars: Record<string, string> = {};
+    if (policy?.id) {
+      const { data: settings } = await supabaseAny
+        .from("policy_settings")
+        .select("setting_key, setting_value")
+        .eq("policy_version_id", policy.id)
+        .in("setting_key", ["buyer_name", "buyer_address", "buyer_company_number", "buyer_tax_number"]);
+      for (const row of settings ?? []) {
+        const val = row.setting_value;
+        buyerVars[row.setting_key] = typeof val === "string" ? val.replace(/^"|"$/g, "") : String(val ?? "");
+      }
+    }
+
+    // 5. Behelyettesítés
+    const vars: Record<string, string> = {
+      case_number: caseRow?.case_number ?? "—",
+      seller_name: sp?.billing_name ?? "—",
+      seller_birth_name: sp?.birth_name ?? "—",
+      seller_birth_place: sp?.birth_place ?? "—",
+      seller_birth_date: formatDateHu(sp?.birth_date),
+      seller_mother_name: sp?.mother_name ?? "—",
+      seller_address: sp?.billing_address ?? "—",
+      buyer_name: buyerVars["buyer_name"] ?? "—",
+      buyer_address: buyerVars["buyer_address"] ?? "—",
+      buyer_company_number: buyerVars["buyer_company_number"] ?? "—",
+      buyer_tax_number: buyerVars["buyer_tax_number"] ?? "—",
+    };
+
+    setProcessedHtml(applyTemplate(ag.html_content ?? "", vars));
+  }, [caseId]);
 
   const loadTemplateVars = useCallback(async () => {
     // Get seller_user_id from case
-    const { data: caseData } = await supabaseAny
-      .from("cases")
-      .select("seller_user_id")
-      .eq("id", caseId)
-      .maybeSingle();
+    const { data: caseData } = await supabaseAny.from("cases").select("seller_user_id").eq("id", caseId).maybeSingle();
     if (!caseData) return;
 
     // Get seller profile
@@ -130,9 +198,7 @@ export default function ServiceAgreementPanel({ caseId, caseStatus, onAccepted }
 
   const canSubmit = decl1 && decl2 && isConfirmationCorrect;
 
-  const processedHtml = agreement?.html_content
-    ? applyTemplate(agreement.html_content, templateVars)
-    : null;
+  const processedHtml = agreement?.html_content ? applyTemplate(agreement.html_content, templateVars) : null;
 
   const handleAccept = async () => {
     if (!agreement || !canSubmit) return;
@@ -203,7 +269,7 @@ export default function ServiceAgreementPanel({ caseId, caseStatus, onAccepted }
       <CardContent className="space-y-5">
         {processedHtml ? (
           <div className="max-h-96 overflow-y-auto p-4 rounded-xl border border-border bg-muted/30 text-sm w-full">
-            <div dangerouslySetInnerHTML={{ __html: processedHtml }} />
+            <div dangerouslySetInnerHTML={{ __html: processedHtml ?? agreement.html_content ?? "" }} />
           </div>
         ) : (
           <div className="p-4 rounded-xl border border-border bg-muted/30">
