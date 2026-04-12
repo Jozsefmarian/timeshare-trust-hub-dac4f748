@@ -207,7 +207,8 @@ export default function SellerCasePayment() {
             <CardContent className="space-y-4">
               {/* Scrollozható szerződés szöveg */}
               <div
-                className="max-h-80 overflow-y-auto border rounded-lg p-4 bg-muted/30 text-sm"
+                <div
+                  className="max-h-96 overflow-y-auto border rounded-lg p-4 bg-muted/30 text-sm w-full"
                 dangerouslySetInnerHTML={{
                   __html: agreement?.html_content ?? "<p>A szerződés szövege betöltés alatt...</p>",
                 }}
