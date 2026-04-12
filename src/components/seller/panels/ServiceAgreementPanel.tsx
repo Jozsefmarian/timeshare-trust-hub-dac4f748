@@ -34,7 +34,7 @@ function formatDateHu(dateStr: string | null): string {
 function applyTemplate(html: string, vars: Record<string, string>): string {
   let result = html;
   for (const [key, value] of Object.entries(vars)) {
-    result = result.replaceAll(`{{${key}}}`, value || "—");
+    result = result.split(`{{${key}}}`).join(value || "—");
   }
   return result;
 }
