@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { FileCheck, Loader2, Download, CheckCircle2 } from "lucide-react";
+import { FileCheck, Loader2, CheckCircle2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
 const supabaseAny: any = supabase;
@@ -24,24 +24,48 @@ interface Agreement {
 
 const CONFIRMATION_WORD = "ELFOGADOM";
 
-function formatDateHu(dateStr: string | null): string {
-  if (!dateStr) return "—";
-  const d = new Date(dateStr);
-  if (isNaN(d.getTime())) return "—";
-  return d.toLocaleDateString("hu-HU", { year: "numeric", month: "long", day: "numeric" });
-}
-
 function applyTemplate(html: string, vars: Record<string, string>): string {
   let result = html;
-  for (const [key, value] of Object.entries(vars)) {
-    result = result.split(`{{${key}}}`).join(value || "—");
+  const keys = Object.keys(vars);
+  for (let i = 0; i < keys.length; i++) {
+    const key = keys[i];
+    const value = vars[key] || "—";
+    result = result.split("{{" + key + "}}").join(value);
   }
   return result;
 }
 
+function formatDateHu(dateStr: string | null | undefined): string {
+  if (!dateStr) return "—";
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return "—";
+  return d.toLocaleDateString("hu-HU", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
+}
+
+function isAfterStatus(current: string, target: string): boolean {
+  const order = [
+    "draft",
+    "submitted",
+    "ai_processing",
+    "green_approved",
+    "contract_generated",
+    "awaiting_signed_contract",
+    "signed_contract_uploaded",
+    "service_agreement_accepted",
+    "payment_pending",
+    "paid",
+    "closed",
+  ];
+  return order.indexOf(current) > order.indexOf(target);
+}
+
 export default function ServiceAgreementPanel({ caseId, caseStatus, onAccepted }: ServiceAgreementPanelProps) {
   const [agreement, setAgreement] = useState<Agreement | null>(null);
-  const [templateVars, setTemplateVars] = useState<Record<string, string>>({});
+  const [renderedHtml, setRenderedHtml] = useState<string>("");
   const [decl1, setDecl1] = useState(false);
   const [decl2, setDecl2] = useState(false);
   const [typedConfirmation, setTypedConfirmation] = useState("");
@@ -54,23 +78,6 @@ export default function ServiceAgreementPanel({ caseId, caseStatus, onAccepted }
     text: string;
   } | null>(null);
 
-  const [processedHtml, setProcessedHtml] = useState<string | null>(null);
-
-  function applyTemplate(html: string, vars: Record<string, string>): string {
-    let result = html;
-    for (const [key, value] of Object.entries(vars)) {
-      result = result.replaceAll(`{{${key}}}`, value || "—");
-    }
-    return result;
-  }
-
-  function formatDateHu(dateStr: string | null | undefined): string {
-    if (!dateStr) return "—";
-    const d = new Date(dateStr);
-    if (isNaN(d.getTime())) return "—";
-    return d.toLocaleDateString("hu-HU", { year: "numeric", month: "long", day: "numeric" });
-  }
-
   const loadAgreement = useCallback(async () => {
     // 1. Szerződés szövege
     const { data: ag } = await supabaseAny
@@ -81,21 +88,21 @@ export default function ServiceAgreementPanel({ caseId, caseStatus, onAccepted }
     if (!ag) return;
     setAgreement(ag as Agreement);
 
-    // 2. Case → seller_user_id
+    // 2. Case adatok
     const { data: caseRow } = await supabaseAny
       .from("cases")
       .select("seller_user_id, case_number")
       .eq("id", caseId)
       .maybeSingle();
 
-    // 3. Seller adatok
+    // 3. Seller profil adatok
     const { data: sp } = await supabaseAny
       .from("seller_profiles")
       .select("billing_name, birth_name, birth_place, birth_date, mother_name, billing_address")
-      .eq("user_id", caseRow?.seller_user_id)
+      .eq("user_id", caseRow?.seller_user_id ?? "")
       .maybeSingle();
 
-    // 4. Policy settings (buyer adatok)
+    // 4. Buyer adatok (policy_settings)
     const { data: policy } = await supabaseAny
       .from("policy_versions")
       .select("id")
@@ -104,7 +111,7 @@ export default function ServiceAgreementPanel({ caseId, caseStatus, onAccepted }
       .limit(1)
       .maybeSingle();
 
-    let buyerVars: Record<string, string> = {};
+    const buyerVars: Record<string, string> = {};
     if (policy?.id) {
       const { data: settings } = await supabaseAny
         .from("policy_settings")
@@ -117,7 +124,7 @@ export default function ServiceAgreementPanel({ caseId, caseStatus, onAccepted }
       }
     }
 
-    // 5. Behelyettesítés
+    // 5. Változók összeállítása és behelyettesítés
     const vars: Record<string, string> = {
       case_number: caseRow?.case_number ?? "—",
       seller_name: sp?.billing_name ?? "—",
@@ -132,55 +139,7 @@ export default function ServiceAgreementPanel({ caseId, caseStatus, onAccepted }
       buyer_tax_number: buyerVars["buyer_tax_number"] ?? "—",
     };
 
-    setProcessedHtml(applyTemplate(ag.html_content ?? "", vars));
-  }, [caseId]);
-
-  const loadTemplateVars = useCallback(async () => {
-    // Get seller_user_id from case
-    const { data: caseData } = await supabaseAny.from("cases").select("seller_user_id").eq("id", caseId).maybeSingle();
-    if (!caseData) return;
-
-    // Get seller profile
-    const { data: sellerProfile } = await supabaseAny
-      .from("seller_profiles")
-      .select("billing_name, birth_name, birth_place, birth_date, mother_name, billing_address")
-      .eq("user_id", caseData.seller_user_id)
-      .maybeSingle();
-
-    // Get published policy version
-    const { data: policy } = await supabaseAny
-      .from("policy_versions")
-      .select("id")
-      .eq("status", "published")
-      .order("published_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    let buyerVars: Record<string, string> = {};
-    if (policy) {
-      const { data: settings } = await supabaseAny
-        .from("policy_settings")
-        .select("setting_key, setting_value")
-        .eq("policy_version_id", policy.id)
-        .in("setting_key", ["buyer_name", "buyer_address", "buyer_company_number", "buyer_tax_number"]);
-
-      if (settings) {
-        for (const s of settings) {
-          const val = typeof s.setting_value === "string" ? s.setting_value : JSON.stringify(s.setting_value);
-          buyerVars[s.setting_key] = val;
-        }
-      }
-    }
-
-    setTemplateVars({
-      seller_name: sellerProfile?.billing_name || "",
-      seller_birth_name: sellerProfile?.birth_name || "",
-      seller_birth_place: sellerProfile?.birth_place || "",
-      seller_birth_date: formatDateHu(sellerProfile?.birth_date || null),
-      seller_mother_name: sellerProfile?.mother_name || "",
-      seller_address: sellerProfile?.billing_address || "",
-      ...buyerVars,
-    });
+    setRenderedHtml(applyTemplate(ag.html_content ?? "", vars));
   }, [caseId]);
 
   const checkExistingAcceptance = useCallback(async () => {
@@ -190,23 +149,17 @@ export default function ServiceAgreementPanel({ caseId, caseStatus, onAccepted }
 
   useEffect(() => {
     loadAgreement();
-    loadTemplateVars();
     checkExistingAcceptance();
-  }, [loadAgreement, loadTemplateVars, checkExistingAcceptance]);
+  }, [loadAgreement, checkExistingAcceptance]);
 
   const isConfirmationCorrect = typedConfirmation.trim().toUpperCase() === CONFIRMATION_WORD;
-
   const canSubmit = decl1 && decl2 && isConfirmationCorrect;
-
-  const processedHtml = agreement?.html_content ? applyTemplate(agreement.html_content, templateVars) : null;
 
   const handleAccept = async () => {
     if (!agreement || !canSubmit) return;
     setMessage(null);
-
     try {
       setIsAccepting(true);
-
       const { data, error } = await supabase.functions.invoke("accept-service-agreement", {
         body: {
           case_id: caseId,
@@ -215,9 +168,7 @@ export default function ServiceAgreementPanel({ caseId, caseStatus, onAccepted }
           typed_confirmation: typedConfirmation.trim(),
         },
       });
-
       if (error) throw error;
-
       setAccepted(true);
       setMessage({
         type: "success",
@@ -233,6 +184,8 @@ export default function ServiceAgreementPanel({ caseId, caseStatus, onAccepted }
       setIsAccepting(false);
     }
   };
+
+  // ── Már elfogadva ─────────────────────────────────────────────────────
 
   if (accepted) {
     return (
@@ -258,6 +211,8 @@ export default function ServiceAgreementPanel({ caseId, caseStatus, onAccepted }
     );
   }
 
+  // ── Elfogadásra vár ───────────────────────────────────────────────────
+
   return (
     <Card className="shadow-sm">
       <CardHeader>
@@ -267,9 +222,10 @@ export default function ServiceAgreementPanel({ caseId, caseStatus, onAccepted }
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-5">
-        {processedHtml ? (
+        {/* Szerződés szövege */}
+        {renderedHtml ? (
           <div className="max-h-96 overflow-y-auto p-4 rounded-xl border border-border bg-muted/30 text-sm w-full">
-            <div dangerouslySetInnerHTML={{ __html: processedHtml ?? agreement.html_content ?? "" }} />
+            <div dangerouslySetInnerHTML={{ __html: renderedHtml }} />
           </div>
         ) : (
           <div className="p-4 rounded-xl border border-border bg-muted/30">
@@ -277,11 +233,13 @@ export default function ServiceAgreementPanel({ caseId, caseStatus, onAccepted }
           </div>
         )}
 
+        {/* Jogi nyilatkozat */}
         <div className="p-3 rounded-lg bg-muted/30 border border-border text-xs text-muted-foreground">
           A szerződés elektronikus úton jön létre. A felhasználó az elfogadás gomb megnyomásával és a szolgáltatási díj
           megfizetésével a szerződést kötelezőnek ismeri el.
         </div>
 
+        {/* Checkboxok */}
         <div className="space-y-3">
           <label className="flex items-start gap-3 p-3 rounded-xl border border-border hover:bg-muted/30 cursor-pointer">
             <Checkbox checked={decl1} onCheckedChange={(v) => setDecl1(!!v)} className="mt-0.5" />
@@ -295,6 +253,7 @@ export default function ServiceAgreementPanel({ caseId, caseStatus, onAccepted }
           </label>
         </div>
 
+        {/* Typed confirmation */}
         <div className="space-y-2">
           <Label htmlFor="typed-confirmation" className="text-sm">
             A megerősítéshez írja be: <span className="font-bold text-foreground">{CONFIRMATION_WORD}</span>
@@ -318,12 +277,14 @@ export default function ServiceAgreementPanel({ caseId, caseStatus, onAccepted }
           )}
         </div>
 
+        {/* Hibaüzenet */}
         {message && (
           <p className={`text-sm ${message.type === "success" ? "text-success" : "text-destructive"}`}>
             {message.text}
           </p>
         )}
 
+        {/* Submit gomb */}
         <Button className="w-full" disabled={!canSubmit || isAccepting} onClick={handleAccept}>
           {isAccepting ? (
             <>
@@ -331,30 +292,10 @@ export default function ServiceAgreementPanel({ caseId, caseStatus, onAccepted }
               Elfogadás folyamatban...
             </>
           ) : (
-            <>
-              <Download className="h-4 w-4 mr-2" />
-              Szolgáltatási szerződés elfogadása
-            </>
+            "Szolgáltatási szerződés elfogadása"
           )}
         </Button>
       </CardContent>
     </Card>
   );
-}
-
-function isAfterStatus(current: string, target: string): boolean {
-  const order = [
-    "draft",
-    "submitted",
-    "ai_processing",
-    "green_approved",
-    "contract_generated",
-    "awaiting_signed_contract",
-    "signed_contract_uploaded",
-    "service_agreement_accepted",
-    "payment_pending",
-    "paid",
-    "closed",
-  ];
-  return order.indexOf(current) > order.indexOf(target);
 }
