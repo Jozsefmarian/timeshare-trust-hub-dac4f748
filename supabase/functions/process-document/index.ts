@@ -92,12 +92,13 @@ function isInternalRequest(req: Request, serviceRoleKey: string) {
   return authHeader === `Bearer ${serviceRoleKey}` || apikey === serviceRoleKey;
 }
 
+// FIX: helyes unicode range a diakritikus jelek eltávolításához
 function normalizeText(value: string | null | undefined): string {
   return (value ?? "")
     .normalize("NFD")
-    .replace(/[u0300-u036f]/g, "")
+    .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
-    .replace(/s+/g, " ")
+    .replace(/\s+/g, " ")
     .trim();
 }
 
@@ -233,7 +234,6 @@ async function extractTextFromFile(
     try {
       const rawText = await fileData.text();
       if (!rawText.trimStart().startsWith("%PDF-")) {
-        const printable = text.replace(/[^\x20-\x7E\u00C0-\u024F\n\r\t]/g, "");
         const cleanText = rawText.replace(/[^\x20-\x7E\n\r\t\u00C0-\u024F]/g, "").trim();
         if (cleanText.length > 200 && isReadableText(cleanText)) {
           return { text: cleanText, method: "pdf_text_extraction" };
@@ -277,42 +277,42 @@ function detectDocumentType(documentType: string | null, fileName: string | null
 }
 
 function extractFieldsFromText(text: string, detectedType: string): Record<string, unknown> {
-  const normalized = text.replace(/r/g, "");
+  const normalized = text.replace(/\r/g, "");
   const result: Record<string, unknown> = { detected_document_type: detectedType };
 
-  const weekMatch = normalized.match(/(?:het(?:e|ében|eben)?|week)\s*[:-]?\s*(\d{1,2})/i);
+  const weekMatch = normalized.match(/(?:het(?:e|\u00e9ben|eben)?|week)\s*[:-]?\s*(\d{1,2})/i);
   if (weekMatch) result.week_number = Number(weekMatch[1]);
 
   const contractMatch = normalized.match(
-    /(?:szerz[őo]d[ée]s(?:sz[áa]m)?|contract(?: number)?)\s*[:-]?\s*([A-Z0-9-/]+)/i,
+    /(?:szerz[\u0151o]d[\u00e9e]s(?:sz[\u00e1a]m)?|contract(?: number)?)\s*[:-]?\s*([A-Z0-9-/]+)/i,
   );
   if (contractMatch) result.contract_number = contractMatch[1];
 
   const shareCountMatch = normalized.match(
-    /(?:r[eé]szv[eé]ny(?:ek)?\s*sz[áa]ma|share count)\s*[:-]?\s*(\d+)/i,
+    /(?:r[\u00e9e]szv[\u00e9e]ny(?:ek)?\s*sz[\u00e1a]ma|share count)\s*[:-]?\s*(\d+)/i,
   );
   if (shareCountMatch) result.share_count = Number(shareCountMatch[1]);
 
   const annualFeeMatch = normalized.match(
-    /(?:fenntart[aá]si d[ií]j|annual fee)\s*[:-]?\s*([\d\s.,]+)\s*(?:ft|huf)?/i,
+    /(?:fenntart[a\u00e1]si d[i\u00ed]j|annual fee)\s*[:-]?\s*([\d\s.,]+)\s*(?:ft|huf)?/i,
   );
   if (annualFeeMatch) result.annual_fee = annualFeeMatch[1].trim();
 
-  const ownerLineMatch = normalized.match(/(?:jogosult|tulajdonos|owner|n[eé]v)\s*[:-]?\s*([^\n]+)/i);
+  const ownerLineMatch = normalized.match(/(?:jogosult|tulajdonos|owner|n[\u00e9e]v)\s*[:-]?\s*([^\n]+)/i);
   if (ownerLineMatch) result.owner_name = ownerLineMatch[1].trim();
 
   const resortLineMatch = normalized.match(
-    /(?:üdül[őo]ingatlan|resort|hotel|club)\s*[:-]?\s*([^\n]+)/i,
+    /(?:\u00fcd[\u00fcü]l[\u0151o]ingatlan|resort|hotel|club)\s*[:-]?\s*([^\n]+)/i,
   );
   if (resortLineMatch) result.resort_name = resortLineMatch[1].trim();
 
   const unitNumberMatch = normalized.match(
-    /(?:egys[eé]g(?:sz[áa]m)?|apartman\s*sz[áa]m|unit(?:\s*number)?|apart(?:ment)?\s*no)\s*[:-]?\s*([A-Z0-9-/]+)/i,
+    /(?:egys[\u00e9e]g(?:sz[\u00e1a]m)?|apartman\s*sz[\u00e1a]m|unit(?:\s*number)?|apart(?:ment)?\s*no)\s*[:-]?\s*([A-Z0-9-/]+)/i,
   );
   if (unitNumberMatch) result.unit_number = unitNumberMatch[1].trim();
 
   const capacityMatch = normalized.match(
-    /(?:(\d+)\s*f[őo]\s*(?:r[eé]sz[eé]re|sz[áa]m[áa]ra)?|(\d+)\s*szem[eé]lyes|capacity\s*[:-]?\s*(\d+))/i,
+    /(?:(\d+)\s*f[\u0151o]\s*(?:r[\u00e9e]sz[\u00e9e]re|sz[\u00e1a]m[\u00e1a]ra)?|(\d+)\s*szem[\u00e9e]lyes|capacity\s*[:-]?\s*(\d+))/i,
   );
   if (capacityMatch) {
     const cap = Number(capacityMatch[1] ?? capacityMatch[2] ?? capacityMatch[3]);
@@ -347,23 +347,7 @@ async function extractFieldsWithAI(
           messages: [
             {
               role: "user",
-              content: `Te egy magyar udulesi szerzodoseket elemzo asszisztens vagy. A megadott szerzodes szovegebol nyerd ki a kovetkezo mezokat JSON formatumban. Csak valodi adatokat adj vissza, ne talalj ki semmit. Ha egy mezo nem talalhato, hagyd ki.
-
-Keresendo mezok:
-- resort_name: udulohely neve
-- week_number: het szama egesz szamkent
-- owner_name: tulajdonos neve
-- contract_number: szerzodes szama
-- annual_fee: eves fenntartasi dij szamkent (pl. 150000)
-- share_count: reszvenyek darabszama
-- unit_type: apartman tipusa (pl. studio, 1 haloszobas)
-- unit_number: egyseg/apartman azonositoja (pl. A-12 vagy 304)
-- capacity: max elhelyezheto fo szama egesz szamkent
-
-Valaszolj KIZAROLAG valid JSON objektummal, semmi massal.
-
-Szerzodes szovege:
-${text.substring(0, 8000)}`,
+              content: `Te egy magyar udulesi szerzodoseket elemzo asszisztens vagy. A megadott szerzodes szovegebol nyerd ki a kovetkezo mezokat JSON formatumban. Csak valodi adatokat adj vissza, ne talalj ki semmit. Ha egy mezo nem talalhato, hagyd ki.\n\nKeresendo mezok:\n- resort_name: udulohely neve\n- week_number: het szama egesz szamkent\n- owner_name: tulajdonos neve\n- contract_number: szerzodes szama\n- annual_fee: eves fenntartasi dij szamkent (pl. 150000)\n- share_count: reszvenyek darabszama\n- unit_type: apartman tipusa (pl. studio, 1 haloszobas)\n- unit_number: egyseg/apartman azonositoja (pl. A-12 vagy 304)\n- capacity: max elhelyezheto fo szama egesz szamkent\n\nValaszolj KIZAROLAG valid JSON objektummal, semmi massal.\n\nSzerzodes szovege:\n${text.substring(0, 8000)}`,
             },
           ],
         }),
@@ -469,6 +453,57 @@ async function buildRestrictionHitsFromDb(
   return hits;
 }
 
+/**
+ * Resort névegyezés: toleráns összehasonlítás.
+ * Kezeli a rövidített neveket, extra szavakat (pl. csillagbesorolás),
+ * és a névváltozásokat (régi vs. jelenlegi név).
+ *
+ * Logika:
+ * 1. Teljes egyezés (normalizált)
+ * 2. Az egyik tartalmazza a másikat teljes egészében
+ * 3. A RÖVIDEBB string szavainak legalább 60%-a megtalálható a HOSSZABB stringben
+ *    (ez kezeli pl. "Club Dobogomajor" vs "Club Dobogomajor *** superior" esetet)
+ * 4. Legalább 6 karakter hosszú közös részstring (prefix/infix egyezés)
+ */
+function resortNamesSimilar(a: string, b: string): boolean {
+  const na = normalizeText(a);
+  const nb = normalizeText(b);
+
+  // 1. Teljes egyezés
+  if (na === nb) return true;
+
+  // 2. Az egyik tartalmazza a másikat
+  if (na.length >= 5 && nb.includes(na)) return true;
+  if (nb.length >= 5 && na.includes(nb)) return true;
+
+  // 3. Szóalapú egyezés: a rövidebb szavai legalább 60%-ban benne vannak a hosszabbban
+  const wordsA = na.split(" ").filter((w) => w.length >= 3);
+  const wordsB = nb.split(" ").filter((w) => w.length >= 3);
+  const shorter = wordsA.length <= wordsB.length ? wordsA : wordsB;
+  const longerStr = wordsA.length <= wordsB.length ? nb : na;
+
+  if (shorter.length >= 1) {
+    const matchCount = shorter.filter((w) => longerStr.includes(w)).length;
+    const ratio = matchCount / shorter.length;
+    if (ratio >= 0.6) return true;
+  }
+
+  // 4. Közös részstring legalább 6 karakter
+  const minLen = 6;
+  const shortStr = na.length <= nb.length ? na : nb;
+  const longStr = na.length <= nb.length ? nb : na;
+  for (let i = 0; i <= shortStr.length - minLen; i++) {
+    const sub = shortStr.substring(i, i + minLen);
+    if (longStr.includes(sub)) return true;
+  }
+
+  return false;
+}
+
+/**
+ * Általános szövegegyezés (nem resort-specifikus).
+ * Szigorúbb mint resortNamesSimilar.
+ */
 function textSimilar(a: string, b: string): boolean {
   const na = normalizeText(a);
   const nb = normalizeText(b);
@@ -479,18 +514,6 @@ function textSimilar(a: string, b: string): boolean {
   return false;
 }
 
-/**
- * Compares extracted document fields with the seller's form data.
- *
- * KEY CHANGE vs previous version:
- * For timeshare_contract, the resort_name and week_number are MANDATORY comparison fields.
- * If the OCR successfully extracted text (textExtracted=true) but could NOT find these
- * fields in the document, we treat that as a mismatch (is_mismatch: true, doc_value: null).
- * This prevents silent green classification when OCR text exists but key data is missing.
- *
- * If textExtracted=false (unreadable doc), we skip field comparison entirely — the
- * caller will add a document_check correction_required row instead.
- */
 function compareWithWeekOffer(
   extractedFields: Record<string, unknown>,
   weekOffer: WeekOfferRow,
@@ -501,16 +524,13 @@ function compareWithWeekOffer(
     return [];
   }
 
-  // If OCR produced no usable text, skip field comparison.
-  // The caller handles this as an unreadable-document correction.
   if (!textExtracted) {
     return [];
   }
 
   const results: MismatchResult[] = [];
 
-  // --- resort_name: mandatory check ---
-  // Compare if form has a value. If OCR text exists but resort not found → mismatch.
+  // --- resort_name: toleráns összehasonlítás ---
   if (weekOffer.resort_name_raw) {
     const docResort = extractedFields.resort_name as string | null | undefined;
     if (docResort) {
@@ -519,10 +539,9 @@ function compareWithWeekOffer(
         field_label: "Uduloingatlan neve",
         form_value: weekOffer.resort_name_raw,
         doc_value: docResort,
-        is_mismatch: !textSimilar(docResort, weekOffer.resort_name_raw),
+        is_mismatch: !resortNamesSimilar(docResort, weekOffer.resort_name_raw),
       });
     } else {
-      // Text extracted but resort name not found in document
       results.push({
         field_name: "resort_name_raw",
         field_label: "Uduloingatlan neve",
@@ -533,8 +552,7 @@ function compareWithWeekOffer(
     }
   }
 
-  // --- week_number: mandatory check ---
-  // Compare if form has a value. If OCR text exists but week not found → mismatch.
+  // --- week_number: kötelező ---
   if (weekOffer.week_number != null) {
     const docWeek = extractedFields.week_number as number | null | undefined;
     if (docWeek != null) {
@@ -546,7 +564,6 @@ function compareWithWeekOffer(
         is_mismatch: Number(docWeek) !== Number(weekOffer.week_number),
       });
     } else {
-      // Text extracted but week number not found in document
       results.push({
         field_name: "week_number",
         field_label: "Udulesi het sorszama",
@@ -557,7 +574,7 @@ function compareWithWeekOffer(
     }
   }
 
-  // --- unit_number: optional check (only if both sides have a value) ---
+  // --- unit_number: opcionális ---
   const docUnitNumber = extractedFields.unit_number as string | null | undefined;
   if (docUnitNumber && weekOffer.unit_number) {
     results.push({
@@ -569,7 +586,7 @@ function compareWithWeekOffer(
     });
   }
 
-  // --- capacity: optional check (only if both sides have a value) ---
+  // --- capacity: opcionális ---
   const docCapacity = extractedFields.capacity as number | null | undefined;
   if (docCapacity != null && weekOffer.capacity != null) {
     results.push({
@@ -595,7 +612,6 @@ async function saveCheckResults(
 ) {
   const rows: Array<Record<string, unknown>> = [];
 
-  // --- Restriction hit summary row ---
   rows.push({
     case_id: caseId,
     document_id: documentId,
@@ -619,7 +635,6 @@ async function saveCheckResults(
     });
   }
 
-  // --- Unreadable document: seller must re-upload ---
   if (unreadableDocument) {
     rows.push({
       case_id: caseId,
@@ -634,13 +649,11 @@ async function saveCheckResults(
         source: "ocr_failed",
       },
     });
-    // Emit no field_match rows when doc is unreadable — document_check is sufficient
     const { error } = await serviceClient.from("check_results").insert(rows);
     if (error) throw error;
     return;
   }
 
-  // --- Field match rows ---
   for (const m of mismatchResults) {
     if (m.is_mismatch) {
       rows.push({
@@ -821,12 +834,9 @@ Deno.serve(async (req) => {
     }
     const extractedFields = { ...regexFields, ...aiFields };
 
-    // textExtracted = true means OCR produced enough text to attempt field comparison.
-    // Threshold: 100 chars. Below this, the document is considered unreadable.
     const textExtracted = extractedTextRaw.length >= 100;
 
     let mismatchResults: MismatchResult[] = [];
-    // unreadableTimeshare = timeshare_contract where OCR failed to produce usable text
     let unreadableTimeshareDoc = false;
 
     try {
@@ -838,7 +848,6 @@ Deno.serve(async (req) => {
 
       if (weekOffer) {
         if (detectedType === "timeshare_contract" && !textExtracted) {
-          // Document is unreadable — will be flagged as document_check correction
           unreadableTimeshareDoc = true;
           console.log(`timeshare_contract unreadable: chars_extracted=${extractedTextRaw.length}`);
         } else {
@@ -879,8 +888,8 @@ Deno.serve(async (req) => {
     const validationStatus = restrictionHits.some((h) => h.severity === "confirmed")
       ? "restriction_confirmed"
       : unreadableTimeshareDoc
-      ? "failed"
-      : "match_ok";
+        ? "failed"
+        : "match_ok";
 
     await serviceClient
       .from("documents")
@@ -916,7 +925,6 @@ Deno.serve(async (req) => {
       })
       .eq("id", job.id);
 
-    // Trigger classify-case. It decides the final classification once all docs are processed.
     try {
       const classifyResponse = await fetch(`${supabaseUrl}/functions/v1/classify-case`, {
         method: "POST",
