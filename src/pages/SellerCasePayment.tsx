@@ -39,6 +39,7 @@ export default function SellerCasePayment() {
   const [isLoading, setIsLoading] = useState(true);
   const [isStarting, setIsStarting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isAbbazia, setIsAbbazia] = useState(false);
 
   // Service agreement state
   const [agreement, setAgreement] = useState<Agreement | null>(null);
@@ -49,6 +50,14 @@ export default function SellerCasePayment() {
   const [isAccepting, setIsAccepting] = useState(false);
   const [acceptError, setAcceptError] = useState<string | null>(null);
   const [acceptanceDone, setAcceptanceDone] = useState(false);
+
+  const TOTAL_FEE = 50000;
+  const setoff = isAbbazia ? 2 : 1;
+  const cardAmount = TOTAL_FEE - setoff;
+
+  function formatHuf(amount: number) {
+    return amount.toLocaleString("hu-HU") + " Ft";
+  }
 
   useEffect(() => {
     const loadCase = async () => {
@@ -152,6 +161,20 @@ export default function SellerCasePayment() {
           .eq("case_id", caseId)
           .maybeSingle();
         setExistingAcceptance(acc ?? null);
+        // Abbázia / részvény meghatározása a bontásos megjelenítéshez
+        const { data: wo } = await supabaseAny
+          .from("week_offers")
+          .select("share_related")
+          .eq("case_id", caseId)
+          .maybeSingle();
+        if (wo?.share_related === true) {
+          const { data: abbShares } = await supabaseAny
+            .from("abbazia_shares")
+            .select("id")
+            .eq("case_id", caseId)
+            .maybeSingle();
+          setIsAbbazia(!!abbShares);
+        }
       } catch (err: any) {
         setError("Az ügy betöltése nem sikerült.");
       } finally {
@@ -375,17 +398,18 @@ export default function SellerCasePayment() {
             <CardContent className="space-y-5">
               <div className="p-4 rounded-xl bg-muted/40 border border-border space-y-2">
                 <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Szolgáltatás</span>
-                  <span className="font-medium">Üdülési jog átruházás</span>
+                  <span className="text-muted-foreground">Szolgáltatási díj</span>
+                  <span className="font-medium text-foreground">{formatHuf(TOTAL_FEE)}</span>
                 </div>
                 <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Összeg</span>
-                  <span className="font-bold text-foreground">99 000 HUF</span>
+                  <span className="text-muted-foreground">Beszámítás (adásvétel alapján)</span>
+                  <span className="font-medium text-foreground">− {formatHuf(setoff)}</span>
                 </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Fizetési mód</span>
-                  <span className="font-medium">Bankkártya (Stripe)</span>
+                <div className="border-t border-border pt-2 flex justify-between text-sm">
+                  <span className="text-muted-foreground">Bankkártyával fizetendő</span>
+                  <span className="font-bold text-foreground">{formatHuf(cardAmount)}</span>
                 </div>
+                <p className="text-xs text-muted-foreground pt-1">Bankkártyás fizetés Stripe felületen keresztül.</p>
               </div>
 
               <p className="text-xs text-muted-foreground">
