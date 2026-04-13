@@ -49,9 +49,7 @@ export default function SellerCasePayment() {
   const [acceptanceDone, setAcceptanceDone] = useState(false);
 
   useEffect(() => {
-    const loadCase = async () => {
-      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-      if (!caseId || !uuidRegex.test(caseId)) {
+     if (!caseId || !uuidRegex.test(caseId)) {
         setIsLoading(false);
         return;
       }
