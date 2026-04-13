@@ -5,12 +5,22 @@ import { useNavigate, useParams } from "react-router-dom";
 
 interface PaymentPanelProps {
   caseStatus: string;
+  isAbbazia?: boolean;
 }
 
-export default function PaymentPanel({ caseStatus }: PaymentPanelProps) {
+const TOTAL_FEE = 50000;
+
+export default function PaymentPanel({ caseStatus, isAbbazia = false }: PaymentPanelProps) {
   const navigate = useNavigate();
   const { caseId } = useParams();
   const isPaid = caseStatus === "paid" || caseStatus === "closed";
+
+  const setoff = isAbbazia ? 2 : 1;
+  const cardAmount = TOTAL_FEE - setoff;
+
+  function formatHuf(amount: number) {
+    return amount.toLocaleString("hu-HU") + " Ft";
+  }
 
   return (
     <Card className="shadow-sm">
@@ -31,12 +41,20 @@ export default function PaymentPanel({ caseStatus }: PaymentPanelProps) {
           </div>
         ) : (
           <div className="space-y-3">
-            <div className="p-4 rounded-xl bg-muted/40 border border-border">
-              <div className="flex justify-between text-sm mb-1">
-                <span className="text-muted-foreground">Fizetendő összeg</span>
-                <span className="font-bold text-foreground">99 000 HUF</span>
+            <div className="p-4 rounded-xl bg-muted/40 border border-border space-y-2">
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Szolgáltatási díj</span>
+                <span className="font-medium text-foreground">{formatHuf(TOTAL_FEE)}</span>
               </div>
-              <p className="text-xs text-muted-foreground">Bankkártyás fizetés Stripe felületen keresztül.</p>
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Beszámítás (adásvétel alapján)</span>
+                <span className="font-medium text-foreground">− {formatHuf(setoff)}</span>
+              </div>
+              <div className="border-t border-border pt-2 flex justify-between text-sm">
+                <span className="text-muted-foreground">Bankkártyával fizetendő</span>
+                <span className="font-bold text-foreground">{formatHuf(cardAmount)}</span>
+              </div>
+              <p className="text-xs text-muted-foreground pt-1">Bankkártyás fizetés Stripe felületen keresztül.</p>
             </div>
             <Button className="w-full" onClick={() => navigate(`/seller/cases/${caseId}/payment`)}>
               <CreditCard className="h-4 w-4 mr-2" />
