@@ -117,21 +117,33 @@ export default function ServiceAgreementPanel({ caseId, caseStatus, onAccepted }
       .maybeSingle();
 
     // 4. Buyer adatok (policy_settings)
-    const { data: policy } = await supabaseAny
-      .from("policy_versions")
-      .select("id")
-      .eq("status", "published")
-      .order("published_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
+    const PUBLISHED_POLICY_ID = "9e7b909e-1f43-4c59-9604-ae7e82f0db67";
 
-    const buyerVars: Record<string, string> = {};
-    if (policy?.id) {
-      const { data: settings } = await supabaseAny
-        .from("policy_settings")
-        .select("setting_key, setting_value")
-        .eq("policy_version_id", policy.id)
-        .in("setting_key", ["buyer_name", "buyer_address", "buyer_company_number", "buyer_tax_number"]);
+const buyerVars: Record<string, string> = {};
+let policyId = PUBLISHED_POLICY_ID;
+
+try {
+  const { data: policy } = await supabaseAny
+    .from("policy_versions")
+    .select("id")
+    .eq("status", "published")
+    .order("published_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (policy?.id) policyId = policy.id;
+} catch {
+  // fallback to hardcoded ID
+}
+
+const { data: settings } = await supabaseAny
+  .from("policy_settings")
+  .select("setting_key, setting_value")
+  .eq("policy_version_id", policyId)
+  .in("setting_key", ["buyer_name", "buyer_address", "buyer_company_number", "buyer_tax_number", "buyer_representative"]);
+for (const row of settings ?? []) {
+  const val = row.setting_value;
+  buyerVars[row.setting_key] = typeof val === "string" ? val.replace(/^"|"$/g, "") : String(val ?? "");
+}
       for (const row of settings ?? []) {
         const val = row.setting_value;
         buyerVars[row.setting_key] = typeof val === "string" ? val.replace(/^"|"$/g, "") : String(val ?? "");
