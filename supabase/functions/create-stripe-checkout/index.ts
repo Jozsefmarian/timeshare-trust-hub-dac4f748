@@ -94,9 +94,7 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: "Forbidden" }, 403, req);
     }
 
-    // A1: Engedélyezett státuszok: service_agreement_accepted VAGY payment_pending
-    // Ha payment_pending, ellenőrizzük hogy van-e declaration_acceptances rekord
-    // (Ez azt jelenti, hogy az előző Stripe session elveszett, de az elfogadás megtörtént)
+    // Engedélyezett státuszok: service_agreement_accepted VAGY payment_pending
     const allowedStatuses = ["service_agreement_accepted", "payment_pending"];
     if (!allowedStatuses.includes(caseRow.status)) {
       return jsonResponse(
@@ -110,7 +108,6 @@ Deno.serve(async (req) => {
     }
 
     if (caseRow.status === "payment_pending") {
-      // Ellenőrizzük, hogy tényleg elfogadta-e a szolgáltatási szerződést
       const { data: existingAcceptance } = await serviceClient
         .from("declaration_acceptances")
         .select("id")
@@ -137,15 +134,54 @@ Deno.serve(async (req) => {
       .eq("id", user.id)
       .single();
 
-    // 5. Stripe checkout session létrehozása
+    // 5. Abbázia / részvény meghatározása az összeg kiszámításához
+    // Logika: ha share_related = true ÉS van abbazia_shares rekord → 2 Ft beszámítás → 49 998 Ft
+    // Egyébként: 1 Ft beszámítás → 49 999 Ft
+    let isAbbazia = false;
+    try {
+      const { data: weekOffer } = await serviceClient
+        .from("week_offers")
+        .select("share_related")
+        .eq("case_id", case_id)
+        .maybeSingle();
+
+      if (weekOffer?.share_related === true) {
+        const { data: abbaziaShares } = await serviceClient
+          .from("abbazia_shares")
+          .select("id")
+          .eq("case_id", case_id)
+          .maybeSingle();
+        isAbbazia = !!abbaziaShares;
+      }
+    } catch (err) {
+      console.error("Abbazia check error (non-blocking):", err);
+      // Ha hiba van, defaultolunk a nem-Abbáziás összegre
+    }
+
+    // Összeg meghatározása:
+    // Teljes szolgáltatási díj: 50 000 Ft
+    // Beszámítás (adásvételi szerz. alapján Zaleo fizet az eladónak):
+    //   - Nem Abbáziás: 1 Ft → bankkártyán: 49 999 Ft
+    //   - Abbáziás (részvénnyel): 2 Ft (üdülőhasználati + részvény) → bankkártyán: 49 998 Ft
+    const TOTAL_SERVICE_FEE = 50000; // 50 000 Ft teljes díj
+    const setoff = isAbbazia ? 2 : 1; // beszámítás összege forintban
+    const amountHuf = TOTAL_SERVICE_FEE - setoff; // bankkártyán fizetendő: 49 999 vagy 49 998
+    const stripeUnitAmount = amountHuf * 100; // Stripe fillér formátum
+
+    console.log(`Payment amount: ${amountHuf} HUF (isAbbazia=${isAbbazia}, setoff=${setoff} Ft)`);
+
+    // 6. Stripe checkout session létrehozása
     const stripe = new Stripe(stripeSecretKey, {
       apiVersion: "2024-04-10",
     });
 
-    // A2: Visszairányítási URL-ek — payment oldalra irányít vissza, nem case detail-re
     const origin = req.headers.get("Origin") ?? "https://timeshareease.hu";
     const successUrl = `${origin}/seller/cases/${case_id}/payment?payment=success`;
     const cancelUrl = `${origin}/seller/cases/${case_id}/payment?payment=cancelled`;
+
+    const productDescription = isAbbazia
+      ? "Üdülési jog átruházási szolgáltatás díja (részvénnyel)"
+      : "Üdülési jog átruházási szolgáltatás díja";
 
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
@@ -156,9 +192,9 @@ Deno.serve(async (req) => {
             currency: "huf",
             product_data: {
               name: `TimeshareEase szolgáltatási díj – ${caseRow.case_number}`,
-              description: "Üdülési jog átruházási szolgáltatás díja",
+              description: productDescription,
             },
-            unit_amount: 9900000, // 99 000 HUF (fillérek: 99000 * 100)
+            unit_amount: stripeUnitAmount,
           },
           quantity: 1,
         },
@@ -167,18 +203,21 @@ Deno.serve(async (req) => {
         case_id,
         case_number: caseRow.case_number,
         seller_user_id: user.id,
+        is_abbazia: String(isAbbazia),
+        setoff_amount: String(setoff),
+        total_service_fee: String(TOTAL_SERVICE_FEE),
       },
       success_url: successUrl,
       cancel_url: cancelUrl,
     });
 
-    // 6. Payments rekord létrehozása (upsert: ha már létezik session, ne duplikáljon)
+    // 7. Payments rekord létrehozása (upsert)
     const { error: paymentInsertError } = await serviceClient.from("payments").upsert(
       {
         case_id,
         payment_type: "service_fee",
         stripe_checkout_session_id: session.id,
-        amount: 99000,
+        amount: amountHuf,
         currency: "HUF",
         status: "pending",
       },
@@ -187,16 +226,15 @@ Deno.serve(async (req) => {
 
     if (paymentInsertError) {
       console.error("Failed to upsert payment record:", paymentInsertError);
-      // Nem álljuk meg itt — a Stripe session már létrejött, adjuk vissza az URL-t
     }
 
-    // 7. Case státusz frissítése payment_pending-re (ha még nem az)
+    // 8. Case státusz frissítése payment_pending-re
     await serviceClient
       .from("cases")
       .update({ status: "payment_pending", updated_at: new Date().toISOString() })
       .eq("id", case_id);
 
-    // 8. Audit log
+    // 9. Audit log
     await serviceClient.from("audit_logs").insert({
       entity_type: "cases",
       entity_id: case_id,
@@ -205,7 +243,10 @@ Deno.serve(async (req) => {
       source: "edge_function",
       new_data: {
         stripe_session_id: session.id,
-        amount: 99000,
+        amount: amountHuf,
+        total_service_fee: TOTAL_SERVICE_FEE,
+        setoff_amount: setoff,
+        is_abbazia: isAbbazia,
         currency: "HUF",
         previous_status: caseRow.status,
       },
@@ -216,6 +257,8 @@ Deno.serve(async (req) => {
         success: true,
         checkout_url: session.url,
         session_id: session.id,
+        amount: amountHuf,
+        is_abbazia: isAbbazia,
       },
       200,
       req,
