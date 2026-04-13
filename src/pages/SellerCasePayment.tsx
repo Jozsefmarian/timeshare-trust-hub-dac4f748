@@ -241,7 +241,7 @@ export default function SellerCasePayment() {
 
   return (
     <SellerLayout>
-      <div className="max-w-lg mx-auto space-y-6">
+      <div className="max-w-3xl mx-auto space-y-6">
         <button
           onClick={() => navigate(`/seller/cases/${caseId}`)}
           className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
