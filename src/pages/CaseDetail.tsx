@@ -41,6 +41,7 @@ type WeekOffer = {
   week_number: number | null;
   unit_type: string | null;
   season_label: string | null;
+  share_related: boolean | null;
 };
 
 type UploadedDocument = {
@@ -196,7 +197,7 @@ export default function CaseDetail() {
         if (data) {
           const { data: wo } = await supabaseAny
             .from("week_offers")
-            .select("resort_name_raw, week_number, unit_type, season_label")
+            .select("resort_name_raw, week_number, unit_type, season_label, share_related")
             .eq("case_id", caseId)
             .maybeSingle();
           setWeekOffer(wo as WeekOffer | null);
@@ -692,7 +693,7 @@ export default function CaseDetail() {
 
             {/* Fizetés */}
             {isAtOrPast(status, "service_agreement_accepted") && !shouldHideForwardFlow && (
-              <PaymentPanel caseStatus={status} />
+              <PaymentPanel caseStatus={status} isAbbazia={weekOffer?.share_related === true} />
             )}
 
             {/* Feltöltött dokumentumok (csak olvasható) */}
