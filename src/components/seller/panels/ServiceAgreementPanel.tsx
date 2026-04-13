@@ -36,17 +36,7 @@ function applyTemplate(html: string, vars: Record<string, string>): string {
 }
 
 function sanitizeHtmlForInline(html: string): string {
-  return html
-    .replace(/<!DOCTYPE[^>]*>/gi, "")
-    .replace(/<html[^>]*>/gi, "")
-    .replace(/<\/html>/gi, "")
-    .replace(/<head[^>]*>[\s\S]*?<\/head>/gi, "")
-    .replace(/<body[^>]*>/gi, "")
-    .replace(/<\/body>/gi, "")
-    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
-    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "")
-    .replace(/<link[^>]*>/gi, "")
-    .replace(/<meta[^>]*>/gi, "");
+  return html;
 }
 
 function formatDateHu(dateStr: string | null | undefined): string {
