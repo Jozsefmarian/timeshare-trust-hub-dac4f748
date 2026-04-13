@@ -8,6 +8,18 @@ import { supabase } from "@/integrations/supabase/client";
 
 const supabaseAny: any = supabase;
 
+function sanitizeHtmlForInline(html: string): string {
+  return html
+    .replace(/<!DOCTYPE[^>]*>/gi, '')
+    .replace(/<html[^>]*>/gi, '').replace(/<\/html>/gi, '')
+    .replace(/<head[^>]*>[\s\S]*?<\/head>/gi, '')
+    .replace(/<body[^>]*>/gi, '').replace(/<\/body>/gi, '')
+    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+    .replace(/<link[^>]*>/gi, '')
+    .replace(/<meta[^>]*>/gi, '');
+}
+
 interface Agreement {
   id: string;
   version: string;
@@ -53,7 +65,76 @@ export default function SellerCasePayment() {
           .select("id, version, title, html_content")
           .eq("is_active", true)
           .maybeSingle();
-        setAgreement(ag ?? null);
+        if (ag) {
+  // Buyer adatok betöltése policy_settings-ből
+  const { data: publishedPolicy } = await supabaseAny
+    .from("policy_versions")
+    .select("id")
+    .eq("status", "published")
+    .order("published_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  const buyerVars: Record<string, string> = {};
+  if (publishedPolicy?.id) {
+    const { data: settings } = await supabaseAny
+      .from("policy_settings")
+      .select("setting_key, setting_value")
+      .eq("policy_version_id", publishedPolicy.id)
+      .in("setting_key", ["buyer_name", "buyer_address", "buyer_company_number", "buyer_tax_number", "buyer_representative"]);
+    for (const row of settings ?? []) {
+      const val = row.setting_value;
+      buyerVars[row.setting_key] = typeof val === "string" ? val.replace(/^"|"$/g, "") : String(val ?? "");
+    }
+  }
+
+  // Case adatok a seller nevéhez
+  const { data: caseRow2 } = await supabaseAny
+    .from("cases")
+    .select("seller_user_id, case_number")
+    .eq("id", caseId)
+    .maybeSingle();
+
+  const { data: sp } = await supabaseAny
+    .from("seller_profiles")
+    .select("billing_name, birth_name, birth_place, birth_date, mother_name, billing_address")
+    .eq("user_id", caseRow2?.seller_user_id ?? "")
+    .maybeSingle();
+
+  const formatDateHu = (dateStr: string | null | undefined) => {
+    if (!dateStr) return "—";
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return "—";
+    return d.toLocaleDateString("hu-HU", { year: "numeric", month: "long", day: "numeric" });
+  };
+
+  const vars: Record<string, string> = {
+    case_number: caseRow2?.case_number ?? "—",
+    seller_name: sp?.billing_name ?? "—",
+    seller_birth_name: sp?.birth_name ?? "—",
+    seller_birth_place: sp?.birth_place ?? "—",
+    seller_birth_date: formatDateHu(sp?.birth_date),
+    seller_mother_name: sp?.mother_name ?? "—",
+    seller_address: sp?.billing_address ?? "—",
+    buyer_name: buyerVars["buyer_name"] ?? "—",
+    buyer_address: buyerVars["buyer_address"] ?? "—",
+    buyer_company_number: buyerVars["buyer_company_number"] ?? "—",
+    buyer_tax_number: buyerVars["buyer_tax_number"] ?? "—",
+    buyer_representative: buyerVars["buyer_representative"] ?? "—",
+  };
+
+  const applyTemplate = (html: string, v: Record<string, string>) => {
+    let result = html;
+    for (const [key, value] of Object.entries(v)) {
+      result = result.split(`{{${key}}}`).join(value || "—");
+    }
+    return result;
+  };
+
+  setAgreement({ ...ag, html_content: applyTemplate(ag.html_content ?? "", vars) });
+} else {
+  setAgreement(null);
+}
 
         // Existing acceptance for this case
         const { data: acc } = await supabaseAny
@@ -209,8 +290,9 @@ export default function SellerCasePayment() {
               <div
                 className="max-h-96 overflow-y-auto border rounded-md px-3 py-2 bg-muted/30 text-sm"
                 dangerouslySetInnerHTML={{
-                  __html: agreement?.html_content ?? "<p>A szerződés szövege betöltés alatt...</p>",
-                }}
+                  dangerouslySetInnerHTML={{
+  __html: sanitizeHtmlForInline(agreement?.html_content ?? "<p>A szerződés szövege betöltés alatt...</p>"),
+}}
               />
               <p className="text-xs text-muted-foreground">Kérjük, olvassa el a teljes szerződést a folytatás előtt.</p>
 
