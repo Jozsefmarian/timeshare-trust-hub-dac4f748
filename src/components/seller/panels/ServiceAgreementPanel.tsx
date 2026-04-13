@@ -116,38 +116,39 @@ export default function ServiceAgreementPanel({ caseId, caseStatus, onAccepted }
       .eq("user_id", caseRow?.seller_user_id ?? "")
       .maybeSingle();
 
-    // 4. Buyer adatok (policy_settings)
+    // 4. Buyer adatok (policy_settings) — fallback a hardcoded published policy ID-ra
     const PUBLISHED_POLICY_ID = "9e7b909e-1f43-4c59-9604-ae7e82f0db67";
+    const buyerVars: Record<string, string> = {};
+    let policyId = PUBLISHED_POLICY_ID;
 
-const buyerVars: Record<string, string> = {};
-let policyId = PUBLISHED_POLICY_ID;
+    try {
+      const { data: policy } = await supabaseAny
+        .from("policy_versions")
+        .select("id")
+        .eq("status", "published")
+        .order("published_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (policy?.id) policyId = policy.id;
+    } catch {
+      // fallback to hardcoded ID
+    }
 
-try {
-  const { data: policy } = await supabaseAny
-    .from("policy_versions")
-    .select("id")
-    .eq("status", "published")
-    .order("published_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  if (policy?.id) policyId = policy.id;
-} catch {
-  // fallback to hardcoded ID
-}
+    const { data: settings } = await supabaseAny
+      .from("policy_settings")
+      .select("setting_key, setting_value")
+      .eq("policy_version_id", policyId)
+      .in("setting_key", [
+        "buyer_name",
+        "buyer_address",
+        "buyer_company_number",
+        "buyer_tax_number",
+        "buyer_representative",
+      ]);
 
-const { data: settings } = await supabaseAny
-  .from("policy_settings")
-  .select("setting_key, setting_value")
-  .eq("policy_version_id", policyId)
-  .in("setting_key", ["buyer_name", "buyer_address", "buyer_company_number", "buyer_tax_number", "buyer_representative"]);
-for (const row of settings ?? []) {
-  const val = row.setting_value;
-  buyerVars[row.setting_key] = typeof val === "string" ? val.replace(/^"|"$/g, "") : String(val ?? "");
-}
-      for (const row of settings ?? []) {
-        const val = row.setting_value;
-        buyerVars[row.setting_key] = typeof val === "string" ? val.replace(/^"|"$/g, "") : String(val ?? "");
-      }
+    for (const row of settings ?? []) {
+      const val = row.setting_value;
+      buyerVars[row.setting_key] = typeof val === "string" ? val.replace(/^"|"$/g, "") : String(val ?? "");
     }
 
     // 5. Változók összeállítása és behelyettesítés
@@ -163,6 +164,7 @@ for (const row of settings ?? []) {
       buyer_address: buyerVars["buyer_address"] ?? "—",
       buyer_company_number: buyerVars["buyer_company_number"] ?? "—",
       buyer_tax_number: buyerVars["buyer_tax_number"] ?? "—",
+      buyer_representative: buyerVars["buyer_representative"] ?? "—",
     };
 
     setRenderedHtml(sanitizeHtmlForInline(applyTemplate(ag.html_content ?? "", vars)));
