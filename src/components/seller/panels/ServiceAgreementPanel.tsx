@@ -35,6 +35,20 @@ function applyTemplate(html: string, vars: Record<string, string>): string {
   return result;
 }
 
+function sanitizeHtmlForInline(html: string): string {
+  return html
+    .replace(/<!DOCTYPE[^>]*>/gi, "")
+    .replace(/<html[^>]*>/gi, "")
+    .replace(/<\/html>/gi, "")
+    .replace(/<head[^>]*>[\s\S]*?<\/head>/gi, "")
+    .replace(/<body[^>]*>/gi, "")
+    .replace(/<\/body>/gi, "")
+    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
+    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "")
+    .replace(/<link[^>]*>/gi, "")
+    .replace(/<meta[^>]*>/gi, "");
+}
+
 function formatDateHu(dateStr: string | null | undefined): string {
   if (!dateStr) return "—";
   const d = new Date(dateStr);
@@ -139,7 +153,7 @@ export default function ServiceAgreementPanel({ caseId, caseStatus, onAccepted }
       buyer_tax_number: buyerVars["buyer_tax_number"] ?? "—",
     };
 
-    setRenderedHtml(applyTemplate(ag.html_content ?? "", vars));
+    setRenderedHtml(sanitizeHtmlForInline(applyTemplate(ag.html_content ?? "", vars)));
   }, [caseId]);
 
   const checkExistingAcceptance = useCallback(async () => {
