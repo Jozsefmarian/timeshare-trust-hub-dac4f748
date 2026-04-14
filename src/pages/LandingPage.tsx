@@ -8,7 +8,7 @@ import {
   Users,
   Building2,
   Mail,
-  Phone,
+  MessageCircle,
   FileSignature,
   CreditCard,
 } from "lucide-react";
@@ -155,7 +155,7 @@ export default function LandingPage() {
       {/* Lábléc */}
       <footer className="bg-primary text-primary-foreground/70">
         <div className="container mx-auto px-4 py-12">
-          <div className="grid md:grid-cols-4 gap-8">
+          <div className="grid md:grid-cols-3 gap-8">
             <div>
               <div className="flex items-center gap-2 mb-4">
                 <img src={tsrLogo} alt="TSR Megoldások" className="h-10" />
@@ -163,7 +163,7 @@ export default function LandingPage() {
               <p className="text-sm">Biztonságos digitális platform üdülési jogok eladásához.</p>
             </div>
             <div>
-              <h4 className="font-semibold text-primary-foreground mb-3 text-sm">Jogi</h4>
+              <h4 className="font-semibold text-primary-foreground mb-3 text-sm">Hasznos információk</h4>
               <ul className="space-y-2 text-sm">
                 <li>
                   <a href="/privacy" className="hover:text-primary-foreground transition-colors">
@@ -172,32 +172,7 @@ export default function LandingPage() {
                 </li>
                 <li>
                   <a href="#" className="hover:text-primary-foreground transition-colors">
-                    Általános szerződési feltételek
-                  </a>
-                </li>
-                <li>
-                  <a href="#" className="hover:text-primary-foreground transition-colors">
-                    Visszatérítési szabályzat
-                  </a>
-                </li>
-              </ul>
-            </div>
-            <div>
-              <h4 className="font-semibold text-primary-foreground mb-3 text-sm">Cég</h4>
-              <ul className="space-y-2 text-sm">
-                <li>
-                  <a href="#" className="hover:text-primary-foreground transition-colors">
-                    Rólunk
-                  </a>
-                </li>
-                <li>
-                  <a href="#" className="hover:text-primary-foreground transition-colors">
                     Impresszum
-                  </a>
-                </li>
-                <li>
-                  <a href="" className="hover:text-primary-foreground transition-colors">
-                    ​
                   </a>
                 </li>
               </ul>
@@ -209,7 +184,7 @@ export default function LandingPage() {
                   <Mail className="h-4 w-4" /> kapcsolat@tsrmegoldasok.hu
                 </li>
                 <li className="flex items-center gap-2">
-                  <Phone className="h-4 w-4" /> +36 1 234 5678
+                  <MessageCircle className="h-4 w-4" /> m.me/tsrmegoldasok
                 </li>
               </ul>
             </div>
