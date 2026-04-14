@@ -169,8 +169,13 @@ export default function LandingPage() {
               <h4 className="font-semibold text-primary-foreground mb-3 text-sm">Jogi</h4>
               <ul className="space-y-2 text-sm">
                 <li>
-                  <a href="#" className="hover:text-primary-foreground transition-colors">
+                  <a href="/privacy" className="hover:text-primary-foreground transition-colors">
                     Adatvédelmi szabályzat
+                  </a>
+                </li>
+                <li>
+                  <a href="/docs/TSR_ADATVEDELMI_TAJEKOZTATO.docx" target="_blank" rel="noopener noreferrer" className="hover:text-primary-foreground transition-colors">
+                    Adatvédelmi tájékoztató (letöltés)
                   </a>
                 </li>
                 <li>
