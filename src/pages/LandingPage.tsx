@@ -174,11 +174,6 @@ export default function LandingPage() {
                   </a>
                 </li>
                 <li>
-                  <a href="/docs/TSR_ADATVEDELMI_TAJEKOZTATO.docx" target="_blank" rel="noopener noreferrer" className="hover:text-primary-foreground transition-colors">
-                    Adatvédelmi tájékoztató (letöltés)
-                  </a>
-                </li>
-                <li>
                   <a href="#" className="hover:text-primary-foreground transition-colors">
                     Általános szerződési feltételek
                   </a>
