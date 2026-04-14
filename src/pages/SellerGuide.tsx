@@ -13,7 +13,7 @@ const steps = [
     tips: [
       {
         type: "yellow" as const,
-        text: "Jegyezze fel az e-mail címét és jelszavát, mert ezekre legközelebb is szüksége lesz!",
+        text: "Jegyezze fel a megadott e-mail címét és jelszavát, mert ezekre legközelebb is szüksége lesz!",
       },
     ],
   },
@@ -26,7 +26,7 @@ const steps = [
   },
   {
     number: 3,
-    title: "1. oldal — Személyes adatok",
+    title: "1. oldal - Személyes adatok",
     description:
       "Töltse ki személyes adatait: nevét, lakcímét, e-mail címét, telefonszámát, születési adatait, anyja nevét, személyi igazolvány számát és adóazonosító jelét. Ezek az adatok kerülnek majd a szerződésbe, ezért pontosan adja meg őket, pontosan úgy, ahogy a személyi igazolványában szerepelnek.",
     tips: [
@@ -38,26 +38,26 @@ const steps = [
   },
   {
     number: 4,
-    title: "2. oldal — Az üdülési jog adatai",
+    title: "2. oldal - Az üdülési jog adatai",
     description:
       'Válassza ki az üdülőhelyet a listából, majd adja meg az üdülési hetével kapcsolatos adatokat: a hét számát (ami az eredeti szerződésében szerepel), az apartman típusát és számát, az elhelyezhető személyek számát, a szezon megnevezését, a jogosultság kezdő és záró évét, az eredeti szerződés sorszámát és az idei évre vonatkozó fenntartási díjat. Ha üdülési jogához részvény is kapcsolódik (pl. Abbázia), jelölje be az "Igen" opciót és töltse ki a részvényadatokat is. Amennyiben az Ön üdülője nem szerepel az Üdülőhelyek listájában, kérjük válassza az "Egyéb szálláshely" lehetőséget.',
     tips: [
       {
         type: "blue" as const,
-        text: "Tartsa kéznél az eredeti üdülési szerződését — az összes szükséges adat abban megtalálható.",
+        text: "Tartsa kéznél az üdülési kogával kapcsolatos dokumentumokat - azokban az összes szükséges adat megtalálható.",
       },
     ],
   },
   {
     number: 5,
-    title: "3. oldal — Nyilatkozatok",
+    title: "3. oldal - Nyilatkozatok",
     description:
       "Olvassa el az oldalon megjelenő nyilatkozatokat, majd pipálja ki mindhárom jelölőnégyzetet. Ezzel megerősíti, hogy az adott nyilatkozatokban foglaltakat elfogadja.",
     tips: [],
   },
   {
     number: 6,
-    title: "4. oldal — Dokumentumok feltöltése",
+    title: "4. oldal - Dokumentumok feltöltése",
     description:
       "Ezen az oldalon fel kell töltenie az üdülési joghoz kapcsolódó dokumentumokat. Minden dokumentumhoz egy külön feltöltési mezőt talál. A feltöltendő dokumentumok: az eredeti Üdülőhasználati szerződés, a Tájékoztató, vagy Klubrend, és a legutóbbi fenntartási díj befizetését igazoló bizonylat. Ha részvény is kapcsolódik az üdülési joghoz, akkor a Részvény adásvételi szerződést is fel kell töltenie. A feltöltéshez kattintson a szaggatott keretes mezőre, vagy húzza rá a fájlt. Elfogadott formátumok: PDF, JPG, PNG. Ha lefotózza a dokumentumot telefonnal, ügyeljen arra, hogy a szöveg jól olvasható és a kép ne legyen elmosódott.",
     tips: [
