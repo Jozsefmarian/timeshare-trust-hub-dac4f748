@@ -21,14 +21,14 @@ const steps = [
     number: 2,
     title: "Új ügy indítása",
     description:
-      'Bejelentkezés után a bal oldali menüben kattintson az "Új ügy indítása" menüpontra. Ez egy 4 lépéses kitöltési folyamatot indít el. Minden lépésnél töltse ki a kért adatokat, majd kattintson a "Következő" gombra.',
+      'Bejelentkezés után a bal oldali menüben kattintson az "Új ügy indítása" menüpontra. Ez egy 4 lépéses kitöltési folyamatot indít el. A kitöltés megkezdése előtt kérjük, olvassa el a Tájékoztatót és az ÁSZF-et. Minden lépésnél töltse ki a kért adatokat, majd kattintson a "Következő" gombra.',
     tips: [],
   },
   {
     number: 3,
     title: "1. oldal — Személyes adatok",
     description:
-      "Töltse ki személyes adatait: nevét, lakcímét, e-mail címét, telefonszámát, születési adatait, anyja nevét és személyi igazolvány számát. Ezek az adatok kerülnek majd a szerződésbe, ezért pontosan adja meg őket, pontosan úgy, ahogy a személyi igazolványában szerepelnek.",
+      "Töltse ki személyes adatait: nevét, lakcímét, e-mail címét, telefonszámát, születési adatait, anyja nevét, személyi igazolvány számát és adóazonosító jelét. Ezek az adatok kerülnek majd a szerződésbe, ezért pontosan adja meg őket, pontosan úgy, ahogy a személyi igazolványában szerepelnek.",
     tips: [
       {
         type: "red" as const,
@@ -40,7 +40,7 @@ const steps = [
     number: 4,
     title: "2. oldal — Az üdülési jog adatai",
     description:
-      'Válassza ki az üdülőhelyet a listából, majd adja meg az üdülési hetével kapcsolatos adatokat: a hét számát (ami az eredeti szerződésében szerepel), az apartman típusát és számát, a szezon megnevezését, a jogosultság kezdő és záró évét, az eredeti szerződés sorszámát és az éves fenntartási díjat. Ha üdülési jogához részvény is kapcsolódik (pl. Abbázia), jelölje be az "Igen" opciót és töltse ki a részvényadatokat is.',
+      'Válassza ki az üdülőhelyet a listából, majd adja meg az üdülési hetével kapcsolatos adatokat: a hét számát (ami az eredeti szerződésében szerepel), az apartman típusát és számát, az elhelyezhető személyek számát, a szezon megnevezését, a jogosultság kezdő és záró évét, az eredeti szerződés sorszámát és az idei évre vonatkozó fenntartási díjat. Ha üdülési jogához részvény is kapcsolódik (pl. Abbázia), jelölje be az "Igen" opciót és töltse ki a részvényadatokat is. Amennyiben az Ön üdülője nem szerepel az Üdülőhelyek listájában, kérjük válassza az "Egyéb szálláshely" lehetőséget.',
     tips: [
       {
         type: "blue" as const,
