@@ -61,9 +61,6 @@ export default function LandingPage() {
             <a href="#how-it-works" className="hover:text-foreground transition-colors">
               Hogyan működik
             </a>
-            <a href="#trust" className="hover:text-foreground transition-colors">
-              Miért minket
-            </a>
             <Link to="/auth">
               <Button variant="outline" size="sm">
                 Bejelentkezés
