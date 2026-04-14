@@ -1012,13 +1012,13 @@ export default function NewCase() {
                     id: "decl1",
                     checked: decl1,
                     set: setDecl1,
-                    text: "Kijelentem, hogy az üdülőhasználati jog jogos tulajdonosa vagyok és jogosult vagyok az átruházásra",
+                    text: "Kijelentem, hogy az üdülőhasználati jog jogos tulajdonosa vagyok és jogosult vagyok annak átruházására.",
                   },
                   {
                     id: "decl2",
                     checked: decl2,
                     set: setDecl2,
-                    text: "Az álzalam megadott adatok a valóságnak megfelelnek.",
+                    text: "Kijelentem, hogy az általam megadott adatok a valóságnak megfelelnek.",
                   },
                   {
                     id: "decl3",
