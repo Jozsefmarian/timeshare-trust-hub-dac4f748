@@ -109,6 +109,70 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: "Case not found" }, 404);
     }
 
+    // --- Ellenőrzés: requires_manual_review resort ---
+    // Ha a case-hez tartozó resort requires_manual_review = true,
+    // azonnal yellow + manual_review besorolás, minden más check előtt.
+    const { data: weekOfferForResort } = await serviceClient
+      .from("week_offers")
+      .select("resort_id")
+      .eq("case_id", caseId)
+      .maybeSingle();
+
+    if (weekOfferForResort?.resort_id) {
+      const { data: resortRow } = await serviceClient
+        .from("resorts")
+        .select("requires_manual_review, name")
+        .eq("id", weekOfferForResort.resort_id)
+        .maybeSingle();
+
+      if (resortRow?.requires_manual_review === true) {
+        console.log(
+          `classify-case: resort '${resortRow.name}' requires_manual_review=true → forcing yellow/manual_review`,
+        );
+
+        const { data: insertedClassification, error: insertError } = await serviceClient
+          .from("classifications")
+          .insert({
+            case_id: caseId,
+            classification: "yellow",
+            reason_summary: "Az üdülőhely egyedi elbírálást igényel.",
+            reason_codes: ["RESORT_REQUIRES_MANUAL_REVIEW"],
+            created_by: "system",
+            policy_version_id: policyVersionId,
+          })
+          .select("id")
+          .single();
+
+        if (insertError) {
+          return jsonResponse({ error: "Failed to insert classification", detail: insertError.message }, 500);
+        }
+
+        const previousStatus = caseRow.status ?? null;
+        const isSubmitted = !!caseRow.submitted_at;
+
+        const caseUpdatePayload: Record<string, unknown> = {
+          classification: "yellow",
+          ai_pipeline_status: "completed",
+        };
+
+        if (isSubmitted) {
+          caseUpdatePayload.status = "yellow_review";
+        }
+
+        await serviceClient.from("cases").update(caseUpdatePayload).eq("id", caseId);
+
+        return jsonResponse({
+          success: true,
+          case_id: caseId,
+          case_status: isSubmitted ? "yellow_review" : previousStatus,
+          classification: "yellow",
+          reason_codes: ["RESORT_REQUIRES_MANUAL_REVIEW"],
+          classification_id: insertedClassification.id,
+          manual_review_forced: true,
+        });
+      }
+    }
+
     // -------------------------------------------------------------------
     // Wait for all uploaded documents to finish processing before deciding.
     // -------------------------------------------------------------------
@@ -176,12 +240,7 @@ Deno.serve(async (req) => {
     const checkRows = (checks ?? []) as CheckRow[];
     const hitRows = (restrictionHits ?? []) as RestrictionHitRow[];
 
-    // -------------------------------------------------------------------
-    // SAFETY NET: If there is a timeshare_contract document but no
-    // field_match or document_check check results exist for it, the field
-    // comparison did not run (e.g. process-document failed silently).
-    // In that case we force yellow so an admin can review manually.
-    // -------------------------------------------------------------------
+    // SAFETY NET
     const hasTimeshareContractDoc = (allDocs ?? []).some(
       (d: any) =>
         (d.document_type ?? "").toLowerCase().includes("timeshare") ||
@@ -308,7 +367,6 @@ Deno.serve(async (req) => {
       `classify-case: case=${caseId} classification=${classification} previous_status=${previousStatus} new_status=${shouldUpdateBusinessStatus ? mappedStatus : "(unchanged)"}`,
     );
 
-    // Trigger contract generation after yellow_review → green (recheck success)
     if (shouldUpdateBusinessStatus && isNowGreen && wasInReview) {
       console.log(`classify-case: green result after yellow_review -> triggering generate-sale-contract`);
       fetch(`${supabaseUrl}/functions/v1/generate-sale-contract`, {
