@@ -133,7 +133,7 @@ export default function SellerGuide() {
       <div className="max-w-3xl mx-auto space-y-6">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Használati útmutató</h1>
-          <p className="text-muted-foreground mt-1">Lépésről lépésre — hogyan adja el üdülési jogát</p>
+          <p className="text-muted-foreground mt-1">Hogyan adja el üdülési jogát - Lépésről lépésre</p>
         </div>
 
         {steps.map((step) => (
