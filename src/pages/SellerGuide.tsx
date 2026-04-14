@@ -75,28 +75,28 @@ const steps = [
     number: 7,
     title: "Feldolgozás és eredmény",
     description:
-      "A beküldés után rendszerünk automatikusan ellenőrzi a feltöltött dokumentumokat. Ez általában néhány percet vesz igénybe. Az eredményről az ügy részletes oldalán kap tájékoztatást. Három lehetséges eredmény van: Zöld — minden rendben, folytathatja. Sárga — valamelyik adatnál eltérést találtunk, javítás szükséges. Piros — sajnos az üdülési jog nem felel meg a feltételeinknek.",
+      "A beküldés után rendszerünk automatikusan ellenőrzi a feltöltött dokumentumokat. Ez általában néhány percet vesz igénybe. Az eredményről az ügy részletes oldalán kap tájékoztatást. Amennyiben a rendszerünk mindent rendben talál, akkor automatikusan folytathatja a folyamatot. Ha bármilyen adatnál eltérést, vagy hibát találunk, minden esetben részletes tájékoztatást kap a további teendőkről.",
     tips: [],
   },
   {
     number: 8,
     title: "Szerződések aláírása",
     description:
-      "Ha zöld eredményt kapott, rendszerünk elkészíti az adásvételi szerződéseket. Az ügy részletes oldalán letöltheti azokat. Nyomtassa ki a szerződéseket, írja alá kézzel, majd szkennelje be vagy fotózza le, és töltse vissza az oldalon a megfelelő helyre. Minden szerződéshez külön feltöltési hely van.",
+      "Ha zöld eredményt kapott, rendszerünk elkészíti az adásvételi szerződéseket és kapcsolódó dokumentumokat, melyket az ügy részletes oldalán tud letölteni. A letöltést követően nyomtassa ki a dokumentumokat, a megfelelő helyeken írja alá kézzel, majd szkennelje be vagy fotózza le, és töltse vissza az oldalon a megfelelő helyre. Minden dokumentumhoz külön feltöltési hely van.",
     tips: [],
   },
   {
     number: 9,
     title: "Szolgáltatási szerződés és fizetés",
     description:
-      'Az aláírt szerződések visszatöltése után megjelenik a szolgáltatási szerződés. Olvassa el figyelmesen, pipálja ki mindkét jelölőnégyzetet, majd írja be a megerősítő szót: ELFOGADOM. Végül kattintson a "Fizetés megkezdése" gombra. A fizetés biztonságos bankkártyás felületen történik.',
+      'Az aláírt dokumentumok visszatöltése után automatikusan megjelenik a Szolgáltatási szerződés. Olvassa el figyelmesen, pipálja ki mindkét jelölőnégyzetet, majd írja be a megerősítő szót: ELFOGADOM. Végül kattintson a "Fizetés megkezdése" gombra. A fizetés folyamata a fizetési szolgáltató biztonságos bankkártyás felületen történik.',
     tips: [],
   },
   {
     number: 10,
     title: "Lezárás",
     description:
-      "Sikeres fizetés után az ügye lezárul és visszakapja megerősítő e-mailen az összefoglalót. Gratulálunk, az üdülési jog átruházása megkezdődött!",
+      "A sikeres fizetést követően az adásvételi folyamat adminisztratív része lezárul. Ezt követően emailben küldjük meg Önnek az adásvétellel kapcsolatos további információkat és az aláírt dokumentumok egy példányát. A dokumentumok feldolgozását követően azonnal megkezdjük az átruházással kapcsolatos ügyintézést, melynek aktuális állásáról rendszeres időközönként tájékoztatást küldünk Önnek.",
     tips: [],
   },
 ];
@@ -173,7 +173,7 @@ export default function SellerGuide() {
             <div className="flex items-center gap-2 text-sm">
               <Phone className="h-4 w-4 text-primary" />
               <Link to="/seller/support" className="text-primary hover:underline">
-                Ügyfélszolgálat
+                06 70 415 3337
               </Link>
             </div>
           </CardContent>
