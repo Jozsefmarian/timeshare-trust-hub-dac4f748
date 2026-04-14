@@ -595,7 +595,10 @@ export default function NewCase() {
       <div className="max-w-2xl mx-auto space-y-6">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Új ügy indítása</h1>
-          <p className="text-muted-foreground text-sm mt-1">Töltse ki az alábbi lépéseket az ügy beküldéséhez.</p>
+          <p className="text-muted-foreground text-sm mt-1">
+            Az alábbi 4 lépésben tudja megadni az adásvételi folyamat megkezdéséhez szükséges összes adatot. A kitöltés
+            megkezdése előtt kérjük, figyelmesen olvassa el ezt a Tájékoztatót!
+          </p>
         </div>
 
         {/* Stepper */}
