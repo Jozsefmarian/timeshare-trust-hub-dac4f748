@@ -601,7 +601,9 @@ export default function CaseDetail() {
   // - ha van correction_required a check_results-ban → sárga1 javítási ág, CorrectionPanel kell
   // - egyébként → sárga2 policy ütközés, ManualReviewPanel Üzenet3
   const manualReviewMessageType = getManualReviewMessageType(classification);
-  const isRecheckLimitReached = manualReviewMessageType === "uze1";
+  const isRecheckLimitReached =
+    manualReviewMessageType === "uze1" ||
+    (classification?.reason_codes ?? []).includes("RESORT_REQUIRES_MANUAL_REVIEW");
 
   const isYellowFixRequired = isYellow && aiDone && hasCorrections && !isRecheckLimitReached;
   const isYellowManualReview = isYellow && aiDone && (!hasCorrections || isRecheckLimitReached);
