@@ -25,6 +25,7 @@ interface Resort {
   operator_name: string | null;
   is_active: boolean;
   is_supported: boolean;
+  requires_manual_review: boolean;
   notes: string | null;
 }
 
@@ -37,6 +38,7 @@ const EMPTY_RESORT: Omit<Resort, "id"> = {
   operator_name: "",
   is_active: true,
   is_supported: true,
+  requires_manual_review: false,
   notes: "",
 };
 
@@ -56,7 +58,7 @@ export default function AdminResorts() {
     try {
       const { data, error: queryError } = await supabaseAny
         .from("resorts")
-        .select("id, name, code, brand, city, country, operator_name, is_active, is_supported, notes")
+        .select("id, name, code, brand, city, country, operator_name, is_active, is_supported, requires_manual_review, notes")
         .order("name", { ascending: true });
 
       if (queryError) throw queryError;
@@ -89,6 +91,7 @@ export default function AdminResorts() {
       operator_name: resort.operator_name ?? "",
       is_active: resort.is_active,
       is_supported: resort.is_supported,
+      requires_manual_review: resort.requires_manual_review ?? false,
       notes: resort.notes ?? "",
     });
     setDialogOpen(true);
@@ -110,6 +113,7 @@ export default function AdminResorts() {
         operator_name: formData.operator_name?.trim() || null,
         is_active: formData.is_active,
         is_supported: formData.is_supported,
+        requires_manual_review: formData.requires_manual_review,
         notes: formData.notes?.trim() || null,
       };
 
@@ -343,6 +347,13 @@ export default function AdminResorts() {
                 />
                 <Label>Támogatott (felvesszük)</Label>
               </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <Switch
+                checked={formData.requires_manual_review}
+                onCheckedChange={(v) => setFormData((p) => ({ ...p, requires_manual_review: v }))}
+              />
+              <Label>Egyedi elbírálás szükséges</Label>
             </div>
           </div>
 

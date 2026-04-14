@@ -1259,6 +1259,7 @@ export type Database = {
           name: string
           notes: string | null
           operator_name: string | null
+          requires_manual_review: boolean
           updated_at: string
         }
         Insert: {
@@ -1273,6 +1274,7 @@ export type Database = {
           name: string
           notes?: string | null
           operator_name?: string | null
+          requires_manual_review?: boolean
           updated_at?: string
         }
         Update: {
@@ -1287,6 +1289,7 @@ export type Database = {
           name?: string
           notes?: string | null
           operator_name?: string | null
+          requires_manual_review?: boolean
           updated_at?: string
         }
         Relationships: []
