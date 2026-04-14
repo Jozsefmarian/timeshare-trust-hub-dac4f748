@@ -150,6 +150,7 @@ export default function AdminCases() {
         .map(c => c.id);
 
       let correctionCaseIds = new Set<string>();
+      let manualReviewCaseIds = new Set<string>();
       if (yellowCaseIds.length > 0) {
         const { data: correctionResults } = await supabase
           .from('check_results')
@@ -157,6 +158,24 @@ export default function AdminCases() {
           .in('case_id', yellowCaseIds)
           .eq('result', 'correction_required');
         correctionCaseIds = new Set((correctionResults ?? []).map(r => r.case_id));
+
+        // Check classifications for RESORT_REQUIRES_MANUAL_REVIEW
+        const { data: classificationResults } = await supabase
+          .from('classifications')
+          .select('case_id, reason_codes')
+          .in('case_id', yellowCaseIds)
+          .order('created_at', { ascending: false });
+
+        // Keep only the latest classification per case
+        const seenCases = new Set<string>();
+        (classificationResults ?? []).forEach((cr) => {
+          if (!seenCases.has(cr.case_id)) {
+            seenCases.add(cr.case_id);
+            if ((cr.reason_codes ?? []).includes('RESORT_REQUIRES_MANUAL_REVIEW')) {
+              manualReviewCaseIds.add(cr.case_id);
+            }
+          }
+        });
       }
 
       const rows: CaseRow[] = casesData.map((c) => {
@@ -174,7 +193,8 @@ export default function AdminCases() {
           recheck_count: c.recheck_count ?? 0,
           is_fix_required: c.status === 'yellow_review'
             && correctionCaseIds.has(c.id)
-            && (c.recheck_count ?? 0) < 3,
+            && (c.recheck_count ?? 0) < 3
+            && !manualReviewCaseIds.has(c.id),
         };
       });
 
