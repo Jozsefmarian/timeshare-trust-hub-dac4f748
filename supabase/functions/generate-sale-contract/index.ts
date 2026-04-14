@@ -169,14 +169,20 @@ Deno.serve(async (req) => {
       .eq("case_id", case_id)
       .maybeSingle();
 
+    // Resort név meghatározása:
+    // Alap: resort_name_raw (amit a seller beírt)
+    // Felülírás: csak akkor, ha a resort NEM requires_manual_review
+    // ("Egyéb szálláshely" esetén a seller által beírt valódi nevet tartjuk meg)
     let resortName = weekOffer?.resort_name_raw ?? "—";
     if (weekOffer?.resort_id) {
       const { data: resort } = await serviceClient
         .from("resorts")
-        .select("name")
+        .select("name, requires_manual_review")
         .eq("id", weekOffer.resort_id)
         .maybeSingle();
-      if (resort?.name) resortName = resort.name;
+      if (resort?.name && !resort?.requires_manual_review) {
+        resortName = resort.name;
+      }
     }
 
     // Policy settings (ceges adatok)
@@ -320,17 +326,15 @@ Deno.serve(async (req) => {
           })
           .eq("id", existing.id);
       } else {
-        await serviceClient
-          .from("contracts")
-          .insert({
-            case_id,
-            contract_type: contractType,
-            status: "generated",
-            generated_storage_bucket: bucket,
-            generated_storage_path: storagePath,
-            generated_file_name: fileName,
-            generated_at: now,
-          });
+        await serviceClient.from("contracts").insert({
+          case_id,
+          contract_type: contractType,
+          status: "generated",
+          generated_storage_bucket: bucket,
+          generated_storage_path: storagePath,
+          generated_file_name: fileName,
+          generated_at: now,
+        });
       }
 
       generatedContracts.push({ type: contractType, path: storagePath });
