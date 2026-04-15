@@ -16,7 +16,7 @@ export default function SellerInfo() {
 
         <h1 className="text-3xl font-bold text-foreground mb-8">TÁJÉKOZTATÓ</h1>
 
-        <div className="space-y-6 text-foreground/80 leading-relaxed">
+        <div className="space-y-6 text-foreground/80 leading-relaxed text-justify">
           <p>
             Ezt a platformot azért hoztuk létre, hogy az általunk megvásárolni kívánt üdülési jogok átruházásának adminisztrációját a lehető legegyszerűbbé tegyük, így Ön a hosszas utánajárás, telefonálgatás és utazás helyett kényelmesen intézheti az adásvételt.
           </p>
@@ -33,24 +33,20 @@ export default function SellerInfo() {
             Az platformon keresztül történő adásvételi folyamat gördülékeny lebonyolításához az alábbiakra lesz szüksége:
           </p>
 
-          <div className="space-y-3">
-            <p className="font-semibold text-foreground">1. Az eladni kívánt üdülési jogához kapcsolódó dokumentumok:</p>
-            <ul className="list-disc pl-6 space-y-2">
-              <li>üdülőhasználati szerződés</li>
-              <li>bérleti szerződés (konstrukciótól függően, ha van)</li>
-              <li>tájékoztató és információs füzet/klubrend</li>
-              <li>részvény adásvételi szerződés (konstrukciótól függően, ha van)</li>
-              <li>a tárgyévre vonatkozó fenntartási díj, egyéb kötelezően fizetendő díj (ha van) befizetését igazoló bizonylat</li>
-            </ul>
-          </div>
-
-          <p>
-            <strong className="text-foreground">2.</strong> Egy hétköznapi nyomtató, amelyen ki tudja nyomtatni az üdülési jog adásvételéhez szükséges dokumentumokat.
-          </p>
-
-          <p>
-            <strong className="text-foreground">3.</strong> Egy hétköznapi dokumentumolvasó (szkenner), vagy kamerás mobiltelefon.
-          </p>
+          <ol className="list-decimal pl-6 space-y-3">
+            <li>
+              az eladni kívánt üdülési jogához kapcsolódó dokumentumok:
+              <ul className="list-disc pl-6 space-y-1 mt-1">
+                <li>üdülőhasználati szerződés</li>
+                <li>bérleti szerződés (konstrukciótól függően, ha van)</li>
+                <li>tájékoztató és információs füzet/klubrend</li>
+                <li>részvény adásvételi szerződés (konstrukciótól függően, ha van)</li>
+                <li>a tárgyévre vonatkozó fenntartási díj, egyéb kötelezően fizetendő díj (ha van) befizetését igazoló bizonylat</li>
+              </ul>
+            </li>
+            <li>egy hétköznapi nyomtató, amelyen ki tudja nyomtatni az üdülési jog adásvételéhez szükséges dokumentumokat.</li>
+            <li>egy hétköznapi dokumentumolvasó (szkenner), vagy kamerás mobiltelefon.</li>
+          </ol>
 
           <p>
             A bal oldali menüsorban található Használati útmutató részletes információkat tartalmaz az egyes lépéseknél szükséges teendőkkel kapcsolatban. Ha bármelyik lépésnél további segítségre van szüksége, kérjük hívja ügyfélszolgálatunkat.
