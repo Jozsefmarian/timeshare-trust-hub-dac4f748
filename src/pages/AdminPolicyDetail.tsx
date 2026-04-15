@@ -535,24 +535,27 @@ export default function AdminPolicyDetail() {
                   <Badge variant="outline" className={statusBadge}>{status}</Badge>
                 </div>
                 <div className="flex items-center justify-between py-2 border-b border-border/50">
-                  <span className="text-sm text-muted-foreground">Korlátozó szabályok</span>
-                  <span className="font-semibold">{restrictions.length}</span>
+                  <span className="text-sm text-muted-foreground">Kulcsszó szabályok</span>
+                  <span className="font-semibold">{restrictions.filter((r) => r.type === "Kulcsszó tiltás").length} db</span>
+                </div>
+                <div className="flex items-center justify-between py-2 border-b border-border/50">
+                  <span className="text-sm text-muted-foreground">Hét korlátozások</span>
+                  <span className="font-semibold">{restrictions.filter((r) => r.type !== "Kulcsszó tiltás").length} db</span>
                 </div>
                 <div className="flex items-center justify-between py-2 border-b border-border/50">
                   <span className="text-sm text-muted-foreground">Minősítési szabályok</span>
                   <span className="font-semibold">{classRules.length}</span>
                 </div>
                 <div className="pt-2 space-y-2">
-                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Súlyosság eloszlás</p>
-                  {severities.map((s) => {
-                    const count = restrictions.filter((r) => r.severity === s).length;
-                    return (
-                      <div key={s} className="flex items-center justify-between text-sm">
-                        <Badge variant="outline" className={severityColors[s]}>{s}</Badge>
-                        <span className="text-muted-foreground">{count} szabály</span>
-                      </div>
-                    );
-                  })}
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Kulcsszó szabályok összesítés</p>
+                  <div className="flex items-center justify-between text-sm">
+                    <Badge variant="outline" className="bg-red-500/15 text-red-600 border-red-500/50">Tiltott</Badge>
+                    <span className="text-muted-foreground">{restrictions.filter((r) => r.type === "Kulcsszó tiltás" && r.severity === "Magas").length} szabály</span>
+                  </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <Badge variant="outline" className="bg-amber-500/15 text-amber-600 border-amber-500/50">Feltételes</Badge>
+                    <span className="text-muted-foreground">{restrictions.filter((r) => r.type === "Kulcsszó tiltás" && r.severity !== "Magas").length} szabály</span>
+                  </div>
                 </div>
                 <div className="pt-2 space-y-2">
                   <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Minősítések</p>
