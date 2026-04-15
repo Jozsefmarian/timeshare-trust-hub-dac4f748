@@ -597,7 +597,8 @@ export default function NewCase() {
           <h1 className="text-2xl font-bold text-foreground">Új ügy indítása</h1>
           <p className="text-muted-foreground text-sm mt-1">
             Az alábbi 4 lépésben tudja megadni az adásvételi folyamat megkezdéséhez szükséges összes adatot. A kitöltés
-            megkezdése előtt kérjük, figyelmesen olvassa el ezt a Tájékoztatót!
+            megkezdése előtt kérjük, figyelmesen olvassa el ezt a{" "}
+            <a href="/seller/info" target="_blank" rel="noopener noreferrer" className="text-secondary font-medium hover:underline">Tájékoztatót</a>!
           </p>
         </div>
 
