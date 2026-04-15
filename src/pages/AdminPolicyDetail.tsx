@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ArrowLeft, Save, Globe, Archive, Plus, Trash2, ShieldCheck, AlertTriangle, Tag } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -24,6 +25,12 @@ interface RestrictionRule {
   message: string;
 }
 
+interface WeekRestriction {
+  id: string;
+  resort_id: string | null;
+  weeks: string;
+}
+
 interface ClassificationRule {
   id: string;
   name: string;
@@ -32,9 +39,12 @@ interface ClassificationRule {
   message: string;
 }
 
-const ruleTypes = ["Kulcsszó tiltás", "Üdülőhely tiltás", "Hét tiltás", "Lejárati év korlátozás"];
+interface ResortOption {
+  id: string;
+  name: string;
+}
+
 const operators = ["tartalmazza", "nem tartalmazza", "egyenlő", "nem egyenlő", "kisebb mint", "nagyobb mint"];
-const severities = ["Alacsony", "Közepes", "Magas"];
 const classifications = ["Zöld", "Sárga", "Piros"];
 
 const classificationColors: Record<string, string> = {
@@ -43,43 +53,17 @@ const classificationColors: Record<string, string> = {
   Piros: "bg-red-500/15 text-red-600 border-red-500/50",
 };
 
-const severityColors: Record<string, string> = {
-  Alacsony: "bg-blue-500/15 text-blue-600 border-blue-500/50",
-  Közepes: "bg-amber-500/15 text-amber-600 border-amber-500/50",
-  Magas: "bg-red-500/15 text-red-600 border-red-500/50",
-};
-
-// DB <-> UI mapping helpers
-const ruleTypeToDb: Record<string, string> = {
-  "Kulcsszó tiltás": "keyword_ban",
-  "Üdülőhely tiltás": "resort_ban",
-  "Hét tiltás": "week_ban",
-  "Lejárati év korlátozás": "expiry_year",
-};
-const ruleTypeFromDb: Record<string, string> = Object.fromEntries(
-  Object.entries(ruleTypeToDb).map(([k, v]) => [v, k])
-);
-
-const operatorToDb: Record<string, string> = {
-  tartalmazza: "contains",
-  "nem tartalmazza": "not_contains",
-  egyenlő: "equals",
-  "nem egyenlő": "not_equals",
-  "kisebb mint": "less_than",
-  "nagyobb mint": "greater_than",
-};
-const operatorFromDb: Record<string, string> = Object.fromEntries(
-  Object.entries(operatorToDb).map(([k, v]) => [v, k])
-);
-
 const severityToDb: Record<string, string> = {
-  Alacsony: "low",
-  Közepes: "medium",
-  Magas: "high",
+  "confirmed": "confirmed",
+  "suspected": "suspected",
+  "Tiltott (→ piros, kizárás)": "confirmed",
+  "Feltételes (→ sárga, manuális review)": "suspected",
 };
-const severityFromDb: Record<string, string> = Object.fromEntries(
-  Object.entries(severityToDb).map(([k, v]) => [v, k])
-);
+
+const severityFromDb: Record<string, string> = {
+  "confirmed": "confirmed",
+  "suspected": "suspected",
+};
 
 const classificationToDb: Record<string, string> = {
   Zöld: "green",
@@ -109,7 +93,9 @@ export default function AdminPolicyDetail() {
   const [version, setVersion] = useState("1.0");
   const [status, setStatus] = useState("Piszkozat");
   const [restrictions, setRestrictions] = useState<RestrictionRule[]>([]);
+  const [weekRestrictions, setWeekRestrictions] = useState<WeekRestriction[]>([]);
   const [classRules, setClassRules] = useState<ClassificationRule[]>([]);
+  const [resortOptions, setResortOptions] = useState<ResortOption[]>([]);
 
   const isDraft = status === "Piszkozat";
 
@@ -117,7 +103,7 @@ export default function AdminPolicyDetail() {
     if (isNew || !policyId) return;
     setIsLoading(true);
     try {
-      const [pvRes, rrRes, crRes] = await Promise.all([
+      const [pvRes, rrRes, crRes, resortsRes] = await Promise.all([
         supabase.from("policy_versions").select("id, name, version, status").eq("id", policyId).single(),
         supabase
           .from("restriction_rules")
@@ -129,6 +115,7 @@ export default function AdminPolicyDetail() {
           .select("id, rule_name, conditions, result_classification, message_template, is_active, sort_order")
           .eq("policy_version_id", policyId)
           .order("sort_order"),
+        supabase.from("resorts").select("id, name").eq("is_active", true).order("name"),
       ]);
 
       if (pvRes.error) throw pvRes.error;
@@ -137,19 +124,37 @@ export default function AdminPolicyDetail() {
       setVersion(pv.version);
       setStatus(statusFromDb[pv.status] || pv.status);
 
+      if (resortsRes.data) {
+        setResortOptions(resortsRes.data.map((r) => ({ id: r.id, name: r.name })));
+      }
+
       if (rrRes.data) {
-        setRestrictions(
-          rrRes.data.map((r: any) => ({
-            id: r.id,
-            name: r.rule_type ? (ruleTypeFromDb[r.rule_type] || r.rule_type) : "",
-            type: ruleTypeFromDb[r.rule_type] || r.rule_type || ruleTypes[0],
-            field: r.field_name || "",
-            operator: operatorFromDb[r.operator] || r.operator || operators[0],
-            value: r.match_value || "",
-            severity: severityFromDb[r.severity] || r.severity || severities[0],
-            message: r.message_template || "",
-          }))
-        );
+        const keywordRules: RestrictionRule[] = [];
+        const weekRules: WeekRestriction[] = [];
+
+        rrRes.data.forEach((r: any) => {
+          if (r.rule_type === "week_ban") {
+            weekRules.push({
+              id: r.id,
+              resort_id: r.field_name || null,
+              weeks: r.match_value || "",
+            });
+          } else {
+            keywordRules.push({
+              id: r.id,
+              name: r.rule_type || "",
+              type: "Kulcsszó tiltás",
+              field: "",
+              operator: operators[0],
+              value: r.match_value || "",
+              severity: severityFromDb[r.severity] || r.severity || "confirmed",
+              message: r.message_template || "",
+            });
+          }
+        });
+
+        setRestrictions(keywordRules);
+        setWeekRestrictions(weekRules);
       }
 
       if (crRes.data) {
@@ -181,12 +186,23 @@ export default function AdminPolicyDetail() {
   const addRestriction = () => {
     setRestrictions((prev) => [
       ...prev,
-      { id: `new-${Date.now()}`, name: "", type: ruleTypes[0], field: "", operator: operators[0], value: "", severity: severities[0], message: "" },
+      { id: `new-${Date.now()}`, name: "", type: "Kulcsszó tiltás", field: "", operator: operators[0], value: "", severity: "confirmed", message: "" },
     ]);
   };
   const removeRestriction = (id: string) => setRestrictions((prev) => prev.filter((r) => r.id !== id));
   const updateRestriction = (id: string, field: keyof RestrictionRule, value: string) => {
     setRestrictions((prev) => prev.map((r) => (r.id === id ? { ...r, [field]: value } : r)));
+  };
+
+  const addWeekRestriction = () => {
+    setWeekRestrictions((prev) => [
+      ...prev,
+      { id: `new-${Date.now()}`, resort_id: null, weeks: "" },
+    ]);
+  };
+  const removeWeekRestriction = (id: string) => setWeekRestrictions((prev) => prev.filter((r) => r.id !== id));
+  const updateWeekRestriction = (id: string, field: keyof WeekRestriction, value: any) => {
+    setWeekRestrictions((prev) => prev.map((r) => (r.id === id ? { ...r, [field]: value } : r)));
   };
 
   const addClassification = () => {
@@ -212,24 +228,43 @@ export default function AdminPolicyDetail() {
         .eq("id", policyId);
       if (pvErr) throw pvErr;
 
-      // 2. Restriction rules: delete + insert
+      // 2. Delete all existing restriction rules
       const { error: delRr } = await supabase.from("restriction_rules").delete().eq("policy_version_id", policyId);
       if (delRr) throw delRr;
 
+      // Insert keyword rules
       if (restrictions.length > 0) {
-        const rrRows = restrictions.map((r, i) => ({
+        const keywordRows = restrictions.map((r, i) => ({
           policy_version_id: policyId,
-          rule_type: ruleTypeToDb[r.type] || r.type,
-          field_name: r.field || null,
+          rule_type: "keyword_ban",
           match_value: r.value || null,
-          operator: operatorToDb[r.operator] || r.operator || null,
-          severity: severityToDb[r.severity] || r.severity || null,
+          severity: severityToDb[r.severity] || "confirmed",
+          field_name: null,
+          operator: null,
           message_template: r.message || null,
           is_active: true,
           sort_order: i,
         }));
-        const { error: insRr } = await supabase.from("restriction_rules").insert(rrRows);
-        if (insRr) throw insRr;
+        const { error: insKeyword } = await supabase.from("restriction_rules").insert(keywordRows);
+        if (insKeyword) throw insKeyword;
+      }
+
+      // Insert week restriction rules
+      const validWeekRows = weekRestrictions.filter(w => w.weeks.trim().length > 0);
+      if (validWeekRows.length > 0) {
+        const weekRows = validWeekRows.map((w, i) => ({
+          policy_version_id: policyId,
+          rule_type: "week_ban",
+          match_value: w.weeks.trim(),
+          field_name: w.resort_id || null,
+          operator: null,
+          severity: null,
+          message_template: null,
+          is_active: true,
+          sort_order: i,
+        }));
+        const { error: insWeek } = await supabase.from("restriction_rules").insert(weekRows);
+        if (insWeek) throw insWeek;
       }
 
       // 3. Classification rules: delete + insert
@@ -382,85 +417,115 @@ export default function AdminPolicyDetail() {
             {/* Restriction rules */}
             <Card>
               <CardHeader>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <CardTitle className="text-lg flex items-center gap-2">
-                      <ShieldCheck className="h-5 w-5 text-destructive" />
-                      Korlátozó szabályok
-                    </CardTitle>
-                    <CardDescription>Szabályok, amelyek korlátozzák az ügy elfogadását</CardDescription>
-                  </div>
-                  <Button variant="outline" size="sm" onClick={addRestriction} disabled={!isDraft}>
-                    <Plus className="h-4 w-4 mr-1" />
-                    Új szabály
-                  </Button>
-                </div>
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <ShieldCheck className="h-5 w-5 text-destructive" />
+                  Korlátozó szabályok
+                </CardTitle>
+                <CardDescription>Szabályok, amelyek korlátozzák az ügy elfogadását</CardDescription>
               </CardHeader>
-              <CardContent className="space-y-4">
-                {restrictions.length === 0 && (
-                  <p className="text-muted-foreground text-sm text-center py-8">
-                    Nincs korlátozó szabály. Kattintson az "Új szabály" gombra.
-                  </p>
-                )}
-                {restrictions.map((rule) => (
-                  <Card key={rule.id} className="border-border/50">
-                    <CardContent className="pt-4 space-y-3">
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 flex-1">
-                          <div className="space-y-1.5">
-                            <Label className="text-xs">Szabály neve</Label>
-                            <Input value={rule.name} onChange={(e) => updateRestriction(rule.id, "name", e.target.value)} placeholder="Szabály neve" disabled={!isDraft} />
+              <CardContent className="space-y-6">
+                {/* Section A: Kulcsszó szabályok */}
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-sm font-semibold">Kulcsszó szabályok</h3>
+                    <Button variant="outline" size="sm" onClick={addRestriction} disabled={!isDraft}>
+                      <Plus className="h-4 w-4 mr-1" />
+                      Új kulcsszó szabály
+                    </Button>
+                  </div>
+                  {restrictions.length === 0 && (
+                    <p className="text-muted-foreground text-sm text-center py-6">
+                      Nincs kulcsszó szabály. Kattintson az "Új kulcsszó szabály" gombra.
+                    </p>
+                  )}
+                  {restrictions.map((rule) => (
+                    <Card key={rule.id} className="border-border/50">
+                      <CardContent className="pt-4 space-y-3">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 flex-1">
+                            <div className="space-y-1.5">
+                              <Label className="text-xs">Szabály neve</Label>
+                              <Input value={rule.name} onChange={(e) => updateRestriction(rule.id, "name", e.target.value)} placeholder="Szabály neve" disabled={!isDraft} />
+                            </div>
+                            <div className="space-y-1.5">
+                              <Label className="text-xs">Súlyosság</Label>
+                              <Select value={rule.severity} onValueChange={(v) => updateRestriction(rule.id, "severity", v)} disabled={!isDraft}>
+                                <SelectTrigger><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="confirmed">Tiltott (→ piros, kizárás)</SelectItem>
+                                  <SelectItem value="suspected">Feltételes (→ sárga, manuális review)</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div className="sm:col-span-2 space-y-1.5">
+                              <Label className="text-xs">Kulcsszavak (vesszővel elválasztva)</Label>
+                              <Input value={rule.value} onChange={(e) => updateRestriction(rule.id, "value", e.target.value)} placeholder="pl. elővásárlási jog, átruházás tilos, jóváhagyás szükséges" disabled={!isDraft} />
+                            </div>
                           </div>
-                          <div className="space-y-1.5">
-                            <Label className="text-xs">Szabály típusa</Label>
-                            <Select value={rule.type} onValueChange={(v) => updateRestriction(rule.id, "type", v)} disabled={!isDraft}>
-                              <SelectTrigger><SelectValue /></SelectTrigger>
-                              <SelectContent>
-                                {ruleTypes.map((t) => (<SelectItem key={t} value={t}>{t}</SelectItem>))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-                          <div className="space-y-1.5">
-                            <Label className="text-xs">Mező neve</Label>
-                            <Input value={rule.field} onChange={(e) => updateRestriction(rule.id, "field", e.target.value)} placeholder="pl. megjegyzés" disabled={!isDraft} />
-                          </div>
-                          <div className="space-y-1.5">
-                            <Label className="text-xs">Operátor</Label>
-                            <Select value={rule.operator} onValueChange={(v) => updateRestriction(rule.id, "operator", v)} disabled={!isDraft}>
-                              <SelectTrigger><SelectValue /></SelectTrigger>
-                              <SelectContent>
-                                {operators.map((o) => (<SelectItem key={o} value={o}>{o}</SelectItem>))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-                          <div className="space-y-1.5">
-                            <Label className="text-xs">Érték</Label>
-                            <Input value={rule.value} onChange={(e) => updateRestriction(rule.id, "value", e.target.value)} placeholder="Érték" disabled={!isDraft} />
-                          </div>
-                          <div className="space-y-1.5">
-                            <Label className="text-xs">Súlyosság</Label>
-                            <Select value={rule.severity} onValueChange={(v) => updateRestriction(rule.id, "severity", v)} disabled={!isDraft}>
-                              <SelectTrigger><SelectValue /></SelectTrigger>
-                              <SelectContent>
-                                {severities.map((s) => (<SelectItem key={s} value={s}>{s}</SelectItem>))}
-                              </SelectContent>
-                            </Select>
-                          </div>
+                          <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-destructive shrink-0 mt-5" onClick={() => removeRestriction(rule.id)} disabled={!isDraft}>
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
                         </div>
-                        <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-destructive shrink-0 mt-5" onClick={() => removeRestriction(rule.id)} disabled={!isDraft}>
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
+                        <div className="space-y-1.5">
+                          <Label className="text-xs">Üzenet</Label>
+                          <Textarea value={rule.message} onChange={(e) => updateRestriction(rule.id, "message", e.target.value)} placeholder="Hibaüzenet szövege..." rows={2} disabled={!isDraft} />
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+
+                <Separator />
+
+                {/* Section B: Hét korlátozások */}
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-sm font-semibold">Hét korlátozások</h3>
+                    <Button variant="outline" size="sm" onClick={addWeekRestriction} disabled={!isDraft}>
+                      <Plus className="h-4 w-4 mr-1" />
+                      Üdülőhely hozzáadása
+                    </Button>
+                  </div>
+                  {weekRestrictions.length === 0 && (
+                    <p className="text-muted-foreground text-sm text-center py-6">
+                      Még nincs hét korlátozás beállítva.
+                    </p>
+                  )}
+                  {weekRestrictions.map((row) => (
+                    <div key={row.id} className="flex items-start gap-3 p-3 rounded-lg border border-border/50">
+                      <div className="flex-1 space-y-3">
+                        <div className="space-y-1.5">
+                          <Label className="text-xs">Üdülőhely</Label>
+                          <Select
+                            value={row.resort_id ?? ""}
+                            onValueChange={(v) => updateWeekRestriction(row.id, "resort_id", v === "" ? null : v)}
+                            disabled={!isDraft}
+                          >
+                            <SelectTrigger><SelectValue placeholder="Válasszon üdülőhelyet" /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="">Minden szálláshely</SelectItem>
+                              {resortOptions.map((resort) => (
+                                <SelectItem key={resort.id} value={resort.id}>{resort.name}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label className="text-xs">Korlátozott hetek sorszámai</Label>
+                          <Input
+                            value={row.weeks}
+                            onChange={(e) => updateWeekRestriction(row.id, "weeks", e.target.value)}
+                            placeholder="pl. 1, 2, 3, 43, 44"
+                            disabled={!isDraft}
+                          />
+                        </div>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <Badge variant="outline" className={severityColors[rule.severity] || ""}>{rule.severity}</Badge>
-                      </div>
-                      <div className="space-y-1.5">
-                        <Label className="text-xs">Üzenet</Label>
-                        <Textarea value={rule.message} onChange={(e) => updateRestriction(rule.id, "message", e.target.value)} placeholder="Hibaüzenet szövege..." rows={2} disabled={!isDraft} />
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
+                      <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-destructive shrink-0 mt-5" onClick={() => removeWeekRestriction(row.id)} disabled={!isDraft}>
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
               </CardContent>
             </Card>
 
@@ -536,26 +601,23 @@ export default function AdminPolicyDetail() {
                 </div>
                 <div className="flex items-center justify-between py-2 border-b border-border/50">
                   <span className="text-sm text-muted-foreground">Kulcsszó szabályok</span>
-                  <span className="font-semibold">{restrictions.filter((r) => r.type === "Kulcsszó tiltás").length} db</span>
+                  <span className="font-semibold">{restrictions.length} db</span>
+                </div>
+                <div className="flex items-center justify-between py-1 pl-4">
+                  <span className="text-xs text-muted-foreground">- Tiltott</span>
+                  <span className="text-xs text-muted-foreground">{restrictions.filter(r => r.severity === "confirmed").length} db</span>
+                </div>
+                <div className="flex items-center justify-between py-1 pl-4 border-b border-border/50">
+                  <span className="text-xs text-muted-foreground">- Feltételes</span>
+                  <span className="text-xs text-muted-foreground">{restrictions.filter(r => r.severity === "suspected").length} db</span>
                 </div>
                 <div className="flex items-center justify-between py-2 border-b border-border/50">
                   <span className="text-sm text-muted-foreground">Hét korlátozások</span>
-                  <span className="font-semibold">{restrictions.filter((r) => r.type !== "Kulcsszó tiltás").length} db</span>
+                  <span className="font-semibold">{weekRestrictions.length} db</span>
                 </div>
                 <div className="flex items-center justify-between py-2 border-b border-border/50">
                   <span className="text-sm text-muted-foreground">Minősítési szabályok</span>
                   <span className="font-semibold">{classRules.length}</span>
-                </div>
-                <div className="pt-2 space-y-2">
-                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Kulcsszó szabályok összesítés</p>
-                  <div className="flex items-center justify-between text-sm">
-                    <Badge variant="outline" className="bg-red-500/15 text-red-600 border-red-500/50">Tiltott</Badge>
-                    <span className="text-muted-foreground">{restrictions.filter((r) => r.type === "Kulcsszó tiltás" && r.severity === "Magas").length} szabály</span>
-                  </div>
-                  <div className="flex items-center justify-between text-sm">
-                    <Badge variant="outline" className="bg-amber-500/15 text-amber-600 border-amber-500/50">Feltételes</Badge>
-                    <span className="text-muted-foreground">{restrictions.filter((r) => r.type === "Kulcsszó tiltás" && r.severity !== "Magas").length} szabály</span>
-                  </div>
                 </div>
                 <div className="pt-2 space-y-2">
                   <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Minősítések</p>
