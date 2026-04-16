@@ -16,7 +16,8 @@ export default function SellerSupport() {
           </CardHeader>
           <CardContent className="space-y-4">
             <p className="text-sm text-muted-foreground">
-              Ha az ügye feldolgozásával kapcsolatban kérdése van, vagy elakadt valamelyik lépésnél, lépjen kapcsolatba ügyfélszolgálatunkkal.
+              Ha az ügye feldolgozásával kapcsolatban kérdése van, vagy elakadt valamelyik lépésnél, lépjen kapcsolatba
+              ügyfélszolgálatunkkal.
             </p>
             <div className="flex items-center gap-2 text-sm">
               <Mail className="h-4 w-4 text-primary" />
@@ -27,7 +28,7 @@ export default function SellerSupport() {
             <div className="flex items-center gap-2 text-sm">
               <Phone className="h-4 w-4 text-primary" />
               <a href="tel:+3612345678" className="text-primary hover:underline">
-                +36 1 234 5678
+                +36 70 561 8110
               </a>
             </div>
           </CardContent>
