@@ -37,6 +37,19 @@ function formatDateHu(dateStr: string | null | undefined): string {
   return d.toLocaleDateString("hu-HU", { year: "numeric", month: "long", day: "numeric" });
 }
 
+function buildUsageDescription(
+  usageFrequency: string | null | undefined,
+  usageParity: string | null | undefined,
+): string {
+  if (!usageFrequency || usageFrequency === "annual") return "Minden évben";
+  if (usageFrequency === "biennial") {
+    if (usageParity === "even") return "Minden másodévben (páros évek)";
+    if (usageParity === "odd") return "Minden másodévben (páratlan évek)";
+    return "Minden másodévben";
+  }
+  return usageFrequency;
+}
+
 async function convertHtmlToPdf(html: string, pdfShiftKey: string): Promise<Uint8Array | null> {
   try {
     const response = await fetch("https://api.pdfshift.io/v3/convert/pdf", {
@@ -92,7 +105,7 @@ function fallbackHtml(contractType: string, vars: Record<string, string>): strin
     securities_transfer: "ÉRTÉKPAPÍR TRANSZFER NYILATKOZAT",
   };
   const title = titles[contractType] ?? contractType.toUpperCase();
-  return `<!DOCTYPE html><html lang="hu"><head><meta charset="UTF-8"><title>${title}</title><style>body{font-family:'Segoe UI',Arial,sans-serif;max-width:800px;margin:40px auto;padding:20px;color:#222;line-height:1.6}h1{text-align:center;font-size:20px;margin-bottom:4px}h2{font-size:15px;margin-top:24px;border-bottom:1px solid #ccc;padding-bottom:4px}.subtitle{text-align:center;font-size:12px;color:#666;margin-bottom:24px}dl.info-grid{display:grid;grid-template-columns:220px 1fr;gap:2px 12px;margin:8px 0}dt{font-weight:600;font-size:13px}dd{margin:0 0 6px;font-size:13px}.signature-block{margin-top:60px;display:flex;justify-content:space-between}.sig-line{width:240px;text-align:center}.sig-line hr{border:none;border-top:1px solid #222;margin-bottom:4px}.sig-line p{font-size:12px;margin:2px 0}.warning{background:#fff3cd;border:1px solid #ffc107;padding:12px;margin-bottom:20px;font-size:13px}</style></head><body><div class="warning">⚠️ Figyelem: ehhez a szerződéstípushoz (${escapeHtml(contractType)}) még nincs aktív sablon feltöltve az admin felületen.</div><h1>${title}</h1><p class="subtitle">Ügyszám: ${escapeHtml(vars.case_number)} | Kelt: ${escapeHtml(vars.generation_date)}</p><h2>1. Eladó adatai</h2><dl class="info-grid"><dt>Név:</dt><dd>${escapeHtml(vars.seller_name)}</dd><dt>Születési név:</dt><dd>${escapeHtml(vars.seller_birth_name)}</dd><dt>Lakcím:</dt><dd>${escapeHtml(vars.seller_address)}</dd><dt>Személyi ig. szám:</dt><dd>${escapeHtml(vars.seller_id_number)}</dd><dt>Adóazonosító:</dt><dd>${escapeHtml(vars.seller_tax_id)}</dd><dt>Születési hely, idő:</dt><dd>${escapeHtml(vars.seller_birth_place)}, ${escapeHtml(vars.seller_birth_date)}</dd><dt>Anyja neve:</dt><dd>${escapeHtml(vars.seller_mother_name)}</dd></dl><h2>2. Vevő adatai</h2><dl class="info-grid"><dt>Név:</dt><dd>${escapeHtml(vars.buyer_name)}</dd><dt>Székhely:</dt><dd>${escapeHtml(vars.buyer_address)}</dd><dt>Cégjegyzékszám:</dt><dd>${escapeHtml(vars.buyer_company_number)}</dd><dt>Adószám:</dt><dd>${escapeHtml(vars.buyer_tax_number)}</dd><dt>Képviselő:</dt><dd>${escapeHtml(vars.buyer_representative)}</dd></dl><h2>3. Üdulési jog adatai</h2><dl class="info-grid"><dt>Üdulőhely:</dt><dd>${escapeHtml(vars.resort_name)}</dd><dt>Hét száma:</dt><dd>${escapeHtml(vars.week_number)}. hét</dd><dt>Apartman típus:</dt><dd>${escapeHtml(vars.unit_type)}</dd><dt>Apartman/egység száma:</dt><dd>${escapeHtml(vars.unit_number)}</dd><dt>Szezon:</dt><dd>${escapeHtml(vars.season_label)}</dd><dt>Jogosultság időszaka:</dt><dd>${escapeHtml(vars.rights_start_year)} – ${escapeHtml(vars.rights_end_year)}</dd><dt>Eredeti szerz. sorszáma:</dt><dd>${escapeHtml(vars.original_contract_number)}</dd><dt>Tárgyévi fenntartási díj:</dt><dd>${escapeHtml(vars.annual_fee)} HUF</dd></dl><div class="signature-block"><div class="sig-line"><hr/><p>Eladó aláírása</p><p>${escapeHtml(vars.seller_name)}</p></div><div class="sig-line"><hr/><p>Vevő aláírása</p><p>${escapeHtml(vars.buyer_name)}</p></div></div></body></html>`;
+  return `<!DOCTYPE html><html lang="hu"><head><meta charset="UTF-8"><title>${title}</title><style>body{font-family:'Segoe UI',Arial,sans-serif;max-width:800px;margin:40px auto;padding:20px;color:#222;line-height:1.6}h1{text-align:center;font-size:20px;margin-bottom:4px}h2{font-size:15px;margin-top:24px;border-bottom:1px solid #ccc;padding-bottom:4px}.subtitle{text-align:center;font-size:12px;color:#666;margin-bottom:24px}dl.info-grid{display:grid;grid-template-columns:220px 1fr;gap:2px 12px;margin:8px 0}dt{font-weight:600;font-size:13px}dd{margin:0 0 6px;font-size:13px}.signature-block{margin-top:60px;display:flex;justify-content:space-between}.sig-line{width:240px;text-align:center}.sig-line hr{border:none;border-top:1px solid #222;margin-bottom:4px}.sig-line p{font-size:12px;margin:2px 0}.warning{background:#fff3cd;border:1px solid #ffc107;padding:12px;margin-bottom:20px;font-size:13px}</style></head><body><div class="warning">⚠️ Figyelem: ehhez a szerződéstípushoz (${escapeHtml(contractType)}) még nincs aktív sablon feltöltve az admin felületen.</div><h1>${title}</h1><p class="subtitle">Ügyszám: ${escapeHtml(vars.case_number)} | Kelt: ${escapeHtml(vars.generation_date)}</p><h2>1. Eladó adatai</h2><dl class="info-grid"><dt>Név:</dt><dd>${escapeHtml(vars.seller_name)}</dd><dt>Születési név:</dt><dd>${escapeHtml(vars.seller_birth_name)}</dd><dt>Lakcím:</dt><dd>${escapeHtml(vars.seller_address)}</dd><dt>Személyi ig. szám:</dt><dd>${escapeHtml(vars.seller_id_number)}</dd><dt>Adóazonosító:</dt><dd>${escapeHtml(vars.seller_tax_id)}</dd><dt>Születési hely, idő:</dt><dd>${escapeHtml(vars.seller_birth_place)}, ${escapeHtml(vars.seller_birth_date)}</dd><dt>Anyja neve:</dt><dd>${escapeHtml(vars.seller_mother_name)}</dd></dl><h2>2. Vevő adatai</h2><dl class="info-grid"><dt>Név:</dt><dd>${escapeHtml(vars.buyer_name)}</dd><dt>Székhely:</dt><dd>${escapeHtml(vars.buyer_address)}</dd><dt>Cégjegyzékszám:</dt><dd>${escapeHtml(vars.buyer_company_number)}</dd><dt>Adószám:</dt><dd>${escapeHtml(vars.buyer_tax_number)}</dd><dt>Képviselő:</dt><dd>${escapeHtml(vars.buyer_representative)}</dd></dl><h2>3. Üdulési jog adatai</h2><dl class="info-grid"><dt>Üdulőhely:</dt><dd>${escapeHtml(vars.resort_name)}</dd><dt>Hét száma:</dt><dd>${escapeHtml(vars.week_number)}. hét</dd><dt>Apartman típus:</dt><dd>${escapeHtml(vars.unit_type)}</dd><dt>Apartman/egység száma:</dt><dd>${escapeHtml(vars.unit_number)}</dd><dt>Szezon:</dt><dd>${escapeHtml(vars.season_label)}</dd><dt>Igénybevétel:</dt><dd>${escapeHtml(vars.usage_description)}</dd><dt>Jogosultság időszaka:</dt><dd>${escapeHtml(vars.rights_start_year)} – ${escapeHtml(vars.rights_end_year)}</dd><dt>Eredeti szerz. sorszáma:</dt><dd>${escapeHtml(vars.original_contract_number)}</dd><dt>Tárgyévi fenntartási díj:</dt><dd>${escapeHtml(vars.annual_fee)} HUF</dd></dl><div class="signature-block"><div class="sig-line"><hr/><p>Eladó aláírása</p><p>${escapeHtml(vars.seller_name)}</p></div><div class="sig-line"><hr/><p>Vevő aláírása</p><p>${escapeHtml(vars.buyer_name)}</p></div></div></body></html>`;
 }
 
 Deno.serve(async (req) => {
@@ -229,6 +242,11 @@ Deno.serve(async (req) => {
 
     const isAbbazia = !!(weekOffer?.share_related && abbaziaShares);
 
+    const usageDescription = buildUsageDescription(
+      (weekOffer as any)?.usage_frequency,
+      (weekOffer as any)?.usage_parity,
+    );
+
     const vars: Record<string, string> = {
       buyer_name: policySettings["buyer_name"] ?? "—",
       buyer_address: policySettings["buyer_address"] ?? "—",
@@ -249,6 +267,7 @@ Deno.serve(async (req) => {
       unit_type: weekOffer?.unit_type ?? "—",
       unit_number: (weekOffer as any)?.unit_number ?? "—",
       season_label: weekOffer?.season_label ?? "—",
+      usage_description: usageDescription,
       rights_start_year: String(weekOffer?.rights_start_year ?? "—"),
       rights_end_year: String(weekOffer?.rights_end_year ?? "—"),
       original_contract_number: (weekOffer as any)?.original_contract_number ?? "—",
