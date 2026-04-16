@@ -22,7 +22,7 @@ export default function SellerSupport() {
             <div className="flex items-center gap-2 text-sm">
               <Mail className="h-4 w-4 text-primary" />
               <a href="mailto:support@tsrmegoldasok.hu" className="text-primary hover:underline">
-                support@tsrmegoldasok.hu
+                kapcsolat@tsrmegoldasok.hu
               </a>
             </div>
             <div className="flex items-center gap-2 text-sm">
