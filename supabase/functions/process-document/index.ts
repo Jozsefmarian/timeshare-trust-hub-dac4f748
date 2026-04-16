@@ -49,6 +49,7 @@ type WeekOfferRow = {
   week_number: number | null;
   unit_number: string | null;
   capacity: number | null;
+  resort_id: string | null;
 };
 
 type MismatchResult = {
@@ -63,6 +64,7 @@ type DbRestrictionRule = {
   id: string;
   rule_type: string;
   match_value: string | null;
+  field_name: string | null;
   severity: string | null;
   is_active: boolean;
   message_template: string | null;
@@ -92,7 +94,6 @@ function isInternalRequest(req: Request, serviceRoleKey: string) {
   return authHeader === `Bearer ${serviceRoleKey}` || apikey === serviceRoleKey;
 }
 
-// FIX: helyes unicode range a diakritikus jelek eltávolításához
 function normalizeText(value: string | null | undefined): string {
   return (value ?? "")
     .normalize("NFD")
@@ -369,10 +370,25 @@ async function extractFieldsWithAI(
   }
 }
 
+// ── KULCSSZO + HET KORLATOZAS SCAN ──────────────────────────────────────────
+//
+// Ez a fuggveny ket dolgot csinal:
+// 1. Kulcsszo tiltás (keyword_ban):
+//    - A match_value vesszővel elválasztott lista lehet (pl. "elővásárlási jog, átruházás tilos")
+//    - Minden egyes kulcsszóra külön keres a dokumentum szövegében
+//    - severity=confirmed → auto_reject (piros)
+//    - severity=suspected → flag_manual_legal (sárga, manuális review)
+//
+// 2. Hét korlátozás (week_ban):
+//    - A match_value vesszővel elválasztott hétsorszám lista (pl. "1,2,3,43,44")
+//    - A field_name tartalmazza a resort UUID-t, vagy NULL = minden resortra vonatkozik
+//    - Ha a case week_number szerepel a listában ÉS a resort egyezik → manuális review (sárga)
+//
 async function buildRestrictionHitsFromDb(
   text: string,
   serviceClient: any,
   policyVersionId: string | null,
+  caseId: string,
 ): Promise<RestrictionHit[]> {
   let resolvedPolicyId = policyVersionId;
   if (!resolvedPolicyId) {
@@ -394,14 +410,15 @@ async function buildRestrictionHitsFromDb(
     return [];
   }
 
+  // Betöltjük az összes aktív szabályt (keyword_ban + week_ban)
   let rules: DbRestrictionRule[] = [];
   try {
     const { data, error } = await serviceClient
       .from("restriction_rules")
-      .select("id, rule_type, match_value, severity, is_active, message_template")
+      .select("id, rule_type, match_value, field_name, severity, is_active, message_template")
       .eq("policy_version_id", resolvedPolicyId)
       .eq("is_active", true)
-      .in("rule_type", ["keyword_ban", "keyword"]);
+      .in("rule_type", ["keyword_ban", "keyword", "week_ban"]);
     if (error) throw error;
     rules = (data ?? []) as DbRestrictionRule[];
   } catch (err) {
@@ -411,72 +428,128 @@ async function buildRestrictionHitsFromDb(
 
   if (rules.length === 0) return [];
 
+  // Week offer adatok betöltése a week_ban ellenőrzéshez
+  let weekNumber: number | null = null;
+  let resortId: string | null = null;
+  try {
+    const { data: wo } = await serviceClient
+      .from("week_offers")
+      .select("week_number, resort_id")
+      .eq("case_id", caseId)
+      .maybeSingle();
+    weekNumber = wo?.week_number ?? null;
+    resortId = wo?.resort_id ?? null;
+  } catch (err) {
+    console.error("Failed to load week_offer for week_ban check:", err);
+  }
+
   const normalizedText = normalizeText(text);
   const hits: RestrictionHit[] = [];
 
   for (const rule of rules) {
     if (!rule.match_value) continue;
-    const pattern = normalizeText(rule.match_value);
-    if (!pattern) continue;
 
-    if (normalizedText.includes(pattern)) {
-      const severity: "suspected" | "confirmed" = rule.severity === "confirmed" ? "confirmed" : "suspected";
-      const action: "flag_manual_legal" | "auto_reject" | "allow_but_yellow" =
-        severity === "confirmed" ? "auto_reject" : "flag_manual_legal";
+    // ── 1. Kulcsszó tiltás ────────────────────────────────────────────────
+    if (rule.rule_type === "keyword_ban" || rule.rule_type === "keyword") {
+      // Vesszős lista feldarabolása
+      const patterns = rule.match_value
+        .split(",")
+        .map((p) => normalizeText(p))
+        .filter((p) => p.length > 0);
 
-      const rawText = (text ?? "").toLowerCase();
-      const rawPattern = (rule.match_value ?? "").toLowerCase();
-      const idx = rawText.indexOf(rawPattern);
-      let excerpt = "";
-      if (idx >= 0) {
-        const start = Math.max(0, idx - 60);
-        const end = Math.min(rawText.length, idx + rawPattern.length + 60);
-        excerpt = text.substring(start, end).trim();
+      for (const pattern of patterns) {
+        if (normalizedText.includes(pattern)) {
+          const severity: "suspected" | "confirmed" = rule.severity === "confirmed" ? "confirmed" : "suspected";
+          const action: "flag_manual_legal" | "auto_reject" | "allow_but_yellow" =
+            severity === "confirmed" ? "auto_reject" : "flag_manual_legal";
+
+          const rawText = (text ?? "").toLowerCase();
+          const idx = rawText.indexOf(pattern);
+          let excerpt = "";
+          if (idx >= 0) {
+            const start = Math.max(0, idx - 60);
+            const end = Math.min(rawText.length, idx + pattern.length + 60);
+            excerpt = text.substring(start, end).trim();
+          }
+
+          hits.push({
+            rule_id: rule.id,
+            matched_text: pattern,
+            severity,
+            action,
+            details: {
+              source: "keyword_scan",
+              rule_type: rule.rule_type,
+              pattern,
+              original_match_value: rule.match_value,
+              policy_version_id: resolvedPolicyId,
+              excerpt,
+            },
+          });
+
+          // Egy szabályból elég egy találat (ne duplikáljon ugyanabból a szabályból)
+          break;
+        }
+      }
+    }
+
+    // ── 2. Hét korlátozás ─────────────────────────────────────────────────
+    if (rule.rule_type === "week_ban") {
+      // Ha nincs week_number a case-ben, nem tudunk ellenőrizni
+      if (weekNumber === null) continue;
+
+      // Resort szűrés:
+      // - field_name === null → minden resortra vonatkozik
+      // - field_name === resort UUID → csak arra a resortra vonatkozik
+      const ruleResortId = rule.field_name ?? null;
+      if (ruleResortId !== null && ruleResortId !== resortId) {
+        // Ez a szabály egy másik resortra vonatkozik, kihagyjuk
+        continue;
       }
 
-      hits.push({
-        rule_id: rule.id,
-        matched_text: rule.match_value,
-        severity,
-        action,
-        details: {
-          source: "db_restriction_scan",
-          rule_type: rule.rule_type,
-          pattern: rule.match_value,
-          policy_version_id: resolvedPolicyId,
-          excerpt,
-        },
-      });
+      // Hétsorszámok feldarabolása és ellenőrzése
+      const bannedWeeks = rule.match_value
+        .split(",")
+        .map((w) => w.trim())
+        .filter((w) => w.length > 0)
+        .map((w) => Number(w))
+        .filter((w) => !isNaN(w));
+
+      if (bannedWeeks.includes(weekNumber)) {
+        console.log(
+          `week_ban hit: week_number=${weekNumber} found in rule ${rule.id} (resort=${ruleResortId ?? "all"})`,
+        );
+
+        hits.push({
+          rule_id: rule.id,
+          matched_text: String(weekNumber),
+          severity: "suspected",
+          action: "flag_manual_legal",
+          details: {
+            source: "week_ban_scan",
+            rule_type: "week_ban",
+            week_number: weekNumber,
+            banned_weeks: bannedWeeks,
+            resort_id: resortId,
+            rule_resort_id: ruleResortId,
+            policy_version_id: resolvedPolicyId,
+          },
+        });
+      }
     }
   }
 
   return hits;
 }
 
-/**
- * Resort névegyezés: toleráns összehasonlítás.
- * Kezeli a rövidített neveket, extra szavakat (pl. csillagbesorolás),
- * és a névváltozásokat (régi vs. jelenlegi név).
- *
- * Logika:
- * 1. Teljes egyezés (normalizált)
- * 2. Az egyik tartalmazza a másikat teljes egészében
- * 3. A RÖVIDEBB string szavainak legalább 60%-a megtalálható a HOSSZABB stringben
- *    (ez kezeli pl. "Club Dobogomajor" vs "Club Dobogomajor *** superior" esetet)
- * 4. Legalább 6 karakter hosszú közös részstring (prefix/infix egyezés)
- */
 function resortNamesSimilar(a: string, b: string): boolean {
   const na = normalizeText(a);
   const nb = normalizeText(b);
 
-  // 1. Teljes egyezés
   if (na === nb) return true;
-
-  // 2. Az egyik tartalmazza a másikat
   if (na.length >= 5 && nb.includes(na)) return true;
   if (nb.length >= 5 && na.includes(nb)) return true;
 
-  // 3. Szóalapú egyezés: a rövidebb szavai legalább 60%-ban benne vannak a hosszabbban
   const wordsA = na.split(" ").filter((w) => w.length >= 3);
   const wordsB = nb.split(" ").filter((w) => w.length >= 3);
   const shorter = wordsA.length <= wordsB.length ? wordsA : wordsB;
@@ -488,7 +561,6 @@ function resortNamesSimilar(a: string, b: string): boolean {
     if (ratio >= 0.6) return true;
   }
 
-  // 4. Közös részstring legalább 6 karakter
   const minLen = 6;
   const shortStr = na.length <= nb.length ? na : nb;
   const longStr = na.length <= nb.length ? nb : na;
@@ -500,10 +572,6 @@ function resortNamesSimilar(a: string, b: string): boolean {
   return false;
 }
 
-/**
- * Általános szövegegyezés (nem resort-specifikus).
- * Szigorúbb mint resortNamesSimilar.
- */
 function textSimilar(a: string, b: string): boolean {
   const na = normalizeText(a);
   const nb = normalizeText(b);
@@ -520,17 +588,11 @@ function compareWithWeekOffer(
   documentType: string,
   textExtracted: boolean,
 ): MismatchResult[] {
-  if (documentType !== "timeshare_contract") {
-    return [];
-  }
-
-  if (!textExtracted) {
-    return [];
-  }
+  if (documentType !== "timeshare_contract") return [];
+  if (!textExtracted) return [];
 
   const results: MismatchResult[] = [];
 
-  // --- resort_name: toleráns összehasonlítás ---
   if (weekOffer.resort_name_raw) {
     const docResort = extractedFields.resort_name as string | null | undefined;
     if (docResort) {
@@ -552,7 +614,6 @@ function compareWithWeekOffer(
     }
   }
 
-  // --- week_number: kötelező ---
   if (weekOffer.week_number != null) {
     const docWeek = extractedFields.week_number as number | null | undefined;
     if (docWeek != null) {
@@ -574,7 +635,6 @@ function compareWithWeekOffer(
     }
   }
 
-  // --- unit_number: opcionális ---
   const docUnitNumber = extractedFields.unit_number as string | null | undefined;
   if (docUnitNumber && weekOffer.unit_number) {
     results.push({
@@ -586,7 +646,6 @@ function compareWithWeekOffer(
     });
   }
 
-  // --- capacity: opcionális ---
   const docCapacity = extractedFields.capacity as number | null | undefined;
   if (docCapacity != null && weekOffer.capacity != null) {
     results.push({
@@ -842,7 +901,7 @@ Deno.serve(async (req) => {
     try {
       const { data: weekOffer } = await serviceClient
         .from("week_offers")
-        .select("resort_name_raw, week_number, unit_number, capacity")
+        .select("resort_name_raw, week_number, unit_number, capacity, resort_id")
         .eq("case_id", doc.case_id)
         .maybeSingle();
 
@@ -872,7 +931,13 @@ Deno.serve(async (req) => {
       console.error("Mismatch comparison error (non-blocking):", mismatchErr);
     }
 
-    const restrictionHits = await buildRestrictionHitsFromDb(extractedTextRaw, serviceClient, job.policy_version_id);
+    // Restriction scan — most már caseId-t is kap a week_ban ellenőrzéshez
+    const restrictionHits = await buildRestrictionHitsFromDb(
+      extractedTextRaw,
+      serviceClient,
+      job.policy_version_id,
+      doc.case_id,
+    );
 
     await saveRestrictionHits(serviceClient, doc.case_id, doc.id, job.policy_version_id, restrictionHits);
     await saveCheckResults(
