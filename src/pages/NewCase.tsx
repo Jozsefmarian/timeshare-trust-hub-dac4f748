@@ -100,8 +100,7 @@ export default function NewCase() {
   const [shareCount, setShareCount] = useState("");
   const [unitNumber, setUnitNumber] = useState("");
   const [originalContractNumber, setOriginalContractNumber] = useState("");
-  const [usageFrequency, setUsageFrequency] = useState<"annual" | "biennial">("annual");
-  const [usageParity, setUsageParity] = useState<"even" | "odd" | null>(null);
+  const [usageOption, setUsageOption] = useState<"annual" | "biennial_even" | "biennial_odd">("annual");
 
   // Abbázia share fields
   const [issuerName, setIssuerName] = useState("");
@@ -238,8 +237,8 @@ export default function NewCase() {
         season_label: seasonName.trim(),
         rights_start_year: Number(rightsStart),
         rights_end_year: Number(rightsEnd),
-        usage_frequency: usageFrequency,
-        usage_parity: usageFrequency === "biennial" ? usageParity : null,
+        usage_frequency: usageOption === "annual" ? "annual" : "biennial",
+        usage_parity: usageOption === "biennial_even" ? "even" : usageOption === "biennial_odd" ? "odd" : null,
         share_related: isShareRelated,
         share_count: isShareRelated && shareCount ? Number(shareCount) : null,
         unit_number: unitNumber.trim() || null,
@@ -479,7 +478,7 @@ export default function NewCase() {
           hasShares !== "" &&
           !!originalContractNumber &&
           !!annualFee &&
-          (usageFrequency === "annual" || (usageFrequency === "biennial" && !!usageParity)) &&
+          !!usageOption &&
           (hasShares !== "yes" ||
             (!!issuerName &&
               !!clientNumber &&
@@ -598,7 +597,15 @@ export default function NewCase() {
           <p className="text-muted-foreground text-sm mt-1">
             Az alábbi 4 lépésben tudja megadni az adásvételi folyamat megkezdéséhez szükséges összes adatot. A kitöltés
             megkezdése előtt kérjük, figyelmesen olvassa el ezt a{" "}
-            <a href="/seller/info" target="_blank" rel="noopener noreferrer" className="text-secondary font-medium hover:underline">Tájékoztatót</a>!
+            <a
+              href="/seller/info"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-secondary font-medium hover:underline"
+            >
+              Tájékoztatót
+            </a>
+            !
           </p>
         </div>
 
@@ -803,47 +810,21 @@ export default function NewCase() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="space-y-1.5">
-                    <Label>Használat gyakorisága</Label>
-                    <Select
-                      value={usageFrequency}
-                      onValueChange={(value: "annual" | "biennial") => {
-                        setUsageFrequency(value);
-                        if (value === "annual") {
-                          setUsageParity(null);
-                        }
-                      }}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Válasszon" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="annual">Minden évben</SelectItem>
-                        <SelectItem value="biennial">Minden második évben</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  {usageFrequency === "biennial" ? (
-                    <div className="space-y-1.5">
-                      <Label>Év típusa</Label>
-                      <Select
-                        value={usageParity ?? ""}
-                        onValueChange={(value: "even" | "odd") => setUsageParity(value)}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Válasszon" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="even">Páros évek</SelectItem>
-                          <SelectItem value="odd">Páratlan évek</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  ) : (
-                    <div />
-                  )}
+                <div className="space-y-1.5">
+                  <Label>Igénybevétel gyakorisága</Label>
+                  <Select
+                    value={usageOption}
+                    onValueChange={(value: "annual" | "biennial_even" | "biennial_odd") => setUsageOption(value)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Válasszon" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="annual">Minden évben</SelectItem>
+                      <SelectItem value="biennial_even">Minden másodévben – páros évek</SelectItem>
+                      <SelectItem value="biennial_odd">Minden másodévben – páratlan évek</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
 
                 <div className="space-y-1.5">
