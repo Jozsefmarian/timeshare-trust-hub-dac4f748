@@ -319,13 +319,12 @@ export default function SellerCasePayment() {
             </CardHeader>
             <CardContent className="space-y-4">
               {/* Scrollozható szerződés szöveg */}
-              <div
-                className="max-h-96 overflow-y-auto border rounded-md px-3 py-2 bg-muted/30 text-sm"
-                dangerouslySetInnerHTML={{
-                  __html: sanitizeHtmlForInline(
-                    agreement?.html_content ?? "<p>A szerződés szövege betöltés alatt...</p>",
-                  ),
-                }}
+              <iframe
+                srcDoc={agreement?.html_content ?? "<p>A szerződés szövege betöltés alatt...</p>"}
+                className="w-full rounded-md border"
+                style={{ height: "400px" }}
+                sandbox="allow-same-origin"
+                title="Szolgáltatási szerződés"
               />
               <p className="text-xs text-muted-foreground">Kérjük, olvassa el a teljes szerződést a folytatás előtt.</p>
 
