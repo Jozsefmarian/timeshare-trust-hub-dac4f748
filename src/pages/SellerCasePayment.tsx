@@ -322,7 +322,7 @@ export default function SellerCasePayment() {
               <iframe
                 srcDoc={agreement?.html_content ?? "<p>A szerződés szövege betöltés alatt...</p>"}
                 className="w-full rounded-md border"
-                style={{ height: "400px" }}
+                style={{ height: "450px", border: "none" }}
                 sandbox="allow-same-origin"
                 title="Szolgáltatási szerződés"
               />
