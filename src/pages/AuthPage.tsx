@@ -173,7 +173,7 @@ export default function AuthPage() {
             {isRegister ? "Csatlakozzon hozzánk" : "Üdvözöljük újra"}
           </h2>
           <p className="text-primary-foreground/70 text-lg">
-            Kezelje üdülési jog átruházási ügyeit, kövesse nyomon dokumentumait és fizetéseit biztonságosan.
+            Egyedi platformunkon gyorsan és biztonságosan intézheti eladni kívánt üdülési jogának átruházását.
           </p>
         </div>
       </div>
