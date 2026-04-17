@@ -28,7 +28,7 @@ export default function SellerSupport() {
             <div className="flex items-center gap-2 text-sm">
               <Phone className="h-4 w-4 text-primary" />
               <a href="tel:+3612345678" className="text-primary hover:underline">
-                +36 70 561 8110
+                +36 70 415 3337
               </a>
             </div>
           </CardContent>
