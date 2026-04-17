@@ -242,9 +242,13 @@ export default function ServiceAgreementPanel({ caseId, caseStatus, onAccepted }
       <CardContent className="space-y-5">
         {/* Szerződés szövege */}
         {renderedHtml ? (
-          <div className="max-h-96 overflow-y-auto p-4 rounded-xl border border-border bg-muted/30 text-sm w-full">
-            <div dangerouslySetInnerHTML={{ __html: renderedHtml }} />
-          </div>
+          <iframe
+            srcDoc={renderedHtml}
+            className="w-full rounded-xl border border-border bg-white"
+            style={{ height: "400px" }}
+            sandbox="allow-same-origin"
+            title="Szolgáltatási szerződés"
+          />
         ) : (
           <div className="p-4 rounded-xl border border-border bg-muted/30">
             <p className="text-sm text-muted-foreground">A szerződés szövege betöltés alatt...</p>
