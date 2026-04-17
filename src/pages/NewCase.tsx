@@ -116,6 +116,7 @@ export default function NewCase() {
   const [decl1, setDecl1] = useState(false);
   const [decl2, setDecl2] = useState(false);
   const [decl3, setDecl3] = useState(false);
+  const [decl4, setDecl4] = useState(false);
 
   // Step 4
   const [files, setFiles] = useState<TrackedFile[]>([]);
@@ -489,7 +490,7 @@ export default function NewCase() {
               !!securitiesAccountId))
         );
       case 2:
-        return decl1 && decl2 && decl3;
+        return decl1 && decl2 && decl3 && decl4;
       case 3: {
         // Only uploaded files count
         const requiredCats = visibleCategories.filter((c) => c.required);
@@ -1018,6 +1019,24 @@ export default function NewCase() {
                     <span className="text-sm text-foreground leading-relaxed">{d.text}</span>
                   </label>
                 ))}
+                <label
+                  htmlFor="decl4"
+                  className="flex items-start gap-3 p-4 rounded-xl border border-border hover:bg-muted/30 transition-colors cursor-pointer"
+                >
+                  <Checkbox id="decl4" checked={decl4} onCheckedChange={(v) => setDecl4(!!v)} className="mt-0.5" />
+                  <span className="text-sm text-foreground leading-relaxed">
+                    Kijelentem, hogy az{" "}
+                    <a
+                      href="/aszf"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-secondary font-medium hover:underline"
+                    >
+                      Általános Szerződési Feltételeket
+                    </a>{" "}
+                    elolvastam és elfogadom.
+                  </span>
+                </label>
               </div>
             )}
 
