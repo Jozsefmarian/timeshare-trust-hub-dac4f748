@@ -244,8 +244,8 @@ export default function ServiceAgreementPanel({ caseId, caseStatus, onAccepted }
         {renderedHtml ? (
           <iframe
             srcDoc={renderedHtml}
-            className="w-full rounded-xl border border-border bg-white"
-            style={{ height: "400px" }}
+            className="w-full rounded-xl border border-border"
+            style={{ height: "450px", border: "none" }}
             sandbox="allow-same-origin"
             title="Szolgáltatási szerződés"
           />
