@@ -78,7 +78,11 @@ export default function AuthPage() {
       toast({ title: "Sikeres bejelentkezés", description: "Átirányítás folyamatban..." });
       navigate(getDefaultRouteForRole(profile?.role), { replace: true });
     } catch (error: any) {
-      toast({ title: "Sikertelen bejelentkezés", description: error?.message || "Ismeretlen hiba történt.", variant: "destructive" });
+      toast({
+        title: "Érvénytelen felhasználónév, vagy jelszó",
+        description: error?.message || "Ismeretlen hiba történt.",
+        variant: "destructive",
+      });
     } finally {
       setIsLoading(false);
     }
@@ -87,15 +91,27 @@ export default function AuthPage() {
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim() || !email.trim() || !password.trim() || !confirmPassword.trim() || !privacyAccepted) {
-      toast({ title: "Hiányzó adatok", description: "Kérjük, töltse ki az összes mezőt és fogadja el az adatkezelési tájékoztatót.", variant: "destructive" });
+      toast({
+        title: "Hiányzó adatok",
+        description: "Kérjük, töltse ki az összes mezőt és fogadja el az adatkezelési tájékoztatót.",
+        variant: "destructive",
+      });
       return;
     }
     if (password.length < 8) {
-      toast({ title: "Túl rövid jelszó", description: "A jelszónak legalább 8 karakter hosszúnak kell lennie.", variant: "destructive" });
+      toast({
+        title: "Túl rövid jelszó",
+        description: "A jelszónak legalább 8 karakter hosszúnak kell lennie.",
+        variant: "destructive",
+      });
       return;
     }
     if (password !== confirmPassword) {
-      toast({ title: "A jelszavak nem egyeznek", description: "Kérjük, adja meg újra a jelszót.", variant: "destructive" });
+      toast({
+        title: "A jelszavak nem egyeznek",
+        description: "Kérjük, adja meg újra a jelszót.",
+        variant: "destructive",
+      });
       return;
     }
     try {
@@ -128,7 +144,11 @@ export default function AuthPage() {
       setConfirmPassword("");
       setPrivacyAccepted(false);
     } catch (error: any) {
-      toast({ title: "Sikertelen regisztráció", description: error?.message || "Ismeretlen hiba történt.", variant: "destructive" });
+      toast({
+        title: "Sikertelen regisztráció",
+        description: error?.message || "Ismeretlen hiba történt.",
+        variant: "destructive",
+      });
     } finally {
       setIsLoading(false);
     }
@@ -249,14 +269,23 @@ export default function AuthPage() {
                 />
                 <label htmlFor="privacy" className="text-sm text-muted-foreground leading-snug cursor-pointer">
                   Kijelentem, hogy az{" "}
-                  <a href="/privacy" target="_blank" rel="noopener noreferrer" className="text-secondary font-medium hover:underline">
+                  <a
+                    href="/privacy"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-secondary font-medium hover:underline"
+                  >
                     adatkezelési tájékoztatót
                   </a>{" "}
                   elolvastam és az abban leírtakat elfogadom.
                 </label>
               </div>
 
-              <Button type="submit" className="w-full bg-secondary text-secondary-foreground hover:bg-secondary/90 py-5" disabled={isLoading || !privacyAccepted}>
+              <Button
+                type="submit"
+                className="w-full bg-secondary text-secondary-foreground hover:bg-secondary/90 py-5"
+                disabled={isLoading || !privacyAccepted}
+              >
                 {isLoading ? "Regisztráció..." : "Regisztráció"}
                 <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
@@ -295,7 +324,11 @@ export default function AuthPage() {
                 </div>
               </div>
 
-              <Button type="submit" className="w-full bg-secondary text-secondary-foreground hover:bg-secondary/90 py-5" disabled={isLoading}>
+              <Button
+                type="submit"
+                className="w-full bg-secondary text-secondary-foreground hover:bg-secondary/90 py-5"
+                disabled={isLoading}
+              >
                 {isLoading ? "Bejelentkezés..." : "Bejelentkezés"}
                 <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
