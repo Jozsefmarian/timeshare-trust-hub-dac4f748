@@ -23,7 +23,7 @@ function isOcrRefusal(text: string): boolean {
   if (!text || text.length === 0) return false;
   const normalized = text
     .normalize("NFD")
-    .replace(/[u0300-u036f]/g, "")
+    .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase();
   return OCR_REFUSAL_PATTERNS.some((pattern) => normalized.includes(pattern));
 }
@@ -100,16 +100,15 @@ function isInternalRequest(req: Request, serviceRoleKey: string) {
 function normalizeText(value: string | null | undefined): string {
   return (value ?? "")
     .normalize("NFD")
-    .replace(/[u0300-u036f]/g, "")
+    .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
-    .replace(/s+/g, " ")
+    .replace(/\s+/g, " ")
     .trim();
 }
 
 function isReadableText(text: string): boolean {
   if (!text || text.length < 30) return false;
-  const printable = text.replace(/[^x20-x7Eu00C0-u024F
-r	]/g, "");
+  const printable = text.replace(/[^\x20-\x7E\u00C0-\u024F\n\r\t]/g, "");
   const ratio = printable.length / text.length;
   return ratio >= 0.7;
 }
@@ -250,8 +249,7 @@ async function extractTextFromFile(
     try {
       const rawText = await fileData.text();
       if (!rawText.trimStart().startsWith("%PDF-")) {
-        const cleanText = rawText.replace(/[^x20-x7E
-r	u00C0-u024F]/g, "").trim();
+        const cleanText = rawText.replace(/[^\x20-\x7E\n\r\t\u00C0-\u024F]/g, "").trim();
         if (cleanText.length > 200 && isReadableText(cleanText)) {
           return { text: cleanText, method: "pdf_text_extraction", tooBig: false };
         }
@@ -294,45 +292,43 @@ function detectDocumentType(documentType: string | null, fileName: string | null
 }
 
 function extractFieldsFromText(text: string, detectedType: string): Record<string, unknown> {
-  const normalized = text.replace(/r/g, "");
+  const normalized = text.replace(/\r/g, "");
   const result: Record<string, unknown> = { detected_document_type: detectedType };
 
-  const weekMatch = normalized.match(/(?:het(?:e|u00e9ben|eben)?|week)s*[:-]?s*(d{1,2})/i);
+  const weekMatch = normalized.match(/(?:het(?:e|\u00e9ben|eben)?|week)\s*[:-]?\s*(\d{1,2})/i);
   if (weekMatch) result.week_number = Number(weekMatch[1]);
 
   const contractMatch = normalized.match(
-    /(?:szerz[u0151o]d[u00e9e]s(?:sz[u00e1a]m)?|contract(?: number)?)s*[:-]?s*([A-Z0-9-/]+)/i,
+    /(?:szerz[\u0151o]d[\u00e9e]s(?:sz[\u00e1a]m)?|contract(?: number)?)\s*[:-]?\s*([A-Z0-9-/]+)/i,
   );
   if (contractMatch) result.contract_number = contractMatch[1];
 
   const shareCountMatch = normalized.match(
-    /(?:r[u00e9e]szv[u00e9e]ny(?:ek)?s*sz[u00e1a]ma|share count)s*[:-]?s*(d+)/i,
+    /(?:r[\u00e9e]szv[\u00e9e]ny(?:ek)?\s*sz[\u00e1a]ma|share count)\s*[:-]?\s*(\d+)/i,
   );
   if (shareCountMatch) result.share_count = Number(shareCountMatch[1]);
 
   const annualFeeMatch = normalized.match(
-    /(?:fenntart[au00e1]si d[iu00ed]j|annual fee)s*[:-]?s*([ds.,]+)s*(?:ft|huf)?/i,
+    /(?:fenntart[a\u00e1]si d[i\u00ed]j|annual fee)\s*[:-]?\s*([\d\s.,]+)\s*(?:ft|huf)?/i,
   );
   if (annualFeeMatch) result.annual_fee = annualFeeMatch[1].trim();
 
-  const ownerLineMatch = normalized.match(/(?:jogosult|tulajdonos|owner|n[u00e9e]v)s*[:-]?s*([^
-]+)/i);
+  const ownerLineMatch = normalized.match(/(?:jogosult|tulajdonos|owner|n[\u00e9e]v)\s*[:-]?\s*([^\n]+)/i);
   if (ownerLineMatch) result.owner_name = ownerLineMatch[1].trim();
 
   const resortLineMatch = normalized.match(
-    /(?:u00fcd[u00fcu00fc]l[u0151o]ingatlan|resort|hotel|club)s*[:-]?s*([^
-]+)/i,
+    /(?:\u00fcd[\u00fc\u00fc]l[\u0151o]ingatlan|resort|hotel|club)\s*[:-]?\s*([^\n]+)/i,
   );
   if (resortLineMatch) result.resort_name = resortLineMatch[1].trim();
 
   const unitNumberMatch = normalized.match(
-    /(?:egys[u00e9e]g(?:sz[u00e1a]m)?|apartmans*sz[u00e1a]m|unit(?:s*number)?|apart(?:ment)?s*no)s*[:-]?s*([A-Z0-9-/]+)/i,
+    /(?:egys[\u00e9e]g(?:sz[\u00e1a]m)?|apartman\s*sz[\u00e1a]m|unit(?:\s*number)?|apart(?:ment)?\s*no)\s*[:-]?\s*([A-Z0-9-/]+)/i,
   );
   if (unitNumberMatch) result.unit_number = unitNumberMatch[1].trim();
 
   // Capacity: csak pozitív egész szám (1-20), 0 nem érvényes
   const capacityMatch = normalized.match(
-    /(?:(d+)s*f[u0151o]s*(?:r[u00e9e]sz[u00e9e]re|sz[u00e1a]m[u00e1a]ra)?|(d+)s*szem[u00e9e]lyes|capacitys*[:-]?s*(d+))/i,
+    /(?:(\d+)\s*f[\u0151o]\s*(?:r[\u00e9e]sz[\u00e9e]re|sz[\u00e1a]m[\u00e1a]ra)?|(\d+)\s*szem[\u00e9e]lyes|capacity\s*[:-]?\s*(\d+))/i,
   );
   if (capacityMatch) {
     const cap = Number(capacityMatch[1] ?? capacityMatch[2] ?? capacityMatch[3]);
@@ -365,23 +361,7 @@ async function extractFieldsWithAI(
           messages: [
             {
               role: "user",
-              content: `Te egy magyar udulesi szerzodoseket elemzo asszisztens vagy. A megadott szerzodes szovegebol nyerd ki a kovetkezo mezokat JSON formatumban. Csak valodi adatokat adj vissza, ne talalj ki semmit. Ha egy mezo nem talalhato, hagyd ki. FONTOS: a capacity (szemelyek szama) csak 1-20 kozotti pozitiv egesz szam lehet, ha 0-t vagy negativ szamot latnal, hagyd ki.
-
-Keresendo mezok:
-- resort_name: udulohely neve
-- week_number: het szama egesz szamkent
-- owner_name: tulajdonos neve
-- contract_number: szerzodes szama
-- annual_fee: eves fenntartasi dij szamkent (pl. 150000)
-- share_count: reszvenyek darabszama
-- unit_type: apartman tipusa (pl. studio, 1 haloszobas)
-- unit_number: egyseg/apartman azonositoja (pl. A-12 vagy 304)
-- capacity: max elhelyezheto fo szama egesz szamkent (csak 1-20 kozotti ertek)
-
-Valaszolj KIZAROLAG valid JSON objektummal, semmi massal.
-
-Szerzodes szovege:
-${text.substring(0, 8000)}`,
+              content: `Te egy magyar udulesi szerzodoseket elemzo asszisztens vagy. A megadott szerzodes szovegebol nyerd ki a kovetkezo mezokat JSON formatumban. Csak valodi adatokat adj vissza, ne talalj ki semmit. Ha egy mezo nem talalhato, hagyd ki. FONTOS: a capacity (szemelyek szama) csak 1-20 kozotti pozitiv egesz szam lehet, ha 0-t vagy negativ szamot latnal, hagyd ki.\n\nKeresendo mezok:\n- resort_name: udulohely neve\n- week_number: het szama egesz szamkent\n- owner_name: tulajdonos neve\n- contract_number: szerzodes szama\n- annual_fee: eves fenntartasi dij szamkent (pl. 150000)\n- share_count: reszvenyek darabszama\n- unit_type: apartman tipusa (pl. studio, 1 haloszobas)\n- unit_number: egyseg/apartman azonositoja (pl. A-12 vagy 304)\n- capacity: max elhelyezheto fo szama egesz szamkent (csak 1-20 kozotti ertek)\n\nValaszolj KIZAROLAG valid JSON objektummal, semmi massal.\n\nSzerzodes szovege:\n${text.substring(0, 8000)}`,
             },
           ],
         }),
@@ -479,7 +459,7 @@ async function buildRestrictionHitsFromDb(
         .filter((p) => p.length > 0);
 
       for (const pattern of patterns) {
-        const escapedPattern = pattern.replace(/[.*+?^${}()|[]]/g, "$&");
+        const escapedPattern = pattern.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
         const wordBoundaryRegex = new RegExp(`(?<![a-z0-9])${escapedPattern}(?![a-z0-9])`, "i");
 
         if (wordBoundaryRegex.test(normalizedText)) {
