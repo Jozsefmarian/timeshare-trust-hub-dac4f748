@@ -1081,7 +1081,7 @@ export default function NewCase() {
                       }}
                     >
                       <Upload className="h-5 w-5 mx-auto text-muted-foreground mb-1" />
-                      <p className="text-xs text-muted-foreground">Húzza ide a fájlt vagy kattintson a feltöltéshez</p>
+                      <p className="text-xs text-muted-foreground">Húzza ide a fájlt vagy kattintson a feltöltéshez (fájl méret max. 4 MB)</p>
                     </div>
                     {filesForCategory(doc.key).map((f) => (
                       <div
