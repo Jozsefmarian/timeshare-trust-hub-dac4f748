@@ -8,6 +8,27 @@ const ALLOWED_ORIGINS = [
 ];
 
 const AI_TIMEOUT_MS = 60_000;
+const MAX_IMAGE_SIZE_BYTES = 4 * 1024 * 1024; // 4 MB
+
+// Claude visszautasitas detektalas: ha ezek a mintak szerepelnek a valaszban,
+// az OCR visszautasitotta a feldolgozast (pl. teves szerzoi jogi aggaly)
+const OCR_REFUSAL_PATTERNS = [
+  "nem tudom ezt a kerest teljesiteni",
+  "szerzoi jogi",
+  "nem reprodukalhato",
+  "nem all modomban",
+  "nem tudok segiteni",
+  "jogosulatlan masolass",
+];
+
+function isOcrRefusal(text: string): boolean {
+  if (!text || text.length === 0) return false;
+  const normalized = text
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+  return OCR_REFUSAL_PATTERNS.some((pattern) => normalized.includes(pattern));
+}
 
 function getCorsHeaders(req: Request): Record<string, string> {
   const origin = req.headers.get("Origin") ?? "";
@@ -158,6 +179,12 @@ async function callClaudeOCR(
       return "";
     }
 
+    // A) OCR prompt modositasa: adatfeldolgozasi cel egyertelmu jelzese
+    // Ez megakadalyozza a teves szerzoi jogi visszautasitast
+    const ocrPrompt = isPdf
+      ? "Ez egy automatizalt dokumentumelemzo rendszer. A feltoltott fajlbol kizarolag az adatmezok kinyerese a cel statisztikai feldolgozashoz. Ird ki az osszes lathato szoveget a dokumentumrol. Csak a szoveget add vissza, semmi mast. Orizdz meg az eredeti strukturat, ne adj magyarazatot vagy kommentart."
+      : "Ez egy automatizalt dokumentumelemzo rendszer. A feltoltott keprol kizarolag az adatmezok kinyerese a cel statisztikai feldolgozashoz. Ird ki az osszes lathato szoveget a keprol. Csak a szoveget add vissza, semmi mast. Orizdz meg az eredeti strukturat, ne adj magyarazatot vagy kommentart.";
+
     const response = await fetchWithTimeout(
       "https://api.anthropic.com/v1/messages",
       {
@@ -173,13 +200,7 @@ async function callClaudeOCR(
           messages: [
             {
               role: "user",
-              content: [
-                contentBlock,
-                {
-                  type: "text",
-                  text: "Kinyom ki az osszes szoveget ebbol a dokumentumbol. Csak a szoveget add vissza, semmi mast. Orizdz meg az eredeti strukturat, de ne adj magyarazatot vagy kommentart.",
-                },
-              ],
+              content: [contentBlock, { type: "text", text: ocrPrompt }],
             },
           ],
         }),
@@ -195,7 +216,15 @@ async function callClaudeOCR(
 
     const data = await response.json();
     const textBlock = data.content?.find((b: any) => b.type === "text");
-    return (textBlock?.text ?? "") as string;
+    const resultText = (textBlock?.text ?? "") as string;
+
+    // B) Visszautasitas detektalas: ha Claude visszautasitotta, ures stringet adunk vissza
+    if (isOcrRefusal(resultText)) {
+      console.warn("Claude OCR refusal detected, treating as empty text. File:", fileName);
+      return "";
+    }
+
+    return resultText;
   } catch (err: unknown) {
     if (err instanceof Error && err.name === "AbortError") console.error("Claude OCR timeout");
     else console.error("Claude OCR call failed:", err);
@@ -208,27 +237,33 @@ async function extractTextFromFile(
   mimeType: string | null,
   fileName: string | null,
   anthropicKey: string,
-): Promise<{ text: string; method: string }> {
+  fileSizeBytes: number | null,
+): Promise<{ text: string; method: string; tooBig: boolean }> {
   const effectiveMime = (mimeType ?? "").toLowerCase();
+
+  if (effectiveMime.startsWith("image/") && fileSizeBytes !== null && fileSizeBytes > MAX_IMAGE_SIZE_BYTES) {
+    console.warn(`Image too large for OCR: ${fileSizeBytes} bytes (max ${MAX_IMAGE_SIZE_BYTES}). File: ${fileName}`);
+    return { text: "", method: "skipped_too_large", tooBig: true };
+  }
 
   if (effectiveMime.startsWith("text/") || effectiveMime === "application/json") {
     try {
-      return { text: await fileData.text(), method: "direct_text" };
+      return { text: await fileData.text(), method: "direct_text", tooBig: false };
     } catch {
-      return { text: "", method: "direct_text_failed" };
+      return { text: "", method: "direct_text_failed", tooBig: false };
     }
   }
 
   if (!anthropicKey) {
     console.warn("No ANTHROPIC_API_KEY -- cannot extract text from non-text file");
-    return { text: "", method: "stub_no_key" };
+    return { text: "", method: "stub_no_key", tooBig: false };
   }
 
   const base64 = uint8ToBase64(new Uint8Array(await fileData.arrayBuffer()));
 
   if (effectiveMime.startsWith("image/")) {
     const text = await callClaudeOCR(base64, effectiveMime, anthropicKey, fileName);
-    return { text, method: text.length > 0 ? "claude_vision" : "claude_vision_failed" };
+    return { text, method: text.length > 0 ? "claude_vision" : "claude_vision_failed", tooBig: false };
   }
 
   if (effectiveMime === "application/pdf" || effectiveMime === "application/x-pdf") {
@@ -237,7 +272,7 @@ async function extractTextFromFile(
       if (!rawText.trimStart().startsWith("%PDF-")) {
         const cleanText = rawText.replace(/[^\x20-\x7E\n\r\t\u00C0-\u024F]/g, "").trim();
         if (cleanText.length > 200 && isReadableText(cleanText)) {
-          return { text: cleanText, method: "pdf_text_extraction" };
+          return { text: cleanText, method: "pdf_text_extraction", tooBig: false };
         }
       }
     } catch {
@@ -246,18 +281,18 @@ async function extractTextFromFile(
 
     const pdfText = await callClaudeOCR(base64, "application/pdf", anthropicKey, fileName);
     if (pdfText.length > 0) {
-      return { text: pdfText, method: "claude_pdf" };
+      return { text: pdfText, method: "claude_pdf", tooBig: false };
     }
-    return { text: "", method: "claude_pdf_failed" };
+    return { text: "", method: "claude_pdf_failed", tooBig: false };
   }
 
   try {
     const t = await fileData.text();
-    if (isReadableText(t)) return { text: t, method: "fallback_text" };
+    if (isReadableText(t)) return { text: t, method: "fallback_text", tooBig: false };
   } catch {
     /* ignore */
   }
-  return { text: "", method: "fallback_failed" };
+  return { text: "", method: "fallback_failed", tooBig: false };
 }
 
 function detectDocumentType(documentType: string | null, fileName: string | null): string {
@@ -303,7 +338,7 @@ function extractFieldsFromText(text: string, detectedType: string): Record<strin
   if (ownerLineMatch) result.owner_name = ownerLineMatch[1].trim();
 
   const resortLineMatch = normalized.match(
-    /(?:\u00fcd[\u00fcü]l[\u0151o]ingatlan|resort|hotel|club)\s*[:-]?\s*([^\n]+)/i,
+    /(?:\u00fcd[\u00fc\u00fc]l[\u0151o]ingatlan|resort|hotel|club)\s*[:-]?\s*([^\n]+)/i,
   );
   if (resortLineMatch) result.resort_name = resortLineMatch[1].trim();
 
@@ -329,9 +364,7 @@ async function extractFieldsWithAI(
   documentType: string,
 ): Promise<Record<string, unknown>> {
   if (!text || text.length < 50 || !anthropicKey) return {};
-  if (!["timeshare_contract", "share_statement"].includes(documentType)) {
-    return {};
-  }
+  if (!["timeshare_contract", "share_statement"].includes(documentType)) return {};
   try {
     const response = await fetchWithTimeout(
       "https://api.anthropic.com/v1/messages",
@@ -370,15 +403,6 @@ async function extractFieldsWithAI(
   }
 }
 
-// ── KULCSSZO + HET KORLATOZAS SCAN ──────────────────────────────────────────
-//
-// Változások v158 → v159:
-// 1. keyword_ban: szóhatáros regex keresés az egyszerű includes() helyett
-//    - normalizeText után pl. "elovasarlasi" tartalmazza az "elovasarlas" mintát → TALÁLAT
-//    - de "15-4524" NEM tartalmazza a "32"-t szóhatárként → NEM TALÁLAT
-// 2. week_ban: csak timeshare_contract dokumentumban fut le
-//    - klubrend, bizonylat, egyéb dokumentumokban NEM keres hétsorszámot
-//
 async function buildRestrictionHitsFromDb(
   text: string,
   serviceClient: any,
@@ -402,11 +426,8 @@ async function buildRestrictionHitsFromDb(
     }
   }
 
-  if (!resolvedPolicyId) {
-    return [];
-  }
+  if (!resolvedPolicyId) return [];
 
-  // Betöltjük az összes aktív szabályt (keyword_ban + week_ban)
   let rules: DbRestrictionRule[] = [];
   try {
     const { data, error } = await serviceClient
@@ -424,7 +445,6 @@ async function buildRestrictionHitsFromDb(
 
   if (rules.length === 0) return [];
 
-  // Week offer adatok betöltése a week_ban ellenőrzéshez
   let weekNumber: number | null = null;
   let resortId: string | null = null;
   try {
@@ -445,21 +465,16 @@ async function buildRestrictionHitsFromDb(
   for (const rule of rules) {
     if (!rule.match_value) continue;
 
-    // ── 1. Kulcsszó tiltás ────────────────────────────────────────────────
-    // Minden dokumentum típusban fut (timeshare_contract, sif_document, stb.)
-    // Szóhatáros regex: az "elovasarlas" mintát megtalálja az "elovasarlasi jog"-ban,
-    // de NEM találja meg a "15-4524" vagy "132" szövegrészekben.
     if (rule.rule_type === "keyword_ban" || rule.rule_type === "keyword") {
+      if (!normalizedText) continue;
+
       const patterns = rule.match_value
         .split(",")
         .map((p) => normalizeText(p))
         .filter((p) => p.length > 0);
 
       for (const pattern of patterns) {
-        // Escape speciális regex karakterek a mintában
         const escapedPattern = pattern.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-        // Szóhatáros regex: (?<![\w\d]) és (?![\w\d]) helyett
-        // a normalizeText már eltávolította az ékezeteket, így \w működik
         const wordBoundaryRegex = new RegExp(`(?<![a-z0-9])${escapedPattern}(?![a-z0-9])`, "i");
 
         if (wordBoundaryRegex.test(normalizedText)) {
@@ -490,35 +505,21 @@ async function buildRestrictionHitsFromDb(
               excerpt,
             },
           });
-
-          // Egy szabályból elég egy találat
           break;
         }
       }
     }
 
-    // ── 2. Hét korlátozás ─────────────────────────────────────────────────
-    // CSAK timeshare_contract dokumentumban fut — klubrendben, bizonylatban NEM.
-    // Indok: az üdülési hét sorszáma az üdülőhasználati szerződésben van rögzítve.
     if (rule.rule_type === "week_ban") {
-      // Kihagyjuk, ha nem üdülőhasználati szerződés
       if (detectedDocumentType !== "timeshare_contract") {
         console.log(`week_ban skip: document type is '${detectedDocumentType}', only runs on timeshare_contract`);
         continue;
       }
-
-      // Ha nincs week_number a case-ben, nem tudunk ellenőrizni
       if (weekNumber === null) continue;
 
-      // Resort szűrés:
-      // - field_name === null → minden resortra vonatkozik
-      // - field_name === resort UUID → csak arra a resortra vonatkozik
       const ruleResortId = rule.field_name ?? null;
-      if (ruleResortId !== null && ruleResortId !== resortId) {
-        continue;
-      }
+      if (ruleResortId !== null && ruleResortId !== resortId) continue;
 
-      // Hétsorszámok feldarabolása és ellenőrzése
       const bannedWeeks = rule.match_value
         .split(",")
         .map((w) => w.trim())
@@ -530,7 +531,6 @@ async function buildRestrictionHitsFromDb(
         console.log(
           `week_ban hit: week_number=${weekNumber} found in rule ${rule.id} (resort=${ruleResortId ?? "all"})`,
         );
-
         hits.push({
           rule_id: rule.id,
           matched_text: String(weekNumber),
@@ -556,30 +556,23 @@ async function buildRestrictionHitsFromDb(
 function resortNamesSimilar(a: string, b: string): boolean {
   const na = normalizeText(a);
   const nb = normalizeText(b);
-
   if (na === nb) return true;
   if (na.length >= 5 && nb.includes(na)) return true;
   if (nb.length >= 5 && na.includes(nb)) return true;
-
   const wordsA = na.split(" ").filter((w) => w.length >= 3);
   const wordsB = nb.split(" ").filter((w) => w.length >= 3);
   const shorter = wordsA.length <= wordsB.length ? wordsA : wordsB;
   const longerStr = wordsA.length <= wordsB.length ? nb : na;
-
   if (shorter.length >= 1) {
     const matchCount = shorter.filter((w) => longerStr.includes(w)).length;
-    const ratio = matchCount / shorter.length;
-    if (ratio >= 0.6) return true;
+    if (matchCount / shorter.length >= 0.6) return true;
   }
-
   const minLen = 6;
   const shortStr = na.length <= nb.length ? na : nb;
   const longStr = na.length <= nb.length ? nb : na;
   for (let i = 0; i <= shortStr.length - minLen; i++) {
-    const sub = shortStr.substring(i, i + minLen);
-    if (longStr.includes(sub)) return true;
+    if (longStr.includes(shortStr.substring(i, i + minLen))) return true;
   }
-
   return false;
 }
 
@@ -593,6 +586,10 @@ function textSimilar(a: string, b: string): boolean {
   return false;
 }
 
+// C) Field_match logika javitasa:
+// Ha volt szoveg (textExtracted=true) de egy mezo nem szerepel benne,
+// azt NEM tekintjuk mismatch-nek — egyszeruen kihagyjuk az osszehasonlitasbol.
+// Csak akkor mismatch, ha a mezo megtalalhato a dokumentumban ES eltero erteket mutat.
 function compareWithWeekOffer(
   extractedFields: Record<string, unknown>,
   weekOffer: WeekOfferRow,
@@ -601,12 +598,12 @@ function compareWithWeekOffer(
 ): MismatchResult[] {
   if (documentType !== "timeshare_contract") return [];
   if (!textExtracted) return [];
-
   const results: MismatchResult[] = [];
 
   if (weekOffer.resort_name_raw) {
     const docResort = extractedFields.resort_name as string | null | undefined;
-    if (docResort) {
+    if (docResort != null && docResort !== "") {
+      // Mező megtalálható a dokumentumban — összehasonlítjuk
       results.push({
         field_name: "resort_name_raw",
         field_label: "Uduloingatlan neve",
@@ -614,20 +611,14 @@ function compareWithWeekOffer(
         doc_value: docResort,
         is_mismatch: !resortNamesSimilar(docResort, weekOffer.resort_name_raw),
       });
-    } else {
-      results.push({
-        field_name: "resort_name_raw",
-        field_label: "Uduloingatlan neve",
-        form_value: weekOffer.resort_name_raw,
-        doc_value: null,
-        is_mismatch: true,
-      });
     }
+    // Ha docResort null/undefined: a mezo nem szerepel ebben a dokumentumban — kihagyjuk
   }
 
   if (weekOffer.week_number != null) {
     const docWeek = extractedFields.week_number as number | null | undefined;
     if (docWeek != null) {
+      // Mező megtalálható — összehasonlítjuk
       results.push({
         field_name: "week_number",
         field_label: "Udulesi het sorszama",
@@ -635,15 +626,8 @@ function compareWithWeekOffer(
         doc_value: docWeek,
         is_mismatch: Number(docWeek) !== Number(weekOffer.week_number),
       });
-    } else {
-      results.push({
-        field_name: "week_number",
-        field_label: "Udulesi het sorszama",
-        form_value: weekOffer.week_number,
-        doc_value: null,
-        is_mismatch: true,
-      });
     }
+    // Ha docWeek null: a mezo nem szerepel ebben a dokumentumban — kihagyjuk
   }
 
   const docUnitNumber = extractedFields.unit_number as string | null | undefined;
@@ -679,6 +663,7 @@ async function saveCheckResults(
   restrictionHits: RestrictionHit[],
   mismatchResults: MismatchResult[],
   unreadableDocument: boolean,
+  imageTooBig: boolean,
 ) {
   const rows: Array<Record<string, unknown>> = [];
 
@@ -703,6 +688,21 @@ async function saveCheckResults(
       message: "Confirmed restriction found in document.",
       details: { source: "db_restriction_scan" },
     });
+  }
+
+  if (imageTooBig) {
+    rows.push({
+      case_id: caseId,
+      document_id: documentId,
+      check_type: "document_check",
+      result: "correction_required",
+      severity: "correction",
+      message: "A feltoltott fajl merete tul nagy, kerem toltse fel ujra kisebb felbontasban.",
+      details: { document_type_id: documentTypeId, source: "image_too_large", file_size_limit_mb: 4 },
+    });
+    const { error } = await serviceClient.from("check_results").insert(rows);
+    if (error) throw error;
+    return;
   }
 
   if (unreadableDocument) {
@@ -835,9 +835,8 @@ Deno.serve(async (req) => {
 
     if (jobLoadError || !job)
       return jsonResponse({ error: "AI validation job not found", detail: jobLoadError?.message ?? null }, 404);
-    if (["completed", "failed", "cancelled"].includes(job.status)) {
+    if (["completed", "failed", "cancelled"].includes(job.status))
       return jsonResponse({ success: true, skipped: true, reason: `Job already ${job.status}`, job_id: job.id });
-    }
     if (!job.document_id) return jsonResponse({ error: "Job has no document_id" }, 400);
 
     await serviceClient
@@ -880,11 +879,19 @@ Deno.serve(async (req) => {
     const anthropicKey = Deno.env.get("ANTHROPIC_API_KEY") ?? "";
     let extractedTextRaw = "";
     let ocrMethod = "unknown";
+    let imageTooBig = false;
     try {
-      const { text, method } = await extractTextFromFile(fileData, doc.mime_type, doc.original_file_name, anthropicKey);
+      const { text, method, tooBig } = await extractTextFromFile(
+        fileData,
+        doc.mime_type,
+        doc.original_file_name,
+        anthropicKey,
+        doc.file_size_bytes,
+      );
       extractedTextRaw = text;
       ocrMethod = method;
-      console.log(`OCR: method=${method}, chars=${text.length}`);
+      imageTooBig = tooBig;
+      console.log(`OCR: method=${method}, chars=${text.length}, tooBig=${tooBig}`);
     } catch (ocrErr) {
       console.error("Text extraction error (non-fatal):", ocrErr);
       ocrMethod = "error";
@@ -903,46 +910,46 @@ Deno.serve(async (req) => {
       if (Object.keys(aiFields).length > 0) console.log("AI extracted fields:", JSON.stringify(aiFields));
     }
     const extractedFields = { ...regexFields, ...aiFields };
-
     const textExtracted = extractedTextRaw.length >= 100;
 
     let mismatchResults: MismatchResult[] = [];
     let unreadableTimeshareDoc = false;
 
-    try {
-      const { data: weekOffer } = await serviceClient
-        .from("week_offers")
-        .select("resort_name_raw, week_number, unit_number, capacity, resort_id")
-        .eq("case_id", doc.case_id)
-        .maybeSingle();
+    if (!imageTooBig) {
+      try {
+        const { data: weekOffer } = await serviceClient
+          .from("week_offers")
+          .select("resort_name_raw, week_number, unit_number, capacity, resort_id")
+          .eq("case_id", doc.case_id)
+          .maybeSingle();
 
-      if (weekOffer) {
-        if (detectedType === "timeshare_contract" && !textExtracted) {
-          unreadableTimeshareDoc = true;
-          console.log(`timeshare_contract unreadable: chars_extracted=${extractedTextRaw.length}`);
-        } else {
-          mismatchResults = compareWithWeekOffer(
-            extractedFields,
-            weekOffer as WeekOfferRow,
-            detectedType,
-            textExtracted,
-          );
-          const mismatches = mismatchResults.filter((m) => m.is_mismatch);
-          console.log(
-            `Mismatch check (${detectedType}): ${mismatches.length} mismatches, chars_extracted=${extractedTextRaw.length}`,
-          );
-          if (mismatches.length > 0)
-            console.log(
-              "Mismatches:",
-              JSON.stringify(mismatches.map((m) => ({ field: m.field_name, form: m.form_value, doc: m.doc_value }))),
+        if (weekOffer) {
+          if (detectedType === "timeshare_contract" && !textExtracted) {
+            unreadableTimeshareDoc = true;
+            console.log(`timeshare_contract unreadable: chars_extracted=${extractedTextRaw.length}`);
+          } else {
+            mismatchResults = compareWithWeekOffer(
+              extractedFields,
+              weekOffer as WeekOfferRow,
+              detectedType,
+              textExtracted,
             );
+            const mismatches = mismatchResults.filter((m) => m.is_mismatch);
+            console.log(
+              `Mismatch check (${detectedType}): ${mismatches.length} mismatches, chars_extracted=${extractedTextRaw.length}`,
+            );
+            if (mismatches.length > 0)
+              console.log(
+                "Mismatches:",
+                JSON.stringify(mismatches.map((m) => ({ field: m.field_name, form: m.form_value, doc: m.doc_value }))),
+              );
+          }
         }
+      } catch (mismatchErr) {
+        console.error("Mismatch comparison error (non-blocking):", mismatchErr);
       }
-    } catch (mismatchErr) {
-      console.error("Mismatch comparison error (non-blocking):", mismatchErr);
     }
 
-    // Restriction scan — detectedType-t is átadjuk a week_ban dokumentumtípus-szűréshez
     const restrictionHits = await buildRestrictionHitsFromDb(
       extractedTextRaw,
       serviceClient,
@@ -960,11 +967,12 @@ Deno.serve(async (req) => {
       restrictionHits,
       mismatchResults,
       unreadableTimeshareDoc,
+      imageTooBig,
     );
 
     const validationStatus = restrictionHits.some((h) => h.severity === "confirmed")
       ? "restriction_confirmed"
-      : unreadableTimeshareDoc
+      : imageTooBig || unreadableTimeshareDoc
         ? "failed"
         : "match_ok";
 
@@ -980,6 +988,7 @@ Deno.serve(async (req) => {
           detected_document_type: detectedType,
           ocr_method: ocrMethod,
           chars_extracted: extractedTextRaw.length,
+          image_too_big: imageTooBig,
         },
         extracted_fields: extractedFields,
       })
@@ -998,6 +1007,7 @@ Deno.serve(async (req) => {
           chars_extracted: extractedTextRaw.length,
           mismatch_count: mismatchResults.filter((m) => m.is_mismatch).length,
           unreadable_document: unreadableTimeshareDoc,
+          image_too_big: imageTooBig,
         },
       })
       .eq("id", job.id);
@@ -1008,14 +1018,13 @@ Deno.serve(async (req) => {
         headers: { "Content-Type": "application/json", apikey: serviceRoleKey },
         body: JSON.stringify({ case_id: doc.case_id, policy_version_id: job.policy_version_id ?? null }),
       });
-
       if (!classifyResponse.ok) {
         console.error("classify-case invoke failed:", classifyResponse.status, await classifyResponse.text());
       } else {
         const classifyData = await classifyResponse.json();
         if (classifyData.pending) {
           console.log(
-            `classify-case returned pending (${classifyData.docs_done}/${classifyData.docs_total} docs done) -- waiting for other documents`,
+            `classify-case returned pending (${classifyData.docs_done}/${classifyData.docs_total} docs done)`,
           );
         } else {
           console.log(
@@ -1037,6 +1046,7 @@ Deno.serve(async (req) => {
       mismatch_count: mismatchResults.filter((m) => m.is_mismatch).length,
       mismatch_fields: mismatchResults.filter((m) => m.is_mismatch).map((m) => m.field_name),
       unreadable_document: unreadableTimeshareDoc,
+      image_too_big: imageTooBig,
       ocr_method: ocrMethod,
       chars_extracted: extractedTextRaw.length,
     });
