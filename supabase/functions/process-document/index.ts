@@ -372,23 +372,19 @@ async function extractFieldsWithAI(
 
 // ── KULCSSZO + HET KORLATOZAS SCAN ──────────────────────────────────────────
 //
-// Ez a fuggveny ket dolgot csinal:
-// 1. Kulcsszo tiltás (keyword_ban):
-//    - A match_value vesszővel elválasztott lista lehet (pl. "elővásárlási jog, átruházás tilos")
-//    - Minden egyes kulcsszóra külön keres a dokumentum szövegében
-//    - severity=confirmed → auto_reject (piros)
-//    - severity=suspected → flag_manual_legal (sárga, manuális review)
-//
-// 2. Hét korlátozás (week_ban):
-//    - A match_value vesszővel elválasztott hétsorszám lista (pl. "1,2,3,43,44")
-//    - A field_name tartalmazza a resort UUID-t, vagy NULL = minden resortra vonatkozik
-//    - Ha a case week_number szerepel a listában ÉS a resort egyezik → manuális review (sárga)
+// Változások v158 → v159:
+// 1. keyword_ban: szóhatáros regex keresés az egyszerű includes() helyett
+//    - normalizeText után pl. "elovasarlasi" tartalmazza az "elovasarlas" mintát → TALÁLAT
+//    - de "15-4524" NEM tartalmazza a "32"-t szóhatárként → NEM TALÁLAT
+// 2. week_ban: csak timeshare_contract dokumentumban fut le
+//    - klubrend, bizonylat, egyéb dokumentumokban NEM keres hétsorszámot
 //
 async function buildRestrictionHitsFromDb(
   text: string,
   serviceClient: any,
   policyVersionId: string | null,
   caseId: string,
+  detectedDocumentType: string,
 ): Promise<RestrictionHit[]> {
   let resolvedPolicyId = policyVersionId;
   if (!resolvedPolicyId) {
@@ -450,15 +446,23 @@ async function buildRestrictionHitsFromDb(
     if (!rule.match_value) continue;
 
     // ── 1. Kulcsszó tiltás ────────────────────────────────────────────────
+    // Minden dokumentum típusban fut (timeshare_contract, sif_document, stb.)
+    // Szóhatáros regex: az "elovasarlas" mintát megtalálja az "elovasarlasi jog"-ban,
+    // de NEM találja meg a "15-4524" vagy "132" szövegrészekben.
     if (rule.rule_type === "keyword_ban" || rule.rule_type === "keyword") {
-      // Vesszős lista feldarabolása
       const patterns = rule.match_value
         .split(",")
         .map((p) => normalizeText(p))
         .filter((p) => p.length > 0);
 
       for (const pattern of patterns) {
-        if (normalizedText.includes(pattern)) {
+        // Escape speciális regex karakterek a mintában
+        const escapedPattern = pattern.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        // Szóhatáros regex: (?<![\w\d]) és (?![\w\d]) helyett
+        // a normalizeText már eltávolította az ékezeteket, így \w működik
+        const wordBoundaryRegex = new RegExp(`(?<![a-z0-9])${escapedPattern}(?![a-z0-9])`, "i");
+
+        if (wordBoundaryRegex.test(normalizedText)) {
           const severity: "suspected" | "confirmed" = rule.severity === "confirmed" ? "confirmed" : "suspected";
           const action: "flag_manual_legal" | "auto_reject" | "allow_but_yellow" =
             severity === "confirmed" ? "auto_reject" : "flag_manual_legal";
@@ -487,14 +491,22 @@ async function buildRestrictionHitsFromDb(
             },
           });
 
-          // Egy szabályból elég egy találat (ne duplikáljon ugyanabból a szabályból)
+          // Egy szabályból elég egy találat
           break;
         }
       }
     }
 
     // ── 2. Hét korlátozás ─────────────────────────────────────────────────
+    // CSAK timeshare_contract dokumentumban fut — klubrendben, bizonylatban NEM.
+    // Indok: az üdülési hét sorszáma az üdülőhasználati szerződésben van rögzítve.
     if (rule.rule_type === "week_ban") {
+      // Kihagyjuk, ha nem üdülőhasználati szerződés
+      if (detectedDocumentType !== "timeshare_contract") {
+        console.log(`week_ban skip: document type is '${detectedDocumentType}', only runs on timeshare_contract`);
+        continue;
+      }
+
       // Ha nincs week_number a case-ben, nem tudunk ellenőrizni
       if (weekNumber === null) continue;
 
@@ -503,7 +515,6 @@ async function buildRestrictionHitsFromDb(
       // - field_name === resort UUID → csak arra a resortra vonatkozik
       const ruleResortId = rule.field_name ?? null;
       if (ruleResortId !== null && ruleResortId !== resortId) {
-        // Ez a szabály egy másik resortra vonatkozik, kihagyjuk
         continue;
       }
 
@@ -931,12 +942,13 @@ Deno.serve(async (req) => {
       console.error("Mismatch comparison error (non-blocking):", mismatchErr);
     }
 
-    // Restriction scan — most már caseId-t is kap a week_ban ellenőrzéshez
+    // Restriction scan — detectedType-t is átadjuk a week_ban dokumentumtípus-szűréshez
     const restrictionHits = await buildRestrictionHitsFromDb(
       extractedTextRaw,
       serviceClient,
       job.policy_version_id,
       doc.case_id,
+      detectedType,
     );
 
     await saveRestrictionHits(serviceClient, doc.case_id, doc.id, job.policy_version_id, restrictionHits);
