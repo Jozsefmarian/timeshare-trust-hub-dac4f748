@@ -64,6 +64,244 @@ function uniq(values: string[]) {
   return [...new Set(values)];
 }
 
+function normalizeText(value: string | null | undefined): string {
+  return (value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function resortNamesSimilar(a: string, b: string): boolean {
+  const na = normalizeText(a);
+  const nb = normalizeText(b);
+  if (na === nb) return true;
+  if (na.length >= 5 && nb.includes(na)) return true;
+  if (nb.length >= 5 && na.includes(nb)) return true;
+  const wordsA = na.split(" ").filter((w) => w.length >= 3);
+  const wordsB = nb.split(" ").filter((w) => w.length >= 3);
+  const shorter = wordsA.length <= wordsB.length ? wordsA : wordsB;
+  const longerStr = wordsA.length <= wordsB.length ? nb : na;
+  if (shorter.length >= 1) {
+    const matchCount = shorter.filter((w) => longerStr.includes(w)).length;
+    if (matchCount / shorter.length >= 0.6) return true;
+  }
+  const minLen = 6;
+  const shortStr = na.length <= nb.length ? na : nb;
+  const longStr = na.length <= nb.length ? nb : na;
+  for (let i = 0; i <= shortStr.length - minLen; i++) {
+    if (longStr.includes(shortStr.substring(i, i + minLen))) return true;
+  }
+  return false;
+}
+
+function textSimilar(a: string, b: string): boolean {
+  const na = normalizeText(a);
+  const nb = normalizeText(b);
+  if (na === nb) return true;
+  if (na.length >= 5 && nb.includes(na)) return true;
+  if (nb.length >= 5 && na.includes(nb)) return true;
+  if (na.split(" ")[0].length > 4 && na.split(" ")[0] === nb.split(" ")[0]) return true;
+  return false;
+}
+
+// Case-szintű field_match összehasonlítás
+// Az adott típusú dokumentumok összes szövegét + extracted_fields-jét összefűzi
+// és egységesen hasonlítja össze a form adatokkal.
+// Ez megoldja a több fájlban feltöltött szerződések problémáját.
+async function runCaseLevelFieldMatch(
+  serviceClient: any,
+  caseId: string,
+): Promise<{
+  mismatchResults: Array<{
+    field_name: string;
+    field_label: string;
+    form_value: any;
+    doc_value: any;
+    is_mismatch: boolean;
+  }>;
+  hasTimeshareText: boolean;
+}> {
+  // 1. Week offer betöltése
+  const { data: weekOffer } = await serviceClient
+    .from("week_offers")
+    .select("resort_name_raw, week_number, unit_number, capacity, resort_id")
+    .eq("case_id", caseId)
+    .maybeSingle();
+
+  if (!weekOffer) return { mismatchResults: [], hasTimeshareText: false };
+
+  // 2. Összes timeshare_contract típusú dokumentum betöltése
+  const { data: timeshareDocsRaw } = await serviceClient
+    .from("documents")
+    .select("id, extracted_text, extracted_fields, ai_status")
+    .eq("case_id", caseId)
+    .eq("upload_status", "uploaded")
+    .in("document_type", ["timeshare_contract", "timeshare_contract"])
+    .in("ai_status", ["completed"]);
+
+  // Ha nincs timeshare doc, próbáljuk a document_type_code alapján is
+  let timeshareDocs = timeshareDocsRaw ?? [];
+  if (timeshareDocs.length === 0) {
+    const { data: allDocs } = await serviceClient
+      .from("documents")
+      .select("id, document_type, extracted_text, extracted_fields, ai_status")
+      .eq("case_id", caseId)
+      .eq("upload_status", "uploaded")
+      .eq("ai_status", "completed");
+
+    timeshareDocs = (allDocs ?? []).filter((d: any) => {
+      const dt = (d.document_type ?? "").toLowerCase();
+      return dt.includes("timeshare") || dt.includes("contract") || dt.includes("udulo");
+    });
+  }
+
+  if (timeshareDocs.length === 0) return { mismatchResults: [], hasTimeshareText: false };
+
+  // 3. Összes szöveg és mező összefűzése
+  const allTexts: string[] = [];
+  const mergedFields: Record<string, unknown> = {};
+
+  for (const doc of timeshareDocs) {
+    const rawText = (doc.extracted_text as any)?.raw_text ?? "";
+    if (rawText && rawText.length > 0) allTexts.push(rawText);
+
+    // Mezők merge-elése: csak akkor írjuk felül, ha az új érték érvényes
+    const fields = (doc.extracted_fields ?? {}) as Record<string, unknown>;
+    for (const [key, value] of Object.entries(fields)) {
+      if (value === null || value === undefined || value === "") continue;
+      // capacity: csak 1-20 közötti érték érvényes
+      if (key === "capacity") {
+        const cap = Number(value);
+        if (cap >= 1 && cap <= 20) mergedFields[key] = cap;
+        continue;
+      }
+      mergedFields[key] = value;
+    }
+  }
+
+  const combinedText = allTexts.join("\n\n--- NEXT PAGE ---\n\n");
+  const hasTimeshareText = combinedText.length >= 100;
+
+  if (!hasTimeshareText) return { mismatchResults: [], hasTimeshareText: false };
+
+  // 4. Összehasonlítás az összefűzött szöveg és mezők alapján
+  const results: Array<{
+    field_name: string;
+    field_label: string;
+    form_value: any;
+    doc_value: any;
+    is_mismatch: boolean;
+  }> = [];
+
+  // Resort név: először extracted_fields-ből, ha nincs, akkor az összefűzött szövegből keresünk
+  if (weekOffer.resort_name_raw) {
+    let docResortName = mergedFields.resort_name as string | null | undefined;
+
+    // Ha nincs kinyert resort név a mezőkből, de a form érték megtalálható az összefűzött szövegben
+    if (!docResortName || docResortName === "") {
+      const normalizedFormResort = normalizeText(weekOffer.resort_name_raw);
+      if (normalizedFormResort.length >= 4 && normalizeText(combinedText).includes(normalizedFormResort)) {
+        // A form resort neve megtalálható a szövegben → nem mismatch
+        results.push({
+          field_name: "resort_name_raw",
+          field_label: "Uduloingatlan neve",
+          form_value: weekOffer.resort_name_raw,
+          doc_value: weekOffer.resort_name_raw,
+          is_mismatch: false,
+        });
+      }
+      // Ha nincs se extracted, se a szövegben → kihagyjuk (nem tudjuk ellenőrizni)
+    } else {
+      // Van kinyert resort név → összehasonlítás
+      results.push({
+        field_name: "resort_name_raw",
+        field_label: "Uduloingatlan neve",
+        form_value: weekOffer.resort_name_raw,
+        doc_value: docResortName,
+        is_mismatch: !resortNamesSimilar(docResortName, weekOffer.resort_name_raw),
+      });
+    }
+  }
+
+  // Hét száma
+  if (weekOffer.week_number != null) {
+    const docWeek = mergedFields.week_number as number | null | undefined;
+    if (docWeek != null) {
+      results.push({
+        field_name: "week_number",
+        field_label: "Udulesi het sorszama",
+        form_value: weekOffer.week_number,
+        doc_value: docWeek,
+        is_mismatch: Number(docWeek) !== Number(weekOffer.week_number),
+      });
+    }
+    // Ha nincs kinyerve → nem ellenőrizzük (kihagyjuk)
+  }
+
+  // Egység száma
+  const docUnitNumber = mergedFields.unit_number as string | null | undefined;
+  if (docUnitNumber && weekOffer.unit_number) {
+    results.push({
+      field_name: "unit_number",
+      field_label: "Apartman/egyseg szama",
+      form_value: weekOffer.unit_number,
+      doc_value: docUnitNumber,
+      is_mismatch: !textSimilar(docUnitNumber, weekOffer.unit_number),
+    });
+  }
+
+  // Kapacitás: csak 1-20 közötti értékeket hasonlítunk össze
+  const docCapacity = mergedFields.capacity as number | null | undefined;
+  if (docCapacity != null && docCapacity >= 1 && docCapacity <= 20 && weekOffer.capacity != null) {
+    results.push({
+      field_name: "capacity",
+      field_label: "Ferohely (max. szemelyek szama)",
+      form_value: weekOffer.capacity,
+      doc_value: docCapacity,
+      is_mismatch: Number(docCapacity) !== Number(weekOffer.capacity),
+    });
+  }
+
+  return { mismatchResults: results, hasTimeshareText };
+}
+
+async function saveCaseLevelFieldMatchResults(
+  serviceClient: any,
+  caseId: string,
+  mismatchResults: Array<{
+    field_name: string;
+    field_label: string;
+    form_value: any;
+    doc_value: any;
+    is_mismatch: boolean;
+  }>,
+) {
+  if (mismatchResults.length === 0) return;
+
+  const rows = mismatchResults.map((m) => ({
+    case_id: caseId,
+    document_id: null, // case-szintű, nem kötődik egy dokumentumhoz
+    check_type: "field_match",
+    result: m.is_mismatch ? "correction_required" : "pass",
+    severity: m.is_mismatch ? "correction" : "info",
+    message: m.is_mismatch
+      ? `${m.field_label}: az urlap adata elter a dokumentumban szereplotol.`
+      : `${m.field_label}: egyezik.`,
+    details: {
+      field_name: m.field_name,
+      field_label: m.field_label,
+      current_value: m.form_value,
+      expected_value: m.doc_value,
+      source: "case_level_comparison",
+    },
+  }));
+
+  const { error } = await serviceClient.from("check_results").insert(rows);
+  if (error) throw error;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: getCorsHeaders(req) });
@@ -110,8 +348,6 @@ Deno.serve(async (req) => {
     }
 
     // --- Ellenőrzés: requires_manual_review resort ---
-    // Ha a case-hez tartozó resort requires_manual_review = true,
-    // azonnal yellow + manual_review besorolás, minden más check előtt.
     const { data: weekOfferForResort } = await serviceClient
       .from("week_offers")
       .select("resort_id")
@@ -173,9 +409,7 @@ Deno.serve(async (req) => {
       }
     }
 
-    // -------------------------------------------------------------------
-    // Wait for all uploaded documents to finish processing before deciding.
-    // -------------------------------------------------------------------
+    // --- Document readiness check ---
     const { data: allDocs, error: docsError } = await serviceClient
       .from("documents")
       .select("id, ai_status, upload_status, document_type")
@@ -192,16 +426,10 @@ Deno.serve(async (req) => {
     console.log(`Document readiness: ${doneDocs}/${totalDocs} done for case ${caseId}`);
 
     if (totalDocs === 0) {
-      return jsonResponse({
-        success: false,
-        pending: true,
-        reason: "no_uploaded_documents",
-        case_id: caseId,
-      });
+      return jsonResponse({ success: false, pending: true, reason: "no_uploaded_documents", case_id: caseId });
     }
 
     if (doneDocs < totalDocs) {
-      console.log(`classify-case: returning pending (${doneDocs}/${totalDocs} docs done)`);
       return jsonResponse({
         success: false,
         pending: true,
@@ -212,9 +440,32 @@ Deno.serve(async (req) => {
       });
     }
 
-    // -------------------------------------------------------------------
-    // All docs processed. Load check results and restriction hits.
-    // -------------------------------------------------------------------
+    // --- Case-szintű field_match futtatása ---
+    // Ez az összes timeshare_contract típusú dokumentum szövegét összefűzi
+    // és egységesen hasonlítja össze a form adatokkal.
+    let caseLevelMismatchResults: Array<{
+      field_name: string;
+      field_label: string;
+      form_value: any;
+      doc_value: any;
+      is_mismatch: boolean;
+    }> = [];
+    let hasTimeshareText = false;
+    try {
+      const result = await runCaseLevelFieldMatch(serviceClient, caseId);
+      caseLevelMismatchResults = result.mismatchResults;
+      hasTimeshareText = result.hasTimeshareText;
+      if (caseLevelMismatchResults.length > 0) {
+        await saveCaseLevelFieldMatchResults(serviceClient, caseId, caseLevelMismatchResults);
+      }
+      console.log(
+        `Case-level field match: hasText=${hasTimeshareText}, fields_checked=${caseLevelMismatchResults.length}, mismatches=${caseLevelMismatchResults.filter((m) => m.is_mismatch).length}`,
+      );
+    } catch (fieldMatchErr) {
+      console.error("Case-level field match error (non-blocking):", fieldMatchErr);
+    }
+
+    // --- Load check results and restriction hits ---
     const { data: checks, error: checksError } = await serviceClient
       .from("check_results")
       .select("id, case_id, document_id, check_type, result, severity, message, details, created_at")
@@ -240,21 +491,18 @@ Deno.serve(async (req) => {
     const checkRows = (checks ?? []) as CheckRow[];
     const hitRows = (restrictionHits ?? []) as RestrictionHitRow[];
 
-    // SAFETY NET
+    // SAFETY NET: timeshare doc van, de nincs field_match eredmény ÉS nincs olvasható szöveg
     const hasTimeshareContractDoc = (allDocs ?? []).some(
       (d: any) =>
         (d.document_type ?? "").toLowerCase().includes("timeshare") ||
         (d.document_type ?? "").toLowerCase().includes("contract") ||
         (d.document_type ?? "").toLowerCase().includes("udulo"),
     );
-    const hasFieldMatchOrDocCheckResults = checkRows.some(
-      (r) => r.check_type === "field_match" || r.check_type === "document_check",
-    );
-    const safetyNetTriggered = hasTimeshareContractDoc && !hasFieldMatchOrDocCheckResults;
+    const hasFieldMatchResults = checkRows.some((r) => r.check_type === "field_match");
+    // Safety net csak akkor aktiv, ha nincs olvasható szöveg sem
+    const safetyNetTriggered = hasTimeshareContractDoc && !hasFieldMatchResults && !hasTimeshareText;
     if (safetyNetTriggered) {
-      console.log(
-        `classify-case SAFETY NET: timeshare_contract doc found but no field_match/document_check results — forcing yellow`,
-      );
+      console.log(`classify-case SAFETY NET: timeshare doc found but no text extracted and no field_match results`);
     }
 
     // --- Classification logic ---
@@ -388,6 +636,9 @@ Deno.serve(async (req) => {
       reason_summary: reasonSummary,
       reason_codes: reasonCodes,
       safety_net_triggered: safetyNetTriggered,
+      has_timeshare_text: hasTimeshareText,
+      case_level_fields_checked: caseLevelMismatchResults.length,
+      case_level_mismatches: caseLevelMismatchResults.filter((m) => m.is_mismatch).length,
       docs_total: totalDocs,
       docs_done: doneDocs,
       stats: {
