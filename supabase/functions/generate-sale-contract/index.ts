@@ -59,7 +59,7 @@ async function convertHtmlToPdf(html: string, pdfShiftKey: string): Promise<Uint
         source: html,
         landscape: false,
         use_print: true,
-        margin: { top: "20mm", bottom: "20mm", left: "20mm", right: "20mm" },
+        margin: { top: "12mm", bottom: "15mm", left: "15mm", right: "15mm" },
       }),
     });
     if (!response.ok) {
@@ -117,11 +117,6 @@ Deno.serve(async (req) => {
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
 
-    // ── Hivo azonositasa ───────────────────────────────────────────────────
-    // 1. Belso EF-EF hivas: apikey header === serviceRoleKey
-    // 2. Admin JWT hivas: Authorization: Bearer <jwt>
-    // 3. Service role Bearer hivas: Authorization: Bearer <serviceRoleKey>
-
     const apikeyHeader = req.headers.get("apikey") ?? "";
     const authHeader = req.headers.get("Authorization") ?? "";
     const bearerToken = authHeader.startsWith("Bearer ") ? authHeader.replace("Bearer ", "") : "";
@@ -132,7 +127,6 @@ Deno.serve(async (req) => {
     let callerUserId: string | null = null;
 
     if (!isInternalRequest) {
-      // Normalis admin JWT hivas
       if (!bearerToken) {
         return jsonResponse({ error: "Unauthorized" }, 401, req);
       }
@@ -157,7 +151,6 @@ Deno.serve(async (req) => {
     const { case_id } = body;
     if (!case_id) return jsonResponse({ error: "Missing case_id" }, 400, req);
 
-    // ── Adatok betoltese ─────────────────────────────────────────────────
     const { data: caseData, error: caseErr } = await serviceClient.from("cases").select("*").eq("id", case_id).single();
     if (caseErr || !caseData) return jsonResponse({ error: "Case not found" }, 404, req);
 
@@ -182,10 +175,6 @@ Deno.serve(async (req) => {
       .eq("case_id", case_id)
       .maybeSingle();
 
-    // Resort név meghatározása:
-    // Alap: resort_name_raw (amit a seller beírt)
-    // Felülírás: csak akkor, ha a resort NEM requires_manual_review
-    // ("Egyéb szálláshely" esetén a seller által beírt valódi nevet tartjuk meg)
     let resortName = weekOffer?.resort_name_raw ?? "—";
     if (weekOffer?.resort_id) {
       const { data: resort } = await serviceClient
@@ -198,7 +187,6 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Policy settings (ceges adatok)
     let policySettings: Record<string, string> = {};
     const settingKeys = [
       "buyer_name",
